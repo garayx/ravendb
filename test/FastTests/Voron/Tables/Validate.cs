@@ -1,4 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using FastTests.Server.Replication;
+using Raven.Client.Documents.Operations.CompareExchange;
+using Raven.Client.Documents.Session;
+using Raven.Server;
+using Raven.Server.Config;
+using Raven.Server.ServerWide.Context;
+using Raven.Server.Utils;
+using Raven.Tests.Core.Utils.Entities;
 using Sparrow.Server;
 using Voron;
 using Voron.Data.Tables;
@@ -6,149 +18,171 @@ using Xunit;
 
 namespace FastTests.Voron.Tables
 {
-    public class Validate : StorageTest
+    public class Validate : ReplicationTestBase
     {
-        [Fact]
-        public void ErrorsOnInvalidVariableSizeDef()
+        // the values are lower to make the cluster less stable
+        protected override RavenServer GetNewServer(ServerCreationOptions options = null)
         {
-            using (var tx = Env.WriteTransaction())
+            if (options == null)
             {
-                var expectedIndex = new TableSchema.SchemaIndexDef
-                {
-                    StartIndex = 2,
-                    Count = 1,
-                    
-                };
-                Slice.From(tx.Allocator, "Test Name", ByteStringType.Immutable, out expectedIndex.Name);
-
-                var actualIndex = new TableSchema.SchemaIndexDef
-                {
-                    StartIndex = 1,
-                    Count = 1,
-                };
-                Slice.From(tx.Allocator, "Bad Test Name", ByteStringType.Immutable, out actualIndex.Name);
-
-                Assert.Throws<ArgumentNullException>(delegate { expectedIndex.Validate(null); });
-                Assert.Throws<ArgumentException>(delegate { expectedIndex.Validate(actualIndex); });
+                options = new ServerCreationOptions();
             }
+            if (options.CustomSettings == null)
+                options.CustomSettings = new Dictionary<string, string>();
+
+            options.CustomSettings[RavenConfiguration.GetKey(x => x.Cluster.OperationTimeout)] = "10";
+            options.CustomSettings[RavenConfiguration.GetKey(x => x.Cluster.StabilizationTime)] = "1";
+            options.CustomSettings[RavenConfiguration.GetKey(x => x.Cluster.TcpConnectionTimeout)] = "3000";
+            options.CustomSettings[RavenConfiguration.GetKey(x => x.Cluster.ElectionTimeout)] = "50";
+
+            return base.GetNewServer(options);
         }
 
         [Fact]
-        public void ErrorsOnInvalidFixedSizeDef()
+        public async Task ParallelClusterTransactions()
         {
-            using (var tx = Env.WriteTransaction())
+            for (int i = 0; i < 100; i++)
             {
-                var expectedIndex = new TableSchema.FixedSizeSchemaIndexDef
+                try
                 {
-                    StartIndex = 2,
-                };
-                Slice.From(tx.Allocator, "Test Name", ByteStringType.Immutable, out expectedIndex.Name);
-
-                var actualIndex = new TableSchema.FixedSizeSchemaIndexDef
+                    await Internal();
+                }
+                catch (Exception e)
                 {
-                    StartIndex = 5,
-                };
-                Slice.From(tx.Allocator, "Test Name", ByteStringType.Immutable, out actualIndex.Name);
-
-                Assert.Throws<ArgumentNullException>(delegate { expectedIndex.Validate(null); });
-                Assert.Throws<ArgumentException>(delegate { expectedIndex.Validate(actualIndex); });
+                    Console.WriteLine(e);
+                    throw;
+                }
             }
         }
 
-        [Fact]
-        public void ErrorsOnInvalidSchemaWithSingleFixedIndex()
+        private async Task Internal()
         {
-            using (var tx = Env.WriteTransaction())
+            List<RavenServer> nods = null;
+            string dbName = null;
+            try
             {
-                var expectedSchema = new TableSchema();
-
-                var def = new TableSchema.FixedSizeSchemaIndexDef
+                DebuggerAttachedTimeout.DisableLongTimespan = true;
+                var numberOfNodes = 7;
+                var cluster = await CreateRaftCluster(numberOfNodes);
+                nods = cluster.Nodes;
+                var db = GetDatabaseName();
+                dbName = db;
+                using (GetDocumentStore(new Options {Server = cluster.Leader, ReplicationFactor = numberOfNodes, ModifyDatabaseName = _ => db}))
                 {
-                    StartIndex = 2,
-                };
-                Slice.From(tx.Allocator, "Test Name", ByteStringType.Immutable, out def.Name);
+                    var count = 0;
+                    var tasks = new List<Task>();
+                    var random = new Random();
 
-                expectedSchema.DefineFixedSizeIndex(def);
+                    for (int i = 0; i < 100; i++)
+                    {
+                        var t = Task.Run(async () =>
+                        {
+                            var nodeNum = random.Next(0, numberOfNodes);
+                            using (var store = GetDocumentStore(new Options {Server = cluster.Nodes[nodeNum], CreateDatabase = false}))
+                            {
+                                for (int j = 0; j < 10; j++)
+                                {
+                                    try
+                                    {
+                                        await store.Operations.ForDatabase(db)
+                                            .SendAsync(new PutCompareExchangeValueOperation<User>($"usernames/{Interlocked.Increment(ref count)}", new User(), 0));
 
-                var actualSchema = new TableSchema();
+                                        using (var session = store.OpenAsyncSession(db))
+                                        {
+                                            session.Advanced.SetTransactionMode(TransactionMode.ClusterWide);
+                                            session.Advanced.ClusterTransaction.CreateCompareExchangeValue($"usernames/{Interlocked.Increment(ref count)}", new User());
+                                            await session.StoreAsync(new User());
+                                            await session.SaveChangesAsync();
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        //
+                                    }
+                                }
+                            }
+                        });
+                        tasks.Add(t);
+                    }
 
-                def = new TableSchema.FixedSizeSchemaIndexDef
-                {
-                    StartIndex = 4,
-                };
-                Slice.From(tx.Allocator, "Bad Test Name", ByteStringType.Immutable, out def.Name);
-                actualSchema.DefineFixedSizeIndex(def);
+                    foreach (var task in tasks)
+                    {
+                        try
+                        {
+                            await task;
+                        }
+                        catch
+                        {
+                            // ignore
+                        }
+                    }
 
+                    var maxTerm = cluster.Nodes.Select(x => x.ServerStore.Engine.CurrentTerm).Max();
+                    long maxTermOld;
+                    var attempts = 3 * numberOfNodes;
+                    do
+                    {
+                        maxTermOld = maxTerm;
+                        await Task.Delay(TimeSpan.FromSeconds(3) * numberOfNodes);
+                        maxTerm = cluster.Nodes.Select(x => x.ServerStore.Engine.CurrentTerm).Max();
 
-                Assert.Throws<ArgumentNullException>(delegate { expectedSchema.Validate(null); });
-                Assert.Throws<ArgumentException>(delegate { expectedSchema.Validate(actualSchema); });
+                        attempts--; // cluster couldn't stabilize
+                    } while (maxTerm != maxTermOld && attempts > 0);
+
+                    var compareExchangeCount = new HashSet<long>();
+                    var maxLog = 0L;
+
+                    foreach (var n in cluster.Nodes.Where(x => x.ServerStore.Engine.CurrentTerm >= maxTerm))
+                    {
+                        using (n.ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
+                        using (ctx.OpenReadTransaction())
+                        {
+                            var currentLog = n.ServerStore.Engine.GetLastEntryIndex(ctx);
+                            if (maxLog < currentLog)
+                                maxLog = currentLog;
+                        }
+                    }
+
+                    foreach (var node in cluster.Nodes)
+                    {
+                        await node.ServerStore.Cluster.WaitForIndexNotification(maxLog, TimeSpan.FromMinutes(1));
+
+                        using (node.ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
+                        using (ctx.OpenReadTransaction())
+                        {
+                            compareExchangeCount.Add(node.ServerStore.Cluster.GetNumberOfCompareExchange(ctx, db));
+                        }
+                    }
+
+                    Assert.Equal(1, compareExchangeCount.Count);
+                }
             }
-        }
-
-        [Fact]
-        public void ErrorsOnInvalidSchemaWithSingleVariableIndex()
-        {
-            using (var tx = Env.WriteTransaction())
+            catch (Exception e)
             {
-                var expectedSchema = new TableSchema();
-
-                var def = new TableSchema.SchemaIndexDef
+                if (nods != null)
                 {
-                    Count = 3,
-                    StartIndex = 2,
-                };
-                Slice.From(tx.Allocator, "Test Name", ByteStringType.Immutable, out def.Name);
-                expectedSchema.DefineIndex(def);
+                    var compareExchangeCount = new HashSet<long>();
+                    foreach (var nod in nods)
+                    {
+                        using (nod.ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
+                        using (ctx.OpenReadTransaction())
+                        {
+                            var currentLog = nod.ServerStore.Engine.GetLastEntryIndex(ctx);
+                            Console.WriteLine($"node: {nod.ServerStore.NodeTag}, index: {currentLog}");
+                            compareExchangeCount.Add(nod.ServerStore.Cluster.GetNumberOfCompareExchange(ctx, dbName));
+                        }
+                    }
 
-                var actualSchema = new TableSchema();
-
-                def = new TableSchema.SchemaIndexDef
+                    Assert.Equal(1, compareExchangeCount.Count);
+                    Console.WriteLine(e);
+                }
+                else
                 {
-                    StartIndex = 4,
-                };
-                Slice.From(tx.Allocator, "Bad Test Name", ByteStringType.Immutable, out def.Name);
+                    Console.WriteLine($"nods null, dbName isNull? {dbName == null}");
+                }
 
-                actualSchema.DefineIndex(def);
-
-
-                Assert.Throws<ArgumentNullException>(delegate { expectedSchema.Validate(null); });
-                Assert.Throws<ArgumentException>(delegate { expectedSchema.Validate(actualSchema); });
-            }
-        }
-
-        [Fact]
-        public void ErrorsOnInvalidSchemaWithMultipleIndexes()
-        {
-            using (var tx = Env.WriteTransaction())
-            {
-                var expectedSchema = new TableSchema();
-
-                var def = new TableSchema.SchemaIndexDef
-                {
-                    Count = 3,
-                    StartIndex = 2,
-                };
-                Slice.From(tx.Allocator, "Test Name", ByteStringType.Immutable, out def.Name);
-
-                expectedSchema.DefineIndex(def);
-
-                var actualSchema = new TableSchema();
-
-                actualSchema.DefineIndex(def);
-
-                expectedSchema.Validate(actualSchema);
-
-                def = new TableSchema.SchemaIndexDef
-                {
-                    StartIndex = 4,
-                };
-                Slice.From(tx.Allocator, "Bad Test Name", ByteStringType.Immutable, out def.Name);
-
-                actualSchema.DefineIndex(def);
-
-
-                Assert.Throws<ArgumentNullException>(delegate { expectedSchema.Validate(null); });
-                Assert.Throws<ArgumentException>(delegate { expectedSchema.Validate(actualSchema); });
+                Console.WriteLine(e);
+                throw;
             }
         }
     }

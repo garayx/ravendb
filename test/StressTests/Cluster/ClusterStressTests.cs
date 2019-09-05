@@ -152,14 +152,14 @@ namespace StressTests.Cluster
                 if (nods != null)
                 {
                     var compareExchangeCount = new HashSet<long>();
-                    foreach (var node in nods)
+                    foreach (var nod in nods)
                     {
-                        using (node.ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
+                        using (nod.ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
                         using (ctx.OpenReadTransaction())
                         {
-                            var currentLog = node.ServerStore.Engine.GetLastEntryIndex(ctx);
-                            Console.WriteLine($"node: {node.ServerStore.NodeTag}, index: {currentLog}");
-                            compareExchangeCount.Add(node.ServerStore.Cluster.GetNumberOfCompareExchange(ctx, dbName));
+                            var currentLog = nod.ServerStore.Engine.GetLastEntryIndex(ctx);
+                            Console.WriteLine($"node: {nod.ServerStore.NodeTag}, index: {currentLog}");
+                            compareExchangeCount.Add(nod.ServerStore.Cluster.GetNumberOfCompareExchange(ctx, dbName));
                         }
                     }
 
