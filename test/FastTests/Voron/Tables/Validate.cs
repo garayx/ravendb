@@ -15,11 +15,19 @@ using Sparrow.Server;
 using Voron;
 using Voron.Data.Tables;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace FastTests.Voron.Tables
 {
     public class Validate : ReplicationTestBase
     {
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public Validate(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
         // the values are lower to make the cluster less stable
         protected override RavenServer GetNewServer(ServerCreationOptions options = null)
         {
@@ -43,13 +51,15 @@ namespace FastTests.Voron.Tables
         {
             for (int i = 0; i < 100; i++)
             {
+                _testOutputHelper.WriteLine($"ParallelClusterTransactions {i}");
+
                 try
                 {
                     await Internal();
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    _testOutputHelper.WriteLine($"Exception {e}");
                     throw;
                 }
             }
@@ -174,14 +184,15 @@ namespace FastTests.Voron.Tables
                     }
 
                     Assert.Equal(1, compareExchangeCount.Count);
-                    Console.WriteLine(e);
+                    _testOutputHelper.WriteLine($"compareExchangeCount.Count: {compareExchangeCount.Count}");
+                    _testOutputHelper.WriteLine($"Exception {e}");
                 }
                 else
                 {
                     Console.WriteLine($"nods null, dbName isNull? {dbName == null}");
                 }
 
-                Console.WriteLine(e);
+                _testOutputHelper.WriteLine($"Exception {e}");
                 throw;
             }
         }
