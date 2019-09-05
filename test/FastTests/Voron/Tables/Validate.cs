@@ -15,19 +15,11 @@ using Sparrow.Server;
 using Voron;
 using Voron.Data.Tables;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace FastTests.Voron.Tables
 {
     public class Validate : ReplicationTestBase
     {
-        private readonly ITestOutputHelper _testOutputHelper;
-
-        public Validate(ITestOutputHelper testOutputHelper)
-        {
-            _testOutputHelper = testOutputHelper;
-        }
-
         // the values are lower to make the cluster less stable
         protected override RavenServer GetNewServer(ServerCreationOptions options = null)
         {
@@ -49,35 +41,23 @@ namespace FastTests.Voron.Tables
         [Fact]
         public async Task ParallelClusterTransactions()
         {
-            for (int i = 0; i < 100; i++)
-            {
-                _testOutputHelper.WriteLine($"ParallelClusterTransactions {i}");
-
-                try
-                {
-                    await Internal();
-                }
-                catch (Exception e)
-                {
-                    _testOutputHelper.WriteLine($"Exception {e}");
-                    throw;
-                }
-            }
-        }
-
-        private async Task Internal()
-        {
             List<RavenServer> nods = null;
             string dbName = null;
             try
             {
+
                 DebuggerAttachedTimeout.DisableLongTimespan = true;
                 var numberOfNodes = 7;
                 var cluster = await CreateRaftCluster(numberOfNodes);
                 nods = cluster.Nodes;
                 var db = GetDatabaseName();
                 dbName = db;
-                using (GetDocumentStore(new Options {Server = cluster.Leader, ReplicationFactor = numberOfNodes, ModifyDatabaseName = _ => db}))
+                using (GetDocumentStore(new Options
+                {
+                    Server = cluster.Leader,
+                    ReplicationFactor = numberOfNodes,
+                    ModifyDatabaseName = _ => db
+                }))
                 {
                     var count = 0;
                     var tasks = new List<Task>();
@@ -88,14 +68,17 @@ namespace FastTests.Voron.Tables
                         var t = Task.Run(async () =>
                         {
                             var nodeNum = random.Next(0, numberOfNodes);
-                            using (var store = GetDocumentStore(new Options {Server = cluster.Nodes[nodeNum], CreateDatabase = false}))
+                            using (var store = GetDocumentStore(new Options
+                            {
+                                Server = cluster.Nodes[nodeNum],
+                                CreateDatabase = false
+                            }))
                             {
                                 for (int j = 0; j < 10; j++)
                                 {
                                     try
                                     {
-                                        await store.Operations.ForDatabase(db)
-                                            .SendAsync(new PutCompareExchangeValueOperation<User>($"usernames/{Interlocked.Increment(ref count)}", new User(), 0));
+                                        await store.Operations.ForDatabase(db).SendAsync(new PutCompareExchangeValueOperation<User>($"usernames/{Interlocked.Increment(ref count)}", new User(), 0));
 
                                         using (var session = store.OpenAsyncSession(db))
                                         {
@@ -184,16 +167,13 @@ namespace FastTests.Voron.Tables
                     }
 
                     Assert.Equal(1, compareExchangeCount.Count);
-                    _testOutputHelper.WriteLine($"compareExchangeCount.Count: {compareExchangeCount.Count}");
-                    _testOutputHelper.WriteLine($"Exception {e}");
+                    throw new Exception($"compareExchangeCount.Count: {compareExchangeCount.Count}", e);
+
                 }
                 else
                 {
-                    Console.WriteLine($"nods null, dbName isNull? {dbName == null}");
+                   throw new Exception($"nods null, dbName isNull? {dbName == null}");
                 }
-
-                _testOutputHelper.WriteLine($"Exception {e}");
-                throw;
             }
         }
     }
