@@ -108,6 +108,22 @@ namespace Raven.Client.Documents.Linq
                     return CreateCounterResult(callExpression);
                 }
 
+                //if (IsCompareExchangeCall(callExpression))
+                //{
+
+                //    var id = (callExpression.Arguments[0] as ConstantExpression)?.Value.ToString();
+
+                //    string[] args;
+                //        args = new[] { id };
+
+                //    return new Result
+                //    {
+                //        MemberType = typeof(string),
+                //        IsNestedPath = false,
+                //        Path = "cmpxchg",
+                //        Args = args
+                //    };
+                //}
                 throw new InvalidOperationException("Cannot understand how to translate " + callExpression);
             }
 
@@ -526,6 +542,11 @@ namespace Raven.Client.Documents.Linq
         {
             return mce.Method.DeclaringType == typeof(RavenQuery) && mce.Method.Name == "Counter"
                    || mce.Object?.Type == typeof(ISessionDocumentCounters) && mce.Method.Name == "Get";
+        }
+
+        public static bool IsCompareExchangeCall(MethodCallExpression mce)
+        {
+            return mce.Method.DeclaringType == typeof(RavenQuery) && mce.Method.Name == "CmpXchg";
         }
 
         public static bool IsTimeSeriesCall(MethodCallExpression mce)

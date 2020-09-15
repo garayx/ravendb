@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using FastTests.Blittable;
+using SlowTests.Client;
 using SlowTests.Issues;
 using Tests.Infrastructure;
 
@@ -23,9 +24,9 @@ namespace Tryouts
                 try
                 {
                     using (var testOutputHelper = new ConsoleTestOutputHelper())
-                    using (var test = new FilteredReplicationTests(testOutputHelper))
+                    using (var test = new QueriesWithCustomFunctions(testOutputHelper))
                     {
-                       await test.WhenDeletingHubReplicationWillRemoveAllAccess();
+                       await test.SingleProjectionQueryCompareExchange();
                     }
                 }
                 catch (Exception e)
