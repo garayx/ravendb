@@ -2336,6 +2336,33 @@ The recommended method is to use full text search (mark the field as Analyzed an
                 return;
             }
 
+            if (body is MethodCallExpression mce && mce.Method.DeclaringType == typeof(RavenQuery) && mce.Method.Name == "CmpXchg")
+            {
+           //     var tsQueryText = VisitExpression();
+                string path2 = ToJs(mce);
+              //  alias ??= Constants.TimeSeries.QueryFunction + FieldsToFetch.Count;
+
+                AddToFieldsToFetch(path2, null);
+                return;
+            }
+
+            //if (IsCompareExchangeCall(callExpression))
+            //{
+
+            //    var id = (callExpression.Arguments[0] as ConstantExpression)?.Value.ToString();
+
+            //    string[] args;
+            //    args = new[] { id };
+
+            //    return new Result
+            //    {
+            //        MemberType = typeof(string),
+            //        IsNestedPath = false,
+            //        Path = "cmpxchg",
+            //        Args = args
+            //    };
+            //}
+
             var expressionInfo = GetMember(body);
             var path = expressionInfo.Path;
             string alias = null;

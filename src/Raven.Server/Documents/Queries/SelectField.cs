@@ -141,6 +141,19 @@ namespace Raven.Server.Documents.Queries
             };
         }
 
+        //public static SelectField CreateCompareExchangeField(string methodName, string alias, SelectField[] args)
+        //{
+        //    return new SelectField
+        //    {
+        //        Alias = alias,
+        //        Name = new QueryFieldName(methodName, false),
+        //        SourceAlias = sourceAlias,
+        //        HasSourceAlias = sourceAlias != null,
+        //        IsParameter = args[args.Length - 1].ValueTokenType == AST.ValueTokenType.Parameter,
+
+        //    };
+        //}
+
         public static SelectField CreateValue(string val, string alias, ValueTokenType type)
         {
             object finalVal = val;
