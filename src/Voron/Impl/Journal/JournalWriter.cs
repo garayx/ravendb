@@ -38,7 +38,7 @@ namespace Voron.Impl.Journal
         {
             _options = options;
             FileName = filename;
-            _log = LoggingSource.Instance.GetLogger<JournalWriter>(options.BasePath.FullPath);
+            _log = options._log.GetLoggerFor($"{nameof(JournalWriter)}: '{options.BasePath.FullPath}'", LogType.Database);
 
             var result = Pal.rvn_open_journal_for_writes(filename.FullPath, mode, size, options.SupportDurabilityFlags, out _writeHandle, out var actualSize, out var error);
             if (result != PalFlags.FailCodes.Success)

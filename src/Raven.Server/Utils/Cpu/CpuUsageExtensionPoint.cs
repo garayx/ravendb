@@ -13,7 +13,6 @@ namespace Raven.Server.Utils.Cpu
     public class CpuUsageExtensionPoint : IDisposable
     {
         private readonly JsonContextPool _contextPool;
-        private readonly Logger _logger = LoggingSource.Instance.GetLogger<MachineResources>("Server");
         private readonly NotificationCenter.NotificationCenter _notificationCenter;
         private readonly ProcessStartInfo _startInfo;
         private readonly TimeSpan _timeout = TimeSpan.FromSeconds(10);
@@ -29,6 +28,8 @@ namespace Raven.Server.Utils.Cpu
             MachineCpuUsage = -1
         };
 
+        private readonly Logger _logger;
+
         public ExtensionPointData Data => IsDisposed ? BadData : _data;
 
         public bool IsDisposed { get; private set; }
@@ -37,11 +38,13 @@ namespace Raven.Server.Utils.Cpu
             JsonContextPool contextPool,
             string exec,
             string args,
-            NotificationCenter.NotificationCenter notificationCenter)
+            NotificationCenter.NotificationCenter notificationCenter
+            , Logger logger)
         {
             _contextPool = contextPool;
             _notificationCenter = notificationCenter;
-            _startInfo = new ProcessStartInfo
+            _logger = logger;
+               _startInfo = new ProcessStartInfo
             {
                 FileName = exec,
                 Arguments = args,
@@ -239,7 +242,7 @@ namespace Raven.Server.Utils.Cpu
 
         private void NotifyWarning(string warningMsg, Exception e = null)
         {
-            if (_logger.IsOperationsEnabled)
+            if (_logger?.IsOperationsEnabled == true)
             {
                 _logger.Operations(warningMsg, e);
             }

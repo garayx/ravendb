@@ -28,7 +28,7 @@ namespace Raven.Server.Documents
 
             Database = context.Database;
             ContextPool = Database.DocumentsStorage.ContextPool;
-            Logger = LoggingSource.Instance.GetLogger(Database.Name, GetType().FullName);
+            Logger = Database._logger.GetLoggerFor(nameof(DatabaseRequestHandler), LogType.Database);
 
             var topologyEtag = GetLongFromHeaders(Constants.Headers.TopologyEtag);
             if (topologyEtag.HasValue && Database.HasTopologyChanged(topologyEtag.Value))

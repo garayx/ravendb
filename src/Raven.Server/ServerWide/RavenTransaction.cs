@@ -7,13 +7,13 @@ namespace Raven.Server.ServerWide
 {
     public class RavenTransaction : IDisposable
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<RavenTransaction>("Server");
-
         public Transaction InnerTransaction;
+        private readonly Logger _logger;
 
-        public RavenTransaction(Transaction transaction)
+        public RavenTransaction(Transaction transaction, Logger logger = null)
         {
             InnerTransaction = transaction;
+            _logger = logger;
         }
 
         public void Commit()
@@ -66,8 +66,8 @@ namespace Raven.Server.ServerWide
                 }
                 catch (Exception e)
                 {
-                    if (Logger.IsOperationsEnabled)
-                        Logger.Operations("Failed to raise notifications", e);
+                    if (_logger?.IsOperationsEnabled == true)
+                        _logger.Operations("Failed to raise notifications", e);
                 }
             }, this);
         }

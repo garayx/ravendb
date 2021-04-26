@@ -16,7 +16,7 @@ namespace Raven.Client.Http
     {
         internal const string NotFoundResponse = "404 Response";
 
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<HttpCache>("Client");
+        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(HttpCache), LogType.Client);
 
         private readonly long _maxSize;
         private readonly ConcurrentDictionary<string, HttpCacheItem> _items = new ConcurrentDictionary<string, HttpCacheItem>();
@@ -31,7 +31,7 @@ namespace Raven.Client.Http
         public HttpCache(long maxSize)
         {
             _maxSize = maxSize;
-            _unmanagedBuffersPool = new UnmanagedBuffersPool(nameof(HttpCache), "Client");
+            _unmanagedBuffersPool = new UnmanagedBuffersPool(Logger.GetLoggerFor(nameof(UnmanagedBuffersPool), LogType.Client));
             LowMemoryNotification.Instance.RegisterLowMemoryHandler(this);
         }
 
@@ -348,6 +348,7 @@ namespace Raven.Client.Http
                 item.Value.Dispose();
             }
             _unmanagedBuffersPool.Dispose();
+            Logger.Dispose();
         }
 
         public void LowMemory(LowMemorySeverity lowMemorySeverity)

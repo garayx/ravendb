@@ -15,21 +15,22 @@ namespace Raven.Server.Utils.Cpu
     {
         (double MachineCpuUsage, double ProcessCpuUsage, double? MachineIoWait) Calculate();
         
-        void Init();
+        void Init(Logger logger);
     }
 
     internal abstract class CpuUsageCalculator<T> : ICpuUsageCalculator where T : ProcessInfo
     {
         private readonly (double MachineCpuUsage, double ProcessCpuUsage, double? MachineIoWait) _emptyCpuUsage = (0.0, 0.0, (double?)null);
-        protected readonly Logger Logger = LoggingSource.Instance.GetLogger<MachineResources>("Server");
+        protected Logger Logger;
         private readonly object _locker = new object();
 
         protected (double MachineCpuUsage, double ProcessCpuUsage, double? MachineIoWait)? LastCpuUsage;
 
         protected T PreviousInfo;
 
-        public void Init()
+        public void Init(Logger logger)
         {
+            Logger = logger;
             PreviousInfo = GetProcessInfo();
         }
 
@@ -266,13 +267,15 @@ namespace Raven.Server.Utils.Cpu
             JsonContextPool contextPool,
             string exec,
             string args,
-            NotificationCenter.NotificationCenter notificationCenter)
+            NotificationCenter.NotificationCenter notificationCenter,
+            Logger logger)
         {
             _inspector = new CpuUsageExtensionPoint(
                 contextPool,
                 exec,
                 args,
-                notificationCenter
+                notificationCenter,
+                logger
             );
         }
 
@@ -282,7 +285,7 @@ namespace Raven.Server.Utils.Cpu
             return (data.MachineCpuUsage, data.ProcessCpuUsage, null);
         }
 
-        public void Init()
+        public void Init(Logger logger)
         {
             _inspector.Start();
         }

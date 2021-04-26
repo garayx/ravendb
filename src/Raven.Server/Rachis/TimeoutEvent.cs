@@ -17,18 +17,18 @@ namespace Raven.Server.Rachis
         private Action _timeoutHappened;
         private string _currentLeader;
 
-        public TimeoutEvent(int timeoutPeriod, string name, bool singleShot = true)
+        public TimeoutEvent(int timeoutPeriod, Logger logger, bool singleShot = true)
         {
             TimeoutPeriod = timeoutPeriod;
             _singleShot = singleShot;
             _lastDeferredTicks = DateTime.UtcNow.Ticks;
             _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
-            _logger = LoggingSource.Instance.GetLogger<TimeoutEvent>(name);
+            _logger = logger;
             LowMemoryNotification.Instance?.RegisterLowMemoryHandler(this);
         }
 
-        public TimeoutEvent(TimeSpan timeoutPeriod, string name, bool singleShot = true) :
-            this((int)timeoutPeriod.TotalMilliseconds, name, singleShot)
+        public TimeoutEvent(TimeSpan timeoutPeriod, Logger logger, bool singleShot = true) :
+            this((int)timeoutPeriod.TotalMilliseconds, logger, singleShot)
         {
         }
 

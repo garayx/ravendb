@@ -29,8 +29,6 @@ namespace Raven.Server.Web.System
 {
     public sealed class DatabasesHandler : RequestHandler
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<DatabasesHandler>("Server");
-
         [RavenAction("/databases", "GET", AuthorizationStatus.ValidUser, EndpointType.Read)]
         public async Task Databases()
         {
@@ -462,8 +460,9 @@ namespace Raven.Server.Web.System
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failed to get database info for: {databaseName}", e);
+                var logger = ServerStore.Logger.GetLoggerFor(nameof(DatabasesHandler), LogType.Server);
+                if (logger.IsInfoEnabled)
+                    logger.Info($"Failed to get database info for: {databaseName}", e);
 
                 WriteFaultedDatabaseInfo(databaseName, nodesTopology, e, context, writer);
             }

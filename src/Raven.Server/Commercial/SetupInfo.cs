@@ -297,10 +297,11 @@ namespace Raven.Server.Commercial
         public readonly ConcurrentQueue<string> Messages;
         public byte[] SettingsZipFile; // not sent as part of the result
 
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<LicenseManager>("Server");
+        private static Logger Logger;
 
-        public SetupProgressAndResult()
+        public SetupProgressAndResult(Logger logger)
         {
+            Logger = logger;
             Messages = new ConcurrentQueue<string>();
             Certificate = null;
         }

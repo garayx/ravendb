@@ -33,7 +33,7 @@ namespace Voron.Impl.Journal
 
         private readonly FastList<PagePosition> _unusedPages;
         private readonly ContentionLoggingLocker _locker2;
-        private Logger _logger;
+        private readonly Logger _logger;
 
         public JournalFile(StorageEnvironment env, IJournalWriter journalWriter, long journalNumber)
         {
@@ -43,7 +43,7 @@ namespace Voron.Impl.Journal
             _journalWriter = journalWriter;
             _writePosIn4Kb = 0;
             _unusedPages = new FastList<PagePosition>();
-            _logger = LoggingSource.Instance.GetLogger<JournalFile>(JournalWriter.FileName.FullPath);
+            _logger = env._log.GetLoggerFor($"{nameof(JournalFile)}: '{JournalWriter.FileName.FullPath}'", LogType.Database);
             _locker2 = new ContentionLoggingLocker(_logger, JournalWriter.FileName.FullPath);
         }
 
@@ -83,6 +83,7 @@ namespace Voron.Impl.Journal
             _unusedPages.Clear();
             _pageTranslationTable.Clear();
             _journalWriter = null;
+            _logger.Dispose();
         }
 
         public JournalSnapshot GetSnapshot()

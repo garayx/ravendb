@@ -54,7 +54,8 @@ namespace Raven.Server.Documents
             _serverStore = serverStore;
             _databaseSemaphore = new SemaphoreSlim(_serverStore.Configuration.Databases.MaxConcurrentLoads);
             _concurrentDatabaseLoadTimeout = _serverStore.Configuration.Databases.ConcurrentLoadTimeout.AsTimeSpan;
-            _logger = LoggingSource.Instance.GetLogger<DatabasesLandlord>("Server");
+            _logger = serverStore.Logger.GetLoggerFor(nameof(DatabasesLandlord), LogType.Server);
+
             CatastrophicFailureHandler = new CatastrophicFailureHandler(this, _serverStore);
         }
 
@@ -516,6 +517,7 @@ namespace Raven.Server.Documents
             finally
             {
                 release.Dispose();
+                _logger.Dispose();
             }
         }
 

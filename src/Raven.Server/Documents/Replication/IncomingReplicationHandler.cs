@@ -99,8 +99,7 @@ namespace Raven.Server.Documents.Replication
             Mode = pullReplicationParams?.Mode ?? PullReplicationMode.None;
 
             CertificateThumbprint = options.Certificate?.Thumbprint;
-
-            _log = LoggingSource.Instance.GetLogger<IncomingReplicationHandler>(_database.Name);
+            _log = parent._log.GetLoggerFor(Logger.GetNameFor(nameof(IncomingReplicationHandler), $"{ConnectionInfo}"), LogType.Database);
             _cts = CancellationTokenSource.CreateLinkedTokenSource(_database.DatabaseShutdown);
 
             _conflictManager = new ConflictManager(_database, _parent.ConflictResolver);
@@ -137,7 +136,7 @@ namespace Raven.Server.Documents.Replication
                 if (_incomingWork != null)
                     return; // already set by someone else, they can start it
 
-                _incomingWork = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => { DoIncomingReplication(); }, null, IncomingReplicationThreadName);
+                _incomingWork = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => { DoIncomingReplication(); }, null, IncomingReplicationThreadName, _log);
             }
 
             if (_log.IsInfoEnabled)
@@ -924,6 +923,8 @@ namespace Raven.Server.Documents.Replication
                 _cts.Dispose();
 
                 _attachmentStreamsTempFile.Dispose();
+
+                _log.Dispose();
             }
             finally
             {
@@ -1542,7 +1543,7 @@ namespace Raven.Server.Documents.Replication
                 ReplicatedItems = replicationItems,
                 ReplicatedAttachmentStreams = replicatedAttachmentStreams,
                 SupportedFeatures = SupportedFeatures,
-                Logger = LoggingSource.Instance.GetLogger<IncomingReplicationHandler>(database.Name)
+                Logger = database._logger.GetLoggerFor(nameof(IncomingReplicationHandler), LogType.Database)
             };
 
             return new IncomingReplicationHandler.MergedDocumentReplicationCommand(dataForReplicationCommand, LastEtag, Mode);

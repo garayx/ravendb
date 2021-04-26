@@ -66,7 +66,7 @@ namespace Raven.Server.Documents
     {
         private readonly ServerStore _serverStore;
         private readonly Action<string> _addToInitLog;
-        private readonly Logger _logger;
+        public readonly Logger _logger;
         private readonly DisposeOnce<SingleAttempt> _disposeOnce;
         internal TestingStuff ForTestingPurposes;
 
@@ -100,7 +100,7 @@ namespace Raven.Server.Documents
         public DocumentDatabase(string name, RavenConfiguration configuration, ServerStore serverStore, Action<string> addToInitLog)
         {
             Name = name;
-            _logger = LoggingSource.Instance.GetLogger<DocumentDatabase>(Name);
+            _logger = serverStore.Logger.GetLoggerFor(nameof(DocumentDatabase), LogType.Server).GetLoggerFor(name, LogType.Database);
             _serverStore = serverStore;
             _addToInitLog = addToInitLog;
             StartTime = Time.GetUtcNow();
@@ -161,9 +161,10 @@ namespace Raven.Server.Documents
                 MetricCacher = new DatabaseMetricCacher(this);
                 TxMerger = new TransactionOperationsMerger(this, DatabaseShutdown);
                 ConfigurationStorage = new ConfigurationStorage(this);
-                NotificationCenter = new NotificationCenter.NotificationCenter(ConfigurationStorage.NotificationsStorage, Name, DatabaseShutdown, configuration);
+                NotificationCenter = new NotificationCenter.NotificationCenter(ConfigurationStorage.NotificationsStorage, Name, DatabaseShutdown, configuration, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(Server.NotificationCenter.NotificationCenter), Name), LogType.Database));
                 HugeDocuments = new HugeDocuments(NotificationCenter, ConfigurationStorage.NotificationsStorage, Name, configuration.PerformanceHints.HugeDocumentsCollectionSize,
                     configuration.PerformanceHints.HugeDocumentSize.GetValue(SizeUnit.Bytes));
+
                 Operations = new Operations.Operations(Name, ConfigurationStorage.OperationsStorage, NotificationCenter, Changes,
                     Is32Bits ? TimeSpan.FromHours(12) : TimeSpan.FromDays(2));
                 DatabaseInfoCache = serverStore.DatabaseInfoCache;
@@ -687,6 +688,8 @@ namespace Raven.Server.Documents
                 });
             }
 
+            exceptionAggregator.Execute(QueryRunner.Dispose);
+
             exceptionAggregator.Execute(() =>
             {
                 IndexStore?.Dispose();
@@ -774,6 +777,8 @@ namespace Raven.Server.Documents
             exceptionAggregator.Execute(_hasClusterTransaction);
 
             exceptionAggregator.ThrowIfNeeded();
+
+            _logger.Dispose();
         }
 
         public DynamicJsonValue GenerateOfflineDatabaseInfo()
@@ -1464,7 +1469,7 @@ namespace Raven.Server.Documents
 
             foreach (var environment in storageEnvironments)
             {
-                foreach (var mountPoint in ServerStore.GetMountPointUsageDetailsFor(environment, includeTempBuffers: includeTempBuffers))
+                foreach (var mountPoint in ServerStore.GetMountPointUsageDetailsFor(environment, includeTempBuffers: includeTempBuffers, _logger))
                 {
                     yield return mountPoint;
                 }

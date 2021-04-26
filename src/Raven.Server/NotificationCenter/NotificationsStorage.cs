@@ -40,9 +40,9 @@ namespace Raven.Server.NotificationCenter
             }
         }
 
-        public NotificationsStorage(string resourceName)
+        public NotificationsStorage(Logger logger)
         {
-            Logger = LoggingSource.Instance.GetLogger<NotificationsStorage>(resourceName);
+            Logger = logger;
 
             _actionsSchema.DefineKey(new TableSchema.SchemaIndexDef
             {

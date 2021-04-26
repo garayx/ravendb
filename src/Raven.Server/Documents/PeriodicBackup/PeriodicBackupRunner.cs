@@ -30,8 +30,7 @@ namespace Raven.Server.Documents.PeriodicBackup
 {
     public class PeriodicBackupRunner : ITombstoneAware, IDisposable
     {
-        private readonly Logger _logger;
-
+        internal readonly Logger _logger;
         private readonly DocumentDatabase _database;
         private readonly ServerStore _serverStore;
         private readonly CancellationTokenSource _cancellationToken;
@@ -56,7 +55,7 @@ namespace Raven.Server.Documents.PeriodicBackup
         {
             _database = database;
             _serverStore = serverStore;
-            _logger = LoggingSource.Instance.GetLogger<PeriodicBackupRunner>(_database.Name);
+            _logger = database._logger.GetLoggerFor(nameof(PeriodicBackupRunner), LogType.Database);
             _cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(_database.DatabaseShutdown);
             _tempBackupPath = (_database.Configuration.Backup.TempPath ?? _database.Configuration.Storage.TempPath ?? _database.Configuration.Core.DataDirectory).Combine("PeriodicBackupTemp");
 
@@ -535,7 +534,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                         Name = periodicBackup.Configuration.Name
                     };
 
-                    var backupTask = new BackupTask(_database, backupParameters, periodicBackup.Configuration, _logger, _forTestingPurposes);
+                    var backupTask = new BackupTask(_database, backupParameters, periodicBackup.Configuration, _forTestingPurposes);
                     periodicBackup.CancelToken = backupTask.TaskCancelToken;
 
                     periodicBackup.RunningTask = new PeriodicBackup.RunningBackupTask
@@ -623,7 +622,7 @@ namespace Raven.Server.Documents.PeriodicBackup
 
         private Task<IOperationResult> StartBackupThread(PeriodicBackup periodicBackup, BackupTask backupTask, TaskCompletionSource<IOperationResult> tcs, Action<IOperationProgress> onProgress)
         {
-            PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => RunBackupThread(periodicBackup, backupTask, tcs, onProgress), null, $"Backup task {periodicBackup.Configuration.Name} for database '{_database.Name}'");
+            PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => RunBackupThread(periodicBackup, backupTask, tcs, onProgress), null, $"Backup task {periodicBackup.Configuration.Name} for database '{_database.Name}'", _logger);
             return tcs.Task;
         }
 

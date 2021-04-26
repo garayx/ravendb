@@ -109,7 +109,7 @@ namespace Voron
 
         private readonly ConcurrentQueue<TemporaryPage> _tempPagesPool = new ConcurrentQueue<TemporaryPage>();
         public bool Disposed;
-        private readonly Logger _log;
+        internal readonly Logger _log;
         public static int MaxConcurrentFlushes = 10; // RavenDB-5221
         public int TimeToSyncAfterFlushInSec;
 
@@ -128,7 +128,7 @@ namespace Voron
             try
             {
                 SelfReference.Owner = this;
-                _log = LoggingSource.Instance.GetLogger<StorageEnvironment>(options.BasePath.FullPath);
+                _log = options._log;
                 _options = options;
                 _dataPager = options.DataPager;
                 _freeSpaceHandling = new FreeSpaceHandling();
@@ -1181,7 +1181,7 @@ namespace Voron
             if (_options.ManualFlushing)
                 return;
 
-            _endOfDiskSpace = new EndOfDiskSpaceEvent(exception.DirectoryPath, exception.CurrentFreeSpace, ExceptionDispatchInfo.Capture(exception));
+            _endOfDiskSpace = new EndOfDiskSpaceEvent(exception.DirectoryPath, exception.CurrentFreeSpace, ExceptionDispatchInfo.Capture(exception), _log);
         }
 
         public unsafe void ValidatePageChecksum(long pageNumber, PageHeader* current)

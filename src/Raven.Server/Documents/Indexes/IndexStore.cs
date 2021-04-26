@@ -93,7 +93,7 @@ namespace Raven.Server.Documents.Indexes
         {
             _documentDatabase = documentDatabase;
             _serverStore = serverStore;
-            Logger = LoggingSource.Instance.GetLogger<IndexStore>(_documentDatabase.Name);
+            Logger = documentDatabase._logger.GetLoggerFor(nameof(IndexStore), LogType.Index);
 
             var stoppedConcurrentIndexBatches = _documentDatabase.Configuration.Indexing.NumberOfConcurrentStoppedBatchesIfRunningLowOnMemory;
             StoppedConcurrentIndexBatches = new SemaphoreSlim(stoppedConcurrentIndexBatches);
@@ -1534,6 +1534,8 @@ namespace Raven.Server.Documents.Indexes
             exceptionAggregator.Execute(() => AnalyzerCompilationCache.Instance.Clear(_documentDatabase.Name));
 
             exceptionAggregator.ThrowIfNeeded();
+
+            Logger.Dispose();
         }
 
         private Index ResetIndexInternal(Index index)

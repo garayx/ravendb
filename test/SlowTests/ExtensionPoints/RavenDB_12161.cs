@@ -54,7 +54,8 @@ while($TRUE){{
                 new JsonContextPool(),
                 exec,
                 args,
-                Server.ServerStore.NotificationCenter))
+                Server.ServerStore.NotificationCenter,
+                logger: null))
             {
                 extensionPoint.Start();
 
@@ -109,7 +110,8 @@ while($TRUE){{
                 new JsonContextPool(),
                 exec,
                 args,
-                Server.ServerStore.NotificationCenter))
+                Server.ServerStore.NotificationCenter,
+                logger: null))
             {
                 extensionPoint.Start();
 
@@ -157,7 +159,8 @@ while($TRUE){{
                 new JsonContextPool(),
                 exec,
                 args,
-                Server.ServerStore.NotificationCenter))
+                Server.ServerStore.NotificationCenter,
+                logger: null))
             {
                 extensionPoint.Start();
 
@@ -212,7 +215,8 @@ while($TRUE){{
                 new JsonContextPool(),
                 exec,
                 args,
-                Server.ServerStore.NotificationCenter))
+                Server.ServerStore.NotificationCenter,
+                logger: null))
             {
                 extensionPoint.Start();
 
@@ -271,7 +275,8 @@ while($TRUE){{
                 new JsonContextPool(),
                 exec,
                 args,
-                Server.ServerStore.NotificationCenter))
+                Server.ServerStore.NotificationCenter,
+                logger: null))
             {
                 extensionPoint.Start();
 
@@ -328,7 +333,8 @@ while($TRUE){{
                 new JsonContextPool(),
                 exec,
                 args,
-                Server.ServerStore.NotificationCenter))
+                Server.ServerStore.NotificationCenter,
+                logger: null))
             {
                 extensionPoint.Start();
 

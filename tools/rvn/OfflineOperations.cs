@@ -23,7 +23,7 @@ namespace rvn
         public static string PutKey(string destDir, string plainTextBase64KeyToPut)
         {
             var secret = Convert.FromBase64String(plainTextBase64KeyToPut);
-            var protect = new SecretProtection(new SecurityConfiguration()).Protect(secret);
+            var protect = new SecretProtection(new SecurityConfiguration(), logger: null).Protect(secret);
 
             using (var f = File.OpenWrite(Path.Combine(destDir, SecretKeyEncrypted)))
             {
@@ -49,7 +49,7 @@ namespace rvn
 
             dstOptions.Encryption.MasterKey = masterKey;
 
-            var protect = new SecretProtection(new SecurityConfiguration()).Protect(masterKey);
+            var protect = new SecretProtection(new SecurityConfiguration(), logger: null).Protect(masterKey);
 
             StorageCompaction.Execute(srcOptions, (StorageEnvironmentOptions.DirectoryStorageEnvironmentOptions)dstOptions);
 
@@ -73,7 +73,7 @@ namespace rvn
             var srcOptions = StorageEnvironmentOptions.ForPath(srcDir);
             var dstOptions = StorageEnvironmentOptions.ForPath(dstDir);
 
-            srcOptions.Encryption.MasterKey = new SecretProtection(new SecurityConfiguration()).Unprotect(bytes);
+            srcOptions.Encryption.MasterKey = new SecretProtection(new SecurityConfiguration(), logger: null).Unprotect(bytes);
 
             StorageCompaction.Execute(srcOptions, (StorageEnvironmentOptions.DirectoryStorageEnvironmentOptions)dstOptions);
 
@@ -96,7 +96,7 @@ namespace rvn
 
             var buffer = File.ReadAllBytes(keyPath);
 
-            var key = new SecretProtection(new SecurityConfiguration()).Unprotect(buffer);
+            var key = new SecretProtection(new SecurityConfiguration(), logger: null).Unprotect(buffer);
             return Convert.ToBase64String(key);
         }
 

@@ -1,6 +1,7 @@
 ﻿using System.Threading;
 using Raven.Server.NotificationCenter;
 using Raven.Server.ServerWide;
+using Sparrow.Logging;
 
 namespace Raven.Server.Dashboard
 {
@@ -11,11 +12,11 @@ namespace Raven.Server.Dashboard
             var options = new ServerDashboardOptions();
 
             var machineResourcesNotificationSender = 
-                new MachineResourcesNotificationSender(nameof(ServerStore), serverStore.Server, Watchers, options.MachineResourcesThrottle, shutdown);
+                new MachineResourcesNotificationSender(serverStore.Server, Watchers, options.MachineResourcesThrottle, shutdown, serverStore.Logger.GetLoggerFor(nameof(MachineResourcesNotificationSender), LogType.Server));
             BackgroundWorkers.Add(machineResourcesNotificationSender);
 
             var databasesInfoNotificationSender = 
-                new DatabasesInfoNotificationSender(nameof(ServerStore), serverStore, Watchers, options.DatabasesInfoThrottle, shutdown);
+                new DatabasesInfoNotificationSender(serverStore, Watchers, options.DatabasesInfoThrottle, shutdown, serverStore.Logger.GetLoggerFor(nameof(DatabasesInfoNotificationSender), LogType.Server));
             BackgroundWorkers.Add(databasesInfoNotificationSender);
         }
     }

@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using Sparrow.Logging;
 using Sparrow.LowMemory;
 using Sparrow.Platform;
 using Sparrow.Platform.Posix;
@@ -10,8 +11,9 @@ namespace Sparrow.Server.LowMemory
         private readonly SmapsReader _smapsReader;
 
         private byte[][] _buffers;
+        private readonly Logger _logger;
 
-        public LowMemoryMonitor()
+        public LowMemoryMonitor(Logger logger)
         {
             if (PlatformDetails.RunningOnLinux)
             {
@@ -20,16 +22,18 @@ namespace Sparrow.Server.LowMemory
                 _buffers = new[] { buffer1, buffer2 };
                 _smapsReader = new SmapsReader(_buffers);
             }
+
+            _logger = logger;
         }
 
         public override MemoryInfoResult GetMemoryInfoOnce()
         {
-            return MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader();
+            return MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader(_logger);
         }
 
         public override MemoryInfoResult GetMemoryInfo(bool extended = false)
         {
-            return MemoryInformation.GetMemoryInfo(extended ? _smapsReader : null, extended: extended);
+            return MemoryInformation.GetMemoryInfo(_logger, extended ? _smapsReader : null, extended: extended);
         }
 
         public override bool IsEarlyOutOfMemory(MemoryInfoResult memInfo, out Size commitChargeThreshold)
@@ -44,7 +48,7 @@ namespace Sparrow.Server.LowMemory
 
         public override void AssertNotAboutToRunOutOfMemory()
         {
-            MemoryInformation.AssertNotAboutToRunOutOfMemory();
+            MemoryInformation.AssertNotAboutToRunOutOfMemory(_logger);
         }
 
         public override void Dispose()

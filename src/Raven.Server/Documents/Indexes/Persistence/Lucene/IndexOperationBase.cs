@@ -165,7 +165,10 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             }
         }
 
-        public abstract void Dispose();
+        public virtual void Dispose()
+        {
+            _logger.Dispose();
+        }
 
         private static Analyzer GetAnalyzer(string fieldName, string analyzer, Dictionary<Type, Analyzer> analyzers, bool forQuerying, string databaseName)
         {

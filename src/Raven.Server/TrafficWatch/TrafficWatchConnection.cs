@@ -15,8 +15,6 @@ namespace Raven.Server.TrafficWatch
 
     internal class TrafficWatchConnection
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<TrafficWatchConnection>("Server");
-
         private readonly WebSocket _webSocket;
         private readonly JsonOperationContext _context;
         public string TenantSpecific { get; set; }
@@ -32,12 +30,14 @@ namespace Raven.Server.TrafficWatch
         private readonly MemoryStream _bufferStream = new MemoryStream();
 
         private bool _disposed;
+        private Logger _logger;
 
-        public TrafficWatchConnection(WebSocket webSocket, string resourceName, JsonOperationContext context, CancellationToken ctk)
+        public TrafficWatchConnection(WebSocket webSocket, string resourceName, JsonOperationContext context, Logger logger, CancellationToken ctk)
         {
             _webSocket = webSocket;
             TenantSpecific = resourceName;
             _context = context;
+            _logger = logger;
 
             _manualResetEvent = new AsyncManualResetEvent(ctk);
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(ctk);
@@ -80,8 +80,8 @@ namespace Raven.Server.TrafficWatch
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Error when handling web socket connection", e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info("Error when handling web socket connection", e);
             }
             finally
             {

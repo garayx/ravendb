@@ -5,11 +5,11 @@ using System.Globalization;
 using System.Threading;
 using Raven.Client;
 using Raven.Client.Exceptions.Documents;
+using Raven.Client.Util;
 using Raven.Server.ServerWide.Context;
 using Sparrow;
 using Sparrow.Binary;
 using Sparrow.Json;
-using Sparrow.Logging;
 using Voron;
 using Voron.Impl;
 
@@ -20,16 +20,11 @@ namespace Raven.Server.Documents.Expiration
         private const string DocumentsByExpiration = "DocumentsByExpiration";
         private const string DocumentsByRefresh = "DocumentsByRefresh";
 
-        private readonly DocumentDatabase _database;
         private readonly DocumentsStorage _documentsStorage;
-        private readonly Logger _logger;
 
         public ExpirationStorage(DocumentDatabase database, Transaction tx)
         {
-            _database = database;
-            _documentsStorage = _database.DocumentsStorage;
-            _logger = LoggingSource.Instance.GetLogger<ExpirationStorage>(database.Name);
-
+            _documentsStorage = database.DocumentsStorage;
             tx.CreateTree(DocumentsByExpiration);
             tx.CreateTree(DocumentsByRefresh);
         }
@@ -72,7 +67,7 @@ namespace Raven.Server.Documents.Expiration
         private void ThrowWrongExpirationDateFormat(Slice lowerId, string expirationDate)
         {
             throw new InvalidOperationException(
-                $"The expiration date format for document '{lowerId}' is not valid: '{expirationDate}'. Use the following format: {_database.Time.GetUtcNow():O}");
+                $"The expiration date format for document '{lowerId}' is not valid: '{expirationDate}'. Use the following format: {SystemTime.UtcNow:O}");
         }
 
         public Dictionary<Slice, List<(Slice LowerId, string Id)>> GetExpiredDocuments(DocumentsOperationContext context,
@@ -128,7 +123,7 @@ namespace Raven.Server.Documents.Expiration
 
                                 try
                                 {
-                                    using (var document = _database.DocumentsStorage.Get(context, clonedId, DocumentFields.Id | DocumentFields.Data))
+                                    using (var document = _documentsStorage.Get(context, clonedId, DocumentFields.Id | DocumentFields.Data))
                                     {
                                         if (document == null ||
                                             document.TryGetMetadata(out var metadata) == false ||
@@ -183,7 +178,7 @@ namespace Raven.Server.Documents.Expiration
         {
             string id = null;
             var allExpired = true;
-            var conflicts = _database.DocumentsStorage.ConflictsStorage.GetConflictsFor(context, clonedId);
+            var conflicts = _documentsStorage.ConflictsStorage.GetConflictsFor(context, clonedId);
             if (conflicts.Count > 0)
             {
                 foreach (var conflict in conflicts)
@@ -240,13 +235,13 @@ namespace Raven.Server.Documents.Expiration
                     {
                         try
                         {
-                            using (var doc = _database.DocumentsStorage.Get(context, ids.LowerId, DocumentFields.Data, throwOnConflict: true))
+                            using (var doc = _documentsStorage.Get(context, ids.LowerId, DocumentFields.Data, throwOnConflict: true))
                             {
                                 if (doc != null && doc.TryGetMetadata(out var metadata))
                                 {
                                     if (HasPassed(metadata, Constants.Documents.Metadata.Expires, currentTime))
                                     {
-                                        _database.DocumentsStorage.Delete(context, ids.LowerId, ids.Id, expectedChangeVector: null);
+                                        _documentsStorage.Delete(context, ids.LowerId, ids.Id, expectedChangeVector: null);
                                     }
                                 }
                             }
@@ -254,7 +249,7 @@ namespace Raven.Server.Documents.Expiration
                         catch (DocumentConflictException)
                         {
                             if (GetConflictedExpiration(context, currentTime, ids.LowerId).AllExpired)
-                                _database.DocumentsStorage.Delete(context, ids.LowerId, ids.Id, expectedChangeVector: null);
+                                _documentsStorage.Delete(context, ids.LowerId, ids.Id, expectedChangeVector: null);
                         }
 
                         deletionCount++;
@@ -278,7 +273,7 @@ namespace Raven.Server.Documents.Expiration
                 {
                     if (ids.Id != null)
                     {
-                        using (var doc = _database.DocumentsStorage.Get(context, ids.LowerId, throwOnConflict: false))
+                        using (var doc = _documentsStorage.Get(context, ids.LowerId, throwOnConflict: false))
                         {
                             if (doc != null && doc.TryGetMetadata(out var metadata))
                             {

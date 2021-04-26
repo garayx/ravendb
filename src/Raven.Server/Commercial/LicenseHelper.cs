@@ -19,15 +19,16 @@ namespace Raven.Server.Commercial
 {
     public class LicenseHelper
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<LicenseHelper>("Server");
+        private readonly Logger _logger;
         public static readonly string LicenseStringConfigurationName = RavenConfiguration.GetKey(x => x.Licensing.License);
 
         private readonly ServerStore _serverStore;
         private readonly SemaphoreSlim _sm = new SemaphoreSlim(1, 1);
 
-        public LicenseHelper(ServerStore serverStore)
+        public LicenseHelper(ServerStore serverStore, Logger logger)
         {
             _serverStore = serverStore;
+            _logger = logger;
         }
 
         public void UpdateLocalLicense(License newLicense, RSAParameters rsaParameters)
@@ -51,8 +52,8 @@ namespace Raven.Server.Commercial
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Failed to update the license locally", e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info("Failed to update the license locally", e);
             }
             finally
             {
@@ -74,8 +75,8 @@ namespace Raven.Server.Commercial
             {
                 var msg = $"Failed to read license from '{LicenseStringConfigurationName}' configuration.";
 
-                if (Logger.IsInfoEnabled)
-                    Logger.Info(msg, e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info(msg, e);
 
                 if (throwOnFailure)
                     throw new LicenseActivationException(msg, e);
@@ -101,8 +102,8 @@ namespace Raven.Server.Commercial
             {
                 var msg = $"Failed to read license from '{path.FullPath}' path.";
 
-                if (Logger.IsInfoEnabled)
-                    Logger.Info(msg, e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info(msg, e);
 
                 if (throwOnFailure)
                     throw new LicenseActivationException(msg, e);
@@ -155,7 +156,7 @@ namespace Raven.Server.Commercial
             }
         }
 
-        private static void UpdateEnvironmentVariableLicenseString(License newLicense, RSAParameters rsaParameters)
+        private void UpdateEnvironmentVariableLicenseString(License newLicense, RSAParameters rsaParameters)
         {
             var preferredTarget = EnvironmentVariableTarget.Machine;
             var licenseString = GetLicenseString();
@@ -197,7 +198,7 @@ namespace Raven.Server.Commercial
             }
         }
 
-        private static bool ValidateLicense(License oldLicense, RSAParameters rsaParameters, License newLicense)
+        private bool ValidateLicense(License oldLicense, RSAParameters rsaParameters, License newLicense)
         {
             try
             {
@@ -205,16 +206,16 @@ namespace Raven.Server.Commercial
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failed to validate license: `{oldLicense}`", e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info($"Failed to validate license: `{oldLicense}`", e);
 
                 return true;
             }
 
             if (oldLicense.Id != newLicense.Id)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Can't update license because the new license ID is: {newLicense.Id} " +
+                if (_logger.IsInfoEnabled)
+                    _logger.Info($"Can't update license because the new license ID is: {newLicense.Id} " +
                                 $"while old license ID is: {oldLicense.Id}");
 
                 return false;

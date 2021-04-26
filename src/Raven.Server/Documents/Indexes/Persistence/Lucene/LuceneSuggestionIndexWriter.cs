@@ -36,14 +36,14 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
 
         public Analyzer Analyzer => _indexWriter?.Analyzer;
 
-        public LuceneSuggestionIndexWriter(string field, LuceneVoronDirectory directory, SnapshotDeletionPolicy snapshotter, IndexWriter.MaxFieldLength maxFieldLength, Index index, IState state)
+        public LuceneSuggestionIndexWriter(string field, LuceneVoronDirectory directory, SnapshotDeletionPolicy snapshotter, IndexWriter.MaxFieldLength maxFieldLength, Index index, IState state, Logger logger)
         {
             _directory = directory;
             _indexDeletionPolicy = snapshotter;
             _maxFieldLength = maxFieldLength;
             _index = index;
             _field = field;
-            _logger = LoggingSource.Instance.GetLogger<LuceneSuggestionIndexWriter>(_index.DocumentDatabase.Name);
+            _logger = logger;
 
             RecreateIndexWriter(state);
         }
@@ -197,7 +197,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             }
             catch (SystemException e)
             {
-                LuceneIndexWriter.TryThrowingBetterException(e, _directory);
+                LuceneIndexWriter.TryThrowingBetterException(e, _directory, _logger);
 
                 throw;
             }
@@ -211,7 +211,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             }
             catch (SystemException e)
             {
-                LuceneIndexWriter.TryThrowingBetterException(e, _directory);
+                LuceneIndexWriter.TryThrowingBetterException(e, _directory, _logger);
 
                 throw;
             }
@@ -313,6 +313,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
         public void Dispose()
         {
             DisposeIndexWriter();
+            _logger.Dispose();
         }
     }
 }

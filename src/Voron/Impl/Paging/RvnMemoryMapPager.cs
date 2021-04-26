@@ -34,7 +34,7 @@ namespace Voron.Impl.Paging
             DeleteOnClose = deleteOnClose;
             FileName = file;
             var copyOnWriteMode = options.CopyOnWriteMode && FileName.FullPath.EndsWith(Constants.DatabaseFilename);
-            _logger = LoggingSource.Instance.GetLogger<StorageEnvironment>($"Pager-{file}");
+            _logger = options._log.GetLoggerFor($"{nameof(StorageEnvironment)}: 'Pager-{file}'", LogType.Database);
 
             if (initialFileSize.HasValue == false || initialFileSize.Value == 0) 
                 initialFileSize = Math.Max(SysInfo.PageSize * 16, 64 * 1024);
@@ -65,7 +65,7 @@ namespace Voron.Impl.Paging
                 }
                 catch (DiskFullException dfEx)
                 {
-                    var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file.FullPath);
+                    var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file.FullPath, _logger);
                     throw new DiskFullException(file.FullPath, initialFileSize.Value, diskSpaceResult?.TotalFreeSpace.GetValue(SizeUnit.Bytes), dfEx.Message);
                 }
             }

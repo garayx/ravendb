@@ -462,7 +462,7 @@ namespace Raven.Server.Web.System
                         Name = backupName
                     };
 
-                    var backupTask = new BackupTask(Database, backupParameters, backupConfiguration, Logger);
+                    var backupTask = new BackupTask(Database, backupParameters, backupConfiguration);
 
                     var t = Database.Operations.AddOperation(
                         null,
@@ -501,7 +501,8 @@ namespace Raven.Server.Web.System
                                 {
                                     ServerStore.ConcurrentBackupsCounter.FinishBackup(backupName, backupStatus: null, sw.Elapsed, Logger);
                                 }
-                            }, null, $"Backup thread {backupName} for database '{Database.Name}'");
+                            }, null, $"Backup thread {backupName} for database '{Database.Name}'",
+                                Logger);
                             return tcs.Task;
                         },
                         id: operationId, token: cancelToken);

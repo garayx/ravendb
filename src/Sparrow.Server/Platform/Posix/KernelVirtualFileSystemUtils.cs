@@ -10,10 +10,9 @@ namespace Sparrow.Platform.Posix
 {
     internal static class KernelVirtualFileSystemUtils
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger("Server", typeof(KernelVirtualFileSystemUtils).FullName);
         private static readonly ConcurrentSet<string> IsOldFileAlert = new ConcurrentSet<string>();
 
-        public static long? ReadNumberFromCgroupFile(string fileName)
+        public static long? ReadNumberFromCgroupFile(string fileName, Logger logger)
         {
             try
             {
@@ -26,15 +25,15 @@ namespace Sparrow.Platform.Posix
             }
             catch (Exception e)
             {
-                if (IsOldFileAlert.TryAdd(fileName) && Logger.IsOperationsEnabled)
+                if (IsOldFileAlert.TryAdd(fileName) && logger?.IsOperationsEnabled == true)
                 {
-                    Logger.Operations($"Unable to read and parse '{fileName}', will not respect container's limit", e);
+                    logger.Operations($"Unable to read and parse '{fileName}', will not respect container's limit", e);
                 }
                 return null;
             }
         }
 
-        public static int ReadNumberOfCoresFromCgroupFile(string filename)
+        public static int ReadNumberOfCoresFromCgroupFile(string filename, Logger logger)
         {
             // on error or if not applicable - return Environment.ProcessorCount
             try
@@ -56,21 +55,21 @@ namespace Sparrow.Platform.Posix
             }
             catch (Exception e)
             {
-                if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
+                if (IsOldFileAlert.TryAdd(filename) && logger.IsOperationsEnabled)
                 {
-                    Logger.Operations($"Unable to read and parse '{filename}', will not respect container's number of cores", e);
+                    logger.Operations($"Unable to read and parse '{filename}', will not respect container's number of cores", e);
                 }
                 return Environment.ProcessorCount;
             }
         }
 
-        public static (string DeviceName, bool IsDeviceSwapFile)[] ReadSwapInformationFromSwapsFile()
+        public static (string DeviceName, bool IsDeviceSwapFile)[] ReadSwapInformationFromSwapsFile(Logger logger = null)
         {
             var filename = "/proc/swaps";
-            return ReadSwapInformationFromSwapsFile(filename);
+            return ReadSwapInformationFromSwapsFile(filename, logger);
         }
 
-        public static (string DeviceName, bool IsDeviceSwapFile)[] ReadSwapInformationFromSwapsFile(string filename)
+        public static (string DeviceName, bool IsDeviceSwapFile)[] ReadSwapInformationFromSwapsFile(string filename, Logger logger = null)
         {
             // /proc/swaps output format :
             //              Filename        Type            Size            Used    Priority
@@ -89,8 +88,8 @@ namespace Sparrow.Platform.Posix
 
                 if (items.Length < numberOfRow + 1)
                 {
-                    if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                        Logger.Operations($"no swap defined on this system according to {filename}");
+                    if (IsOldFileAlert.TryAdd(filename) && logger?.IsOperationsEnabled == true)
+                        logger.Operations($"no swap defined on this system according to {filename}");
                     return Array.Empty<(string, bool)>();
                 }
 
@@ -100,16 +99,16 @@ namespace Sparrow.Platform.Posix
                     items[3].Equals("Used") == false ||
                     items[4].Equals("Priority") == false)
                 {
-                    if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                        Logger.Operations($"Unrecognized header at {filename}, cannot read swap information");
+                    if (IsOldFileAlert.TryAdd(filename) && logger?.IsOperationsEnabled == true)
+                        logger.Operations($"Unrecognized header at {filename}, cannot read swap information");
                     return Array.Empty<(string, bool)>();
                 }
 
 
                 if (items.Length % numberOfRow != 0)
                 {
-                    if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                        Logger.Operations($"Invalid number of fields at {filename}, cannot read swap information");
+                    if (IsOldFileAlert.TryAdd(filename) && logger?.IsOperationsEnabled == true)
+                        logger.Operations($"Invalid number of fields at {filename}, cannot read swap information");
                     return Array.Empty<(string, bool)>();
                 }
 
@@ -130,13 +129,13 @@ namespace Sparrow.Platform.Posix
             }
             catch (Exception e)
             {
-                if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                    Logger.Operations($"Unable to read and parse '{filename}', cannot read swap information", e);
+                if (IsOldFileAlert.TryAdd(filename) && logger?.IsOperationsEnabled == true)
+                    logger.Operations($"Unable to read and parse '{filename}', cannot read swap information", e);
                 return Array.Empty<(string, bool)>();
             }
         }
 
-        public static long ReadNumberFromFile(string filename)
+        public static long ReadNumberFromFile(string filename, Logger logger)
         {
             // return long number read from file, on error return long.MaxValue
             try
@@ -147,15 +146,15 @@ namespace Sparrow.Platform.Posix
             }
             catch (Exception e)
             {
-                if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
+                if (IsOldFileAlert.TryAdd(filename) && logger.IsOperationsEnabled)
                 {
-                    Logger.Operations($"Unable to read and parse '{filename}'", e);
+                    logger.Operations($"Unable to read and parse '{filename}'", e);
                 }
                 return long.MaxValue;
             }
         }
 
-        public static HashSet<string> GetAllDisksFromPartitionsFile()
+        public static HashSet<string> GetAllDisksFromPartitionsFile(Logger logger)
         {
             // /proc/partitions output format :
             //          major minor  #blocks  name
@@ -176,8 +175,8 @@ namespace Sparrow.Platform.Posix
 
                 if (items.Length < 5)
                 {
-                    if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                        Logger.Operations($"no partitions defined on this system according to {filename}");
+                    if (IsOldFileAlert.TryAdd(filename) && logger.IsOperationsEnabled)
+                        logger.Operations($"no partitions defined on this system according to {filename}");
                     return results;
                 }
 
@@ -186,15 +185,15 @@ namespace Sparrow.Platform.Posix
                     items[2].Equals("#blocks") == false ||
                     items[3].Equals("name") == false)
                 {
-                    if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                        Logger.Operations($"Unrecognized header at {filename}, cannot read partitions information");
+                    if (IsOldFileAlert.TryAdd(filename) && logger.IsOperationsEnabled)
+                        logger.Operations($"Unrecognized header at {filename}, cannot read partitions information");
                     return results;
                 }
 
                 if (items.Length % 4 != 0)
                 {
-                    if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                        Logger.Operations($"Invalid number of fields at {filename}, cannot read partitions information");
+                    if (IsOldFileAlert.TryAdd(filename) && logger.IsOperationsEnabled)
+                        logger.Operations($"Invalid number of fields at {filename}, cannot read partitions information");
                     return results;
                 }
 
@@ -211,8 +210,8 @@ namespace Sparrow.Platform.Posix
             }
             catch (Exception e)
             {
-                if (IsOldFileAlert.TryAdd(filename) && Logger.IsOperationsEnabled)
-                    Logger.Operations($"Unable to read and parse '{filename}', cannot read partitions information", e);
+                if (IsOldFileAlert.TryAdd(filename) && logger.IsOperationsEnabled)
+                    logger.Operations($"Unable to read and parse '{filename}', cannot read partitions information", e);
                 return new HashSet<string>();
             }
         }

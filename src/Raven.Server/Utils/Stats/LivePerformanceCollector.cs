@@ -19,9 +19,9 @@ namespace Raven.Server.Utils.Stats
 
         protected readonly Logger Logger;
 
-        protected LivePerformanceCollector(CancellationToken parentCts, string loggingSource)
+        protected LivePerformanceCollector(CancellationToken parentCts, Logger logger)
         {
-            Logger = LoggingSource.Instance.GetLogger(loggingSource, GetType().FullName);
+            Logger = logger;
 
             _cts = CancellationTokenSource.CreateLinkedTokenSource(parentCts);
         }
@@ -115,7 +115,10 @@ namespace Raven.Server.Utils.Stats
 
             exceptionAggregator.Execute(() => _cts.Dispose());
 
-            exceptionAggregator.ThrowIfNeeded();
+            using (Logger)
+            {
+                exceptionAggregator.ThrowIfNeeded();
+            }
         }
 
         protected class HandlerAndPerformanceStatsList<THandler, TStatsAggregator>

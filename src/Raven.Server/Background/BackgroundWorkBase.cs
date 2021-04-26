@@ -14,10 +14,10 @@ namespace Raven.Server.Background
         private Task _currentTask;
         protected readonly Logger Logger;
 
-        protected BackgroundWorkBase(string resourceName, CancellationToken shutdown)
+        protected BackgroundWorkBase(CancellationToken shutdown, Logger logger)
         {
             _shutdown = shutdown;
-            Logger = LoggingSource.Instance.GetLogger(resourceName ?? "Server", GetType().FullName);
+            Logger = logger;
             Cts = CancellationTokenSource.CreateLinkedTokenSource(_shutdown);
         }
 
@@ -158,6 +158,7 @@ namespace Raven.Server.Background
             try
             {
                 Stop();
+                Logger.Dispose();
                 Cts.Dispose();
             }
             catch (ObjectDisposedException) //precaution, shouldn't happen

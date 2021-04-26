@@ -114,7 +114,7 @@ namespace Raven.Server.Documents.TimeSeries
             });
         }
 
-        private readonly Logger _logger;
+        internal readonly Logger _logger;
 
         public TimeSeriesStorage(DocumentDatabase documentDatabase, Transaction tx)
         {
@@ -125,8 +125,8 @@ namespace Raven.Server.Documents.TimeSeries
             tx.CreateTree(DeletedRangesKey);
 
             Stats = new TimeSeriesStats(this, tx);
+            _logger = documentDatabase.DocumentsStorage._logger.GetLoggerFor(nameof(TimeSeriesStorage), LogType.Database);
             Rollups = new TimeSeriesRollups(_documentDatabase);
-            _logger = LoggingSource.Instance.GetLogger<TimeSeriesStorage>(documentDatabase.Name);
         }
 
         public static DateTime ExtractDateTimeFromKey(Slice key)

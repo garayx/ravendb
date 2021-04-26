@@ -48,8 +48,8 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             _maxFieldLength = mfl;
             _indexReaderWarmer = indexReaderWarmer;
             _index = index;
-
-            _logger = LoggingSource.Instance.GetLogger<LuceneIndexWriter>(index.DocumentDatabase.Name);
+            
+            _logger = index._logger.GetLoggerFor(nameof(LuceneIndexWriter), LogType.Index);
             RecreateIndexWriter(state);
         }
 
@@ -77,7 +77,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             }
             catch (SystemException e)
             {
-                TryThrowingBetterException(e, _directory);
+                TryThrowingBetterException(e, _directory, _logger);
                 throw;
             }
             finally
@@ -86,7 +86,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             }
         }
 
-        public static void TryThrowingBetterException(SystemException e, LuceneVoronDirectory directory)
+        public static void TryThrowingBetterException(SystemException e, LuceneVoronDirectory directory, Logger logger)
         {
             if (e.Message.StartsWith("this writer hit an OutOfMemoryError"))
                 throw new OutOfMemoryException("Index writer hit OOM during commit", e);
@@ -98,7 +98,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             {
                 // this commit stage is written to the temp scratch buffers
                 var fullPath = directory.TempFullPath;
-                var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(fullPath);
+                var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(fullPath, logger: logger);
                 var freeSpace = driveInfo != null ? driveInfo.TotalFreeSpace.ToString() : "N/A";
                 throw new DiskFullException($"There isn't enough space to commit the index to {fullPath}. " +
                                             $"Currently available space: {freeSpace}", e);
@@ -118,7 +118,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             }
             catch (SystemException e)
             {
-                TryThrowingBetterException(e, _directory);
+                TryThrowingBetterException(e, _directory, _logger);
 
                 throw;
             }
@@ -204,6 +204,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
         public void Dispose()
         {
             DisposeIndexWriter();
+            _logger.Dispose();
         }
 
         public void AddIndexesNoOptimize(Directory[] directories, int count, IState state)

@@ -49,8 +49,7 @@ namespace Raven.Server.Documents.ETL
 
         public EtlLoader(DocumentDatabase database, ServerStore serverStore)
         {
-            Logger = LoggingSource.Instance.GetLogger(database.Name, GetType().FullName);
-
+            Logger = database._logger.GetLoggerFor(nameof(EtlLoader), LogType.Database);
             _database = database;
             _serverStore = serverStore;
 
@@ -396,6 +395,8 @@ namespace Raven.Server.Documents.ETL
             ea.Execute(() => _database.TombstoneCleaner.Unsubscribe(this));
 
             ea.ThrowIfNeeded();
+
+            Logger.Dispose();
         }
 
         private bool IsMyEtlTask<T, TConnectionString>(DatabaseRecord record, T etlTask, ref Dictionary<string, string> responsibleNodes)

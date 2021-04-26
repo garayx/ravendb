@@ -11,8 +11,6 @@ namespace Raven.Server.NotificationCenter.Handlers
 {
     public class ServerDashboardHandler : ServerNotificationHandlerBase
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<ServerDashboardHandler>("Server");
-
         [RavenAction("/server-dashboard/watch", "GET", AuthorizationStatus.ValidUser, EndpointType.Read, SkipUsagesCount = true)]
         public async Task Get()
         {
@@ -24,7 +22,7 @@ namespace Raven.Server.NotificationCenter.Handlers
                     var isValidFor = GetDatabaseAccessValidationFunc();
                     try
                     {
-                        using (var lowMemoryMonitor = new LowMemoryMonitor())
+                        using (var lowMemoryMonitor = new LowMemoryMonitor(ServerStore.Logger.GetLoggerFor(nameof(LowMemoryMonitor), LogType.Server)))
                         {
                             var machineResources = MachineResourcesNotificationSender.GetMachineResources(Server.MetricCacher, lowMemoryMonitor, Server.CpuUsageCalculator);
                             await writer.WriteToWebSocket(machineResources.ToJson());
@@ -47,8 +45,9 @@ namespace Raven.Server.NotificationCenter.Handlers
                     }
                     catch (Exception e)
                     {
-                        if (Logger.IsInfoEnabled)
-                            Logger.Info("Failed to send the initial server dashboard data", e);
+                        var logger = ServerStore.Logger.GetLoggerFor(nameof(ServerDashboardHandler), LogType.Server);
+                        if (logger.IsInfoEnabled)
+                            logger.Info("Failed to send the initial server dashboard data", e);
                     }
 
                     await writer.WriteNotifications(isValidFor);

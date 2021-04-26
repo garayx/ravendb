@@ -71,10 +71,10 @@ namespace Raven.Server
         static RavenServer()
         {
             DebugStuff.Attach();
-            UnhandledExceptions.Track(Logger);
+            UnhandledExceptions.Track(LoggingSource.Instance.GetLogger<RavenServer>("Server"));
         }
 
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<RavenServer>("Server");
+        internal readonly Logger RavenServerLogger;
         private readonly Logger _authAuditLog = LoggingSource.AuditLog.GetLogger("AuthenticateCertificate", "Audit");
         private TestingStuff _forTestingPurposes;
 
@@ -110,9 +110,11 @@ namespace Raven.Server
 
         internal CipherSuitesPolicy CipherSuitesPolicy => _httpsConnectionMiddleware?.CipherSuitesPolicy;
 
-        public RavenServer(RavenConfiguration configuration)
+        public RavenServer(RavenConfiguration configuration, Logger logger)
         {
             JsonDeserializationValidator.Validate();
+
+            RavenServerLogger = logger.GetLoggerFor<RavenServer>(LogType.Server);
 
             Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             if (Configuration.Initialized == false)
@@ -129,9 +131,9 @@ namespace Raven.Server
             Metrics = new MetricCounters();
             MetricCacher = new ServerMetricCacher(this);
 
-            _tcpLogger = LoggingSource.Instance.GetLogger<RavenServer>("Server/TCP");
-            _externalCertificateValidator = new ExternalCertificateValidator(this, Logger);
-            _tcpContextPool = new JsonContextPool(Configuration.Memory.MaxContextSizeToKeep);
+            _tcpLogger = RavenServerLogger.GetLoggerFor("Server/TCP", LogType.Server);
+            _externalCertificateValidator = new ExternalCertificateValidator(this, RavenServerLogger);
+            _tcpContextPool = new JsonContextPool(Configuration.Memory.MaxContextSizeToKeep, _tcpLogger.GetLoggerFor(nameof(JsonContextPool), LogType.Server));
         }
 
         public TcpListenerStatus GetTcpServerStatus()
@@ -145,14 +147,14 @@ namespace Raven.Server
             Certificate = LoadCertificateAtStartup() ?? new CertificateHolder();
 
             CpuUsageCalculator = string.IsNullOrEmpty(Configuration.Monitoring.CpuUsageMonitorExec)
-                ? CpuHelper.GetOSCpuUsageCalculator()
-                : CpuHelper.GetExtensionPointCpuUsageCalculator(_tcpContextPool, Configuration.Monitoring, ServerStore.NotificationCenter);
+                ? CpuHelper.GetOSCpuUsageCalculator(RavenServerLogger.GetLoggerFor(nameof(CpuHelper), LogType.Server))
+                : CpuHelper.GetExtensionPointCpuUsageCalculator(_tcpContextPool, Configuration.Monitoring, ServerStore.NotificationCenter, RavenServerLogger.GetLoggerFor(nameof(CpuHelper), LogType.Server));
 
-            CpuUsageCalculator.Init();
+            CpuUsageCalculator.Init(CpuHelper._logger);
             MetricCacher.Initialize();
 
-            if (Logger.IsInfoEnabled)
-                Logger.Info($"Server store started took {sp.ElapsedMilliseconds:#,#;;0} ms");
+            if (RavenServerLogger.IsInfoEnabled)
+                RavenServerLogger.Info($"Server store started took {sp.ElapsedMilliseconds:#,#;;0} ms");
 
             sp.Restart();
             ListenToPipes().IgnoreUnobservedExceptions();
@@ -236,13 +238,13 @@ namespace Raven.Server
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Could not configure server", e);
+                if (RavenServerLogger.IsInfoEnabled)
+                    RavenServerLogger.Info("Could not configure server", e);
                 throw;
             }
 
-            if (Logger.IsInfoEnabled)
-                Logger.Info($"Configuring HTTP server took {sp.ElapsedMilliseconds:#,#;;0} ms");
+            if (RavenServerLogger.IsInfoEnabled)
+                RavenServerLogger.Info($"Configuring HTTP server took {sp.ElapsedMilliseconds:#,#;;0} ms");
 
             try
             {
@@ -282,8 +284,8 @@ namespace Raven.Server
                     SecretProtection.AddCertificateChainToTheUserCertificateAuthorityStoreAndCleanExpiredCerts(Certificate.Certificate, Certificate.Certificate.Export(X509ContentType.Cert), Configuration.Security.CertificatePassword);
                 }
 
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Initialized Server... {WebUrl}");
+                if (RavenServerLogger.IsInfoEnabled)
+                    RavenServerLogger.Info($"Initialized Server... {WebUrl}");
 
                 _tcpListenerStatus = StartTcpListener();
 
@@ -293,8 +295,8 @@ namespace Raven.Server
                 }
                 catch (Exception e)
                 {
-                    if (Logger.IsOperationsEnabled)
-                        Logger.Operations("Could not open the server store", e);
+                    if (RavenServerLogger.IsOperationsEnabled)
+                        RavenServerLogger.Operations("Could not open the server store", e);
                     throw;
                 }
 
@@ -335,18 +337,18 @@ namespace Raven.Server
                         }
                         catch (Exception e)
                         {
-                            if (Logger.IsOperationsEnabled)
-                                Logger.Operations("Fatal exception occured during cpu credit monitoring", e);
+                            if (RavenServerLogger.IsOperationsEnabled)
+                                RavenServerLogger.Operations("Fatal exception occured during cpu credit monitoring", e);
                         }
-                    }, null, "CPU Credits Monitoring");
+                    }, null, "CPU Credits Monitoring", RavenServerLogger);
                 }
 
                 _refreshClusterCertificate?.Change(TimeSpan.FromMinutes(1), TimeSpan.FromHours(1));
             }
             catch (Exception e)
             {
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations("Could not start server", e);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations("Could not start server", e);
                 throw;
             }
         }
@@ -365,8 +367,8 @@ namespace Raven.Server
 
                 ServerStore.NotificationCenter.Add(AlertRaised.Create(null, CertificateReplacement.CertReplaceAlertTitle, msg, AlertType.Certificates_Expiration, NotificationSeverity.Error));
 
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations(msg);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations(msg);
             }
             else if (remainingDays <= 20)
             {
@@ -388,8 +390,8 @@ namespace Raven.Server
 
                 ServerStore.NotificationCenter.Add(AlertRaised.Create(null, CertificateReplacement.CertReplaceAlertTitle, msg, AlertType.Certificates_Expiration, severity));
 
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations(msg);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations(msg);
             }
             else
             {
@@ -426,8 +428,8 @@ namespace Raven.Server
             }
             catch (Exception exception)
             {
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations($"Failed to check the expiration date of the new server certificate '{Certificate.Certificate?.Subject} ({Certificate.Certificate?.Thumbprint})'", exception);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations($"Failed to check the expiration date of the new server certificate '{Certificate.Certificate?.Subject} ({Certificate.Certificate?.Thumbprint})'", exception);
             }
         }
 
@@ -531,8 +533,8 @@ namespace Raven.Server
             }
             catch (Exception e)
             {
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations("During CPU credits monitoring, failed to sync the remaining credits.", e);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations("During CPU credits monitoring, failed to sync the remaining credits.", e);
             }
 
             while (ServerStore.ServerShutdown.IsCancellationRequested == false)
@@ -577,8 +579,8 @@ namespace Raven.Server
                 }
                 catch (Exception e)
                 {
-                    if (Logger.IsOperationsEnabled)
-                        Logger.Operations("Unhandled exception occured during cpu credit monitoring", e);
+                    if (RavenServerLogger.IsOperationsEnabled)
+                        RavenServerLogger.Operations("Unhandled exception occured during cpu credit monitoring", e);
                 }
 
                 // During startup and until we get a valid result, we retry once a minute
@@ -603,15 +605,15 @@ namespace Raven.Server
                     if (duringStartup)
                     {
                         startupRetriesSw.Restart();
-                        if (Logger.IsOperationsEnabled)
-                            Logger.Operations("During startup, failed to sync CPU credits. Retrying in 1 minute.", e);
+                        if (RavenServerLogger.IsOperationsEnabled)
+                            RavenServerLogger.Operations("During startup, failed to sync CPU credits. Retrying in 1 minute.", e);
                     }
 
                     // If it's the first time, or if we logged the last error more than 15 minutes ago
                     if (err == null || err.Elapsed.TotalMinutes > 15)
                     {
-                        if (Logger.IsOperationsEnabled)
-                            Logger.Operations("During CPU credits monitoring, failed to sync the remaining credits.", e);
+                        if (RavenServerLogger.IsOperationsEnabled)
+                            RavenServerLogger.Operations("During CPU credits monitoring, failed to sync the remaining credits.", e);
                         if (err == null)
                             err = Stopwatch.StartNew();
                         else
@@ -803,8 +805,8 @@ namespace Raven.Server
                     }.Uri.ToString())
                     .ToArray();
 
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations($"HTTPS is on. Setting up a new web host to redirect incoming HTTP traffic on port 80 to HTTPS on port 443. The new web host is listening to { string.Join(", ", serverUrlsToRedirect) }");
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations($"HTTPS is on. Setting up a new web host to redirect incoming HTTP traffic on port 80 to HTTPS on port 443. The new web host is listening to { string.Join(", ", serverUrlsToRedirect) }");
 
                 var webHostBuilder = new WebHostBuilder()
                     .UseKestrel()
@@ -818,8 +820,8 @@ namespace Raven.Server
             }
             catch (Exception e)
             {
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations("Failed to create a webhost to redirect HTTP traffic to HTTPS", e);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations("Failed to create a webhost to redirect HTTP traffic to HTTPS", e);
             }
         }
 
@@ -833,8 +835,8 @@ namespace Raven.Server
                 {
                     httpMessageHandler.SslProtocols = TcpUtils.SupportedSslProtocols;
 
-                    if (Logger.IsOperationsEnabled)
-                        Logger.Operations($"When setting the certificate, validating that the server can authenticate with itself using {url}.");
+                    if (RavenServerLogger.IsOperationsEnabled)
+                        RavenServerLogger.Operations($"When setting the certificate, validating that the server can authenticate with itself using {url}.");
 
                     // Using the server certificate as a client certificate to test if we can talk to ourselves
                     httpMessageHandler.ClientCertificates.Add(certificateCertificate);
@@ -846,14 +848,14 @@ namespace Raven.Server
                     {
                         await client.GetAsync("/setup/alive");
                     }
-                    if (Logger.IsOperationsEnabled)
-                        Logger.Operations($"Successful connection to {url}.");
+                    if (RavenServerLogger.IsOperationsEnabled)
+                        RavenServerLogger.Operations($"Successful connection to {url}.");
                 }
             }
             catch (Exception e)
             {
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations($"Server failed to contact itself @ {url}. " +
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations($"Server failed to contact itself @ {url}. " +
                                       $"This can happen if PublicServerUrl is not the same as the domain in the certificate or you have other certificate errors. " +
                                       "Trying again, this time with a RemoteCertificateValidationCallback which allows connections with the same certificate.", e);
 
@@ -883,15 +885,15 @@ namespace Raven.Server
                                 }
                             }
 
-                            if (Logger.IsOperationsEnabled)
-                                Logger.Operations($"Successful connection with RemoteCertificateValidationCallback to {url}.");
+                            if (RavenServerLogger.IsOperationsEnabled)
+                                RavenServerLogger.Operations($"Successful connection with RemoteCertificateValidationCallback to {url}.");
                         }
                     }
                 }
                 catch (Exception e2)
                 {
-                    if (Logger.IsOperationsEnabled)
-                        Logger.Operations($"Server failed to contact itself @ {url} even though RemoteCertificateValidationCallback allows connections with the same certificate.", e2);
+                    if (RavenServerLogger.IsOperationsEnabled)
+                        RavenServerLogger.Operations($"Server failed to contact itself @ {url} even though RemoteCertificateValidationCallback allows connections with the same certificate.", e2);
                 }
             }
         }
@@ -935,8 +937,8 @@ namespace Raven.Server
             }
             catch (Exception exception)
             {
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations("Periodic check of the server certificate expiration date failed.", exception);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations("Periodic check of the server certificate expiration date failed.", exception);
             }
         }
 
@@ -987,8 +989,8 @@ namespace Raven.Server
                     newCertificate = LoadCertificate();
                     if (newCertificate == null)
                     {
-                        if (Logger.IsOperationsEnabled)
-                            Logger.Operations(msg);
+                        if (RavenServerLogger.IsOperationsEnabled)
+                            RavenServerLogger.Operations(msg);
 
                         ServerStore.NotificationCenter.Add(AlertRaised.Create(
                             null,
@@ -1040,8 +1042,8 @@ namespace Raven.Server
             catch (Exception e)
             {
                 var msg = "Failed to replace the server certificate.";
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations(msg, e);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations(msg, e);
 
                 ServerStore.NotificationCenter.Add(AlertRaised.Create(
                     null,
@@ -1118,8 +1120,8 @@ namespace Raven.Server
             if (shouldRenew == false)
             {
                 // We don't want an alert here, this happens frequently.
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations(
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations(
                         $"Renew check: still have time left to renew the server certificate with thumbprint `{currentCertificate.Certificate.Thumbprint}`, estimated renewal date: {renewalDate}");
                 return null;
             }
@@ -1135,8 +1137,8 @@ namespace Raven.Server
                     AlertType.Certificates_DeveloperLetsEncryptRenewal,
                     NotificationSeverity.Warning));
 
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations(msg);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations(msg);
                 return null;
             }
 
@@ -1200,10 +1202,10 @@ namespace Raven.Server
                     throw new InvalidOperationException("Failed to load (and validate) the new certificate which was received during the refresh process.", e);
                 }
 
-                if (Logger.IsOperationsEnabled)
+                if (RavenServerLogger.IsOperationsEnabled)
                 {
                     var source = string.IsNullOrEmpty(Configuration.Security.CertificateLoadExec) ? "Let's Encrypt" : $"executable ({Configuration.Security.CertificateLoadExec} {Configuration.Security.CertificateLoadExecArguments})";
-                    Logger.Operations($"Got new certificate from {source}. Starting certificate replication.");
+                    RavenServerLogger.Operations($"Got new certificate from {source}. Starting certificate replication.");
                 }
 
                 // During replacement of a cluster certificate, we must have both the new and the old server certificates registered in the server store.
@@ -1240,8 +1242,8 @@ namespace Raven.Server
             catch (Exception e)
             {
                 var msg = "Failed to start certificate replication.";
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations(msg, e);
+                if (RavenServerLogger.IsOperationsEnabled)
+                    RavenServerLogger.Operations(msg, e);
 
                 ServerStore.NotificationCenter.Add(AlertRaised.Create(
                     null,
@@ -1385,8 +1387,8 @@ namespace Raven.Server
                 if (string.IsNullOrEmpty(Configuration.Security.CertificateLoadExec) == false &&
                     (string.IsNullOrEmpty(Configuration.Security.CertificateRenewExec) || string.IsNullOrEmpty(Configuration.Security.CertificateChangeExec)))
                 {
-                    if (Logger.IsOperationsEnabled)
-                        Logger.Operations($"You are using the configuration property '{RavenConfiguration.GetKey(x => x.Security.CertificateLoadExec)}', without specifying '{RavenConfiguration.GetKey(x => x.Security.CertificateRenewExec)}' and '{RavenConfiguration.GetKey(x => x.Security.CertificateChangeExec)}'. This configuration requires you to renew the certificate manually across the entire cluster.");
+                    if (RavenServerLogger.IsOperationsEnabled)
+                        RavenServerLogger.Operations($"You are using the configuration property '{RavenConfiguration.GetKey(x => x.Security.CertificateLoadExec)}', without specifying '{RavenConfiguration.GetKey(x => x.Security.CertificateRenewExec)}' and '{RavenConfiguration.GetKey(x => x.Security.CertificateChangeExec)}'. This configuration requires you to renew the certificate manually across the entire cluster.");
                 }
 
                 return LoadCertificate();
@@ -1667,8 +1669,8 @@ namespace Raven.Server
                 }
                 catch (Exception e)
                 {
-                    if (Logger.IsInfoEnabled)
-                        Logger.Info($"Failed to run command '{nameof(PutCertificateWithSamePinningHashCommand)}'.", e);
+                    if (RavenServerLogger.IsInfoEnabled)
+                        RavenServerLogger.Info($"Failed to run command '{nameof(PutCertificateWithSamePinningHashCommand)}'.", e);
                 }
             }, ServerStore.ServerShutdown));
 
@@ -1758,8 +1760,8 @@ namespace Raven.Server
 
                 foreach (var ipAddress in GetListenIpAddresses(host))
                 {
-                    if (Configuration.Core.TcpServerUrls != null && Logger.IsInfoEnabled)
-                        Logger.Info($"RavenDB TCP is configured to use {string.Join(", ", Configuration.Core.TcpServerUrls)} and bind to {ipAddress} at {port}");
+                    if (Configuration.Core.TcpServerUrls != null && RavenServerLogger.IsInfoEnabled)
+                        RavenServerLogger.Info($"RavenDB TCP is configured to use {string.Join(", ", Configuration.Core.TcpServerUrls)} and bind to {ipAddress} at {port}");
 
                     var listener = new TcpListener(ipAddress, status.Port != 0 ? status.Port : port);
                     status.Listeners.Add(listener);
@@ -1779,8 +1781,8 @@ namespace Raven.Server
                         "For more information go to https://ravendb.net/l/EJS81M/5.2";
 
                         errors.Add(new IOException(msg, ex));
-                        if (Logger.IsOperationsEnabled)
-                            Logger.Operations(msg, ex);
+                        if (RavenServerLogger.IsOperationsEnabled)
+                            RavenServerLogger.Operations(msg, ex);
                         continue;
                     }
 
@@ -2018,9 +2020,9 @@ namespace Raven.Server
 
                         header = JsonDeserializationClient.TcpConnectionHeaderMessage(headerJson);
 
-                        if (Logger.IsInfoEnabled)
+                        if (RavenServerLogger.IsInfoEnabled)
                         {
-                            Logger.Info($"New {header.Operation} TCP connection to {header.DatabaseName ?? "the cluster node"} from {tcpClient.Client.RemoteEndPoint}");
+                            RavenServerLogger.Info($"New {header.Operation} TCP connection to {header.DatabaseName ?? "the cluster node"} from {tcpClient.Client.RemoteEndPoint}");
                         }
 
                         //In the case where we have mismatched version but the other side doesn't know how to handle it.
@@ -2030,9 +2032,9 @@ namespace Raven.Server
                                 tcpAuditLog.Info(
                                     $"Got connection from {tcpClient.Client.RemoteEndPoint} with certificate '{cert?.Subject} ({cert?.Thumbprint})'. Dropping connection because: {header.Info}");
 
-                            if (Logger.IsInfoEnabled)
+                            if (RavenServerLogger.IsInfoEnabled)
                             {
-                                Logger.Info($"Got a request to drop TCP connection to {header.DatabaseName ?? "the cluster node"} " +
+                                RavenServerLogger.Info($"Got a request to drop TCP connection to {header.DatabaseName ?? "the cluster node"} " +
                                             $"from {tcpClient.Client.RemoteEndPoint} reason: {header.Info}");
                             }
 
@@ -2050,9 +2052,9 @@ namespace Raven.Server
                         if (tcpAuditLog != null)
                             tcpAuditLog.Info($"Got connection from {tcpClient.Client.RemoteEndPoint} with certificate '{cert?.Subject} ({cert?.Thumbprint})'. {msg}");
 
-                        if (Logger.IsInfoEnabled)
+                        if (RavenServerLogger.IsInfoEnabled)
                         {
-                            Logger.Info(
+                            RavenServerLogger.Info(
                                 $"Got a request to drop TCP connection to {header.DatabaseName ?? "the cluster node"} from {tcpClient.Client.RemoteEndPoint} " +
                                 $"reason: {msg}");
                         }
@@ -2060,9 +2062,9 @@ namespace Raven.Server
                         throw new ArgumentException(msg);
                     }
 
-                    if (Logger.IsInfoEnabled)
+                    if (RavenServerLogger.IsInfoEnabled)
                     {
-                        Logger.Info(
+                        RavenServerLogger.Info(
                             $"Got a request to establish TCP connection to {header.DatabaseName ?? "the cluster node"} from {tcpClient.Client.RemoteEndPoint} " +
                             $"Didn't agree on {header.Operation} protocol version: {header.OperationVersion} will request to use version: {supported}.");
                     }
@@ -2085,9 +2087,9 @@ namespace Raven.Server
                         tcpAuditLog.Info(
                             $"Got connection from {tcpClient.Client.RemoteEndPoint} with certificate '{cert?.Subject} ({cert?.Thumbprint})'. Rejecting connection because {err} for {header.Operation} on {header.DatabaseName}.");
 
-                    if (Logger.IsInfoEnabled)
+                    if (RavenServerLogger.IsInfoEnabled)
                     {
-                        Logger.Info(
+                        RavenServerLogger.Info(
                             $"New {header.Operation} TCP connection to {header.DatabaseName ?? "the cluster node"} from {tcpClient.Client.RemoteEndPoint}" +
                             $" is not authorized to access {header.DatabaseName ?? "the cluster node"} because {err}");
                     }
@@ -2095,9 +2097,9 @@ namespace Raven.Server
                     return header;
                 }
 
-                if (Logger.IsInfoEnabled)
+                if (RavenServerLogger.IsInfoEnabled)
                 {
-                    Logger.Info($"TCP connection from {header.SourceNodeTag ?? tcpClient.Client.RemoteEndPoint.ToString()} " +
+                    RavenServerLogger.Info($"TCP connection from {header.SourceNodeTag ?? tcpClient.Client.RemoteEndPoint.ToString()} " +
                                 $"for '{header.Operation}' is accepted with version {supported}");
                 }
             }
@@ -2528,8 +2530,8 @@ namespace Raven.Server
                 }
                 catch (Exception e)
                 {
-                    if (Logger.IsInfoEnabled)
-                        Logger.Info($"Failed to run command '{nameof(RegisterReplicationHubAccessCommand)}'.", e);
+                    if (RavenServerLogger.IsInfoEnabled)
+                        RavenServerLogger.Info($"Failed to run command '{nameof(RegisterReplicationHubAccessCommand)}'.", e);
                 }
             }, ServerStore.ServerShutdown));
 

@@ -13,7 +13,7 @@ namespace Raven.Client.ServerWide.Tcp
         public const int OutOfRangeStatus = -1;
         public const int DropStatus = -2;
 
-        private static readonly Logger Log = LoggingSource.Instance.GetLogger("TCP Negotiation", typeof(TcpNegotiation).FullName);
+        private static readonly Logger Log = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(TcpNegotiation), LogType.Client);
 
         private static SyncTcpNegotiation _sync;
 

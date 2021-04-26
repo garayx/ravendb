@@ -171,11 +171,11 @@ namespace Tests.Infrastructure
             configuration.Core.RunInMemory = true;
             configuration.Core.PublicServerUrl = new UriSetting($"http://localhost:{((IPEndPoint)tcpListener.LocalEndpoint).Port}");
             configuration.Cluster.ElectionTimeout = new TimeSetting(electionTimeout, TimeUnit.Milliseconds);
-            var serverStore = new RavenServer(configuration) { ThrowOnLicenseActivationFailure = true }.ServerStore;
+            var serverStore = new RavenServer(configuration, Log) { ThrowOnLicenseActivationFailure = true }.ServerStore;
             serverStore.Initialize();
             var rachis = new RachisConsensus<CountingStateMachine>(serverStore, seed);
             var storageEnvironment = new StorageEnvironment(server);
-            rachis.Initialize(storageEnvironment, configuration, new ClusterChanges(), configuration.Core.ServerUrls[0], out _);
+            rachis.Initialize(storageEnvironment, configuration, new ClusterChanges(), configuration.Core.ServerUrls[0], Log, out _);
             rachis.OnDispose += (sender, args) =>
             {
                 serverStore.Dispose();

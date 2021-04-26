@@ -1,6 +1,7 @@
 ﻿using System;
 using Sparrow;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Voron;
 
 namespace Raven.Server.ServerWide.Context
@@ -9,11 +10,13 @@ namespace Raven.Server.ServerWide.Context
     {
         private ClusterChanges _changes;
         private StorageEnvironment _storageEnvironment;
+        private readonly Logger _logger;
 
-        public ClusterContextPool(ClusterChanges changes, StorageEnvironment storageEnvironment, Size? maxContextSizeToKeepInMb = null)
-            : base(maxContextSizeToKeepInMb)
+        public ClusterContextPool(ClusterChanges changes, StorageEnvironment storageEnvironment, Logger logger = null, Size? maxContextSizeToKeepInMb = null)
+            : base(maxContextSizeToKeepInMb, logger)
         {
             _changes = changes ?? throw new ArgumentNullException(nameof(changes));
+            _logger = logger;
             _storageEnvironment = storageEnvironment ?? throw new ArgumentNullException(nameof(storageEnvironment));
         }
 
@@ -32,7 +35,7 @@ namespace Raven.Server.ServerWide.Context
                 maxNumberOfAllocatedStringValues = 8 * 1024;
             }
 
-            return new ClusterOperationContext(_changes, _storageEnvironment, initialSize, 16 * 1024, maxNumberOfAllocatedStringValues, LowMemoryFlag);
+            return new ClusterOperationContext(_changes, _storageEnvironment, initialSize, 16 * 1024, maxNumberOfAllocatedStringValues, LowMemoryFlag, _logger.GetLoggerFor(nameof(ClusterTransaction), _logger.Type));
         }
 
         public override void Dispose()

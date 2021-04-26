@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Sparrow.Logging;
 using Sparrow.Threading;
 using Voron;
 using Voron.Impl;
@@ -10,18 +11,20 @@ namespace Raven.Server.ServerWide.Context
     public class ClusterOperationContext : TransactionOperationContext<ClusterTransaction>
     {
         private readonly ClusterChanges _changes;
+        private readonly Logger _logger;
         public readonly StorageEnvironment Environment;
 
-        public ClusterOperationContext(ClusterChanges changes, StorageEnvironment environment, int initialSize, int longLivedSize, int maxNumberOfAllocatedStringValues, SharedMultipleUseFlag lowMemoryFlag)
+        public ClusterOperationContext(ClusterChanges changes, StorageEnvironment environment, int initialSize, int longLivedSize, int maxNumberOfAllocatedStringValues, SharedMultipleUseFlag lowMemoryFlag, Logger logger)
             : base(initialSize, longLivedSize, maxNumberOfAllocatedStringValues, lowMemoryFlag)
         {
             _changes = changes ?? throw new ArgumentNullException(nameof(changes));
+            _logger = logger;
             Environment = environment ?? throw new ArgumentNullException(nameof(environment));
         }
 
         protected override ClusterTransaction CloneReadTransaction(ClusterTransaction previous)
         {
-            var clonedTx = new ClusterTransaction(Environment.CloneReadTransaction(previous.InnerTransaction, PersistentContext, Allocator), _changes);
+            var clonedTx = new ClusterTransaction(Environment.CloneReadTransaction(previous.InnerTransaction, PersistentContext, Allocator), _changes, _logger);
 
             previous.Dispose();
 
@@ -30,12 +33,12 @@ namespace Raven.Server.ServerWide.Context
 
         protected override ClusterTransaction CreateReadTransaction()
         {
-            return new ClusterTransaction(Environment.ReadTransaction(PersistentContext, Allocator), _changes);
+            return new ClusterTransaction(Environment.ReadTransaction(PersistentContext, Allocator), _changes, _logger);
         }
 
         protected override ClusterTransaction CreateWriteTransaction(TimeSpan? timeout = null)
         {
-            return new ClusterTransaction(Environment.WriteTransaction(PersistentContext, Allocator, timeout), _changes);
+            return new ClusterTransaction(Environment.WriteTransaction(PersistentContext, Allocator, timeout), _changes, _logger);
         }
     }
 
@@ -45,8 +48,8 @@ namespace Raven.Server.ServerWide.Context
 
         protected readonly ClusterChanges _clusterChanges;
 
-        public ClusterTransaction(Transaction transaction, ClusterChanges clusterChanges)
-            : base(transaction)
+        public ClusterTransaction(Transaction transaction, ClusterChanges clusterChanges, Logger logger)
+            : base(transaction, logger)
         {
             _clusterChanges = clusterChanges ?? throw new System.ArgumentNullException(nameof(clusterChanges));
         }

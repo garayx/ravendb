@@ -1,5 +1,6 @@
 ﻿using System;
 using Raven.Server.Utils;
+using Sparrow.Logging;
 using Sparrow.LowMemory;
 using Sparrow.Platform;
 using Sparrow.Platform.Posix;
@@ -11,10 +12,12 @@ namespace Raven.Server.ServerWide
     {
         private readonly SmapsReader _smapsReader;
         private readonly RavenServer _server;
+        private Logger _logger;
 
         public ServerMetricCacher(RavenServer server)
         {
             _server = server;
+            _logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(ServerMetricCacher), LogType.Server);
 
             if (PlatformDetails.RunningOnLinux)
                 _smapsReader = new SmapsReader(new[] { new byte[SmapsReader.BufferSize], new byte[SmapsReader.BufferSize] });
@@ -34,17 +37,17 @@ namespace Raven.Server.ServerWide
 
         private object CalculateMemoryInfo()
         {
-            return MemoryInformation.GetMemoryInfo();
+            return MemoryInformation.GetMemoryInfo(_server.RavenServerLogger.GetLoggerFor(nameof(MemoryInformation), LogType.Server));
         }
 
         private object CalculateMemoryInfoExtended()
         {
-            return MemoryInformation.GetMemoryInfo(_smapsReader, extended: true);
+            return MemoryInformation.GetMemoryInfo(_server.RavenServerLogger.GetLoggerFor(nameof(MemoryInformation), LogType.Server), _smapsReader, extended: true);
         }
 
         private DiskSpaceResult CalculateDiskSpaceInfo()
         {
-            return DiskSpaceChecker.GetDiskSpaceInfo(_server.ServerStore.Configuration.Core.DataDirectory.FullPath);
+            return DiskSpaceChecker.GetDiskSpaceInfo(_server.ServerStore.Configuration.Core.DataDirectory.FullPath, _logger);
         }
 
         private GCMemoryInfo CalculateGcMemoryInfo(GCKind gcKind)

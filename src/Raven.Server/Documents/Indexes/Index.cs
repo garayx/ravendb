@@ -110,7 +110,7 @@ namespace Raven.Server.Documents.Indexes
 
         private readonly Size MappedSizeLimitOn32Bits = new Size(8, SizeUnit.Megabytes);
 
-        protected Logger _logger;
+        internal Logger _logger;
 
         internal LuceneIndexPersistence IndexPersistence;
 
@@ -346,13 +346,14 @@ namespace Raven.Server.Documents.Indexes
 
             exceptionAggregator.Execute(() => { _mre?.Dispose(); });
 
-            exceptionAggregator.ThrowIfNeeded();
+            using (_logger)
+            {
+                exceptionAggregator.ThrowIfNeeded();
+            }
         }
 
         public static Index Open(string path, DocumentDatabase documentDatabase)
         {
-            var logger = LoggingSource.Instance.GetLogger<Index>(documentDatabase.Name);
-
             StorageEnvironment environment = null;
 
             var name = new DirectoryInfo(path).Name;
@@ -361,8 +362,11 @@ namespace Raven.Server.Documents.Indexes
             var indexTempPath =
                 documentDatabase.Configuration.Indexing.TempPath?.Combine(name);
 
+            // we use a temp logger to categorize the loggers
+            var logger = documentDatabase.IndexStore.Logger.GetLoggerFor(name, LogType.Index);
+
             var options = StorageEnvironmentOptions.ForPath(indexPath, indexTempPath?.FullPath, null,
-                documentDatabase.IoChanges, documentDatabase.CatastrophicFailureNotification);
+                documentDatabase.IoChanges, documentDatabase.CatastrophicFailureNotification, logger);
             try
             {
                 InitializeOptions(options, documentDatabase, name);
@@ -589,7 +593,8 @@ namespace Raven.Server.Documents.Indexes
         {
             InitializeMetrics(configuration);
 
-            _logger = LoggingSource.Instance.GetLogger<Index>(documentDatabase.Name);
+            _logger = documentDatabase.IndexStore.Logger.GetLoggerFor(Name, LogType.Index);
+
             using (DrainRunningQueries())
             {
                 if (_initialized)
@@ -638,9 +643,9 @@ namespace Raven.Server.Documents.Indexes
 
             var options = configuration.RunInMemory
                 ? StorageEnvironmentOptions.CreateMemoryOnly(indexPath.FullPath, indexTempPath?.FullPath ?? Path.Combine(indexPath.FullPath, "Temp"),
-                    documentDatabase.IoChanges, documentDatabase.CatastrophicFailureNotification)
+                    documentDatabase.IoChanges, documentDatabase.CatastrophicFailureNotification, _logger)
                 : StorageEnvironmentOptions.ForPath(indexPath.FullPath, indexTempPath?.FullPath, null,
-                    documentDatabase.IoChanges, documentDatabase.CatastrophicFailureNotification);
+                    documentDatabase.IoChanges, documentDatabase.CatastrophicFailureNotification, _logger);
 
             InitializeOptions(options, documentDatabase, name);
 
@@ -734,10 +739,27 @@ namespace Raven.Server.Documents.Indexes
                 PerformanceHints = performanceHints;
 
                 _mre = new ThrottledManualResetEventSlim(Configuration.ThrottlingTimeInterval?.AsTimeSpan, throttlingBehavior: ThrottledManualResetEventSlim.ThrottlingBehavior.ManualManagement);
-                _logger = LoggingSource.Instance.GetLogger<Index>(documentDatabase.Name);
-                _environment = environment;
+               
+                // replace temp logger if needed
                 var safeName = IndexDefinitionBase.GetIndexNameSafeForFileSystem(Name);
-                _unmanagedBuffersPool = new UnmanagedBuffersPoolWithLowMemoryHandling($"Indexes//{safeName}");
+                if (documentDatabase.IndexStore.Logger.Loggers.TryRemove(safeName, out var holder))
+                {
+                    var logger = documentDatabase.IndexStore.Logger.GetLoggerFor(Name, LogType.Index);
+                    if (logger.HasLoggers())
+                        logger.Loggers.Dispose();
+
+                    logger.Loggers = new CollectionOfLoggers(holder.Logger.Loggers);
+                    holder.Logger = null;
+
+                    _logger = logger;
+                }
+                else
+                {
+                    _logger = documentDatabase.IndexStore.Logger.GetLoggerFor(Name, LogType.Index);
+                }
+
+                _environment = environment;
+                _unmanagedBuffersPool = new UnmanagedBuffersPoolWithLowMemoryHandling(_logger.GetLoggerFor(nameof(UnmanagedBuffersPoolWithLowMemoryHandling), LogType.Index));
 
                 InitializeComponentsUsingEnvironment(documentDatabase, _environment);
 
@@ -776,8 +798,7 @@ namespace Raven.Server.Documents.Indexes
         private void InitializeComponentsUsingEnvironment(DocumentDatabase documentDatabase, StorageEnvironment environment)
         {
             _contextPool?.Dispose();
-            _contextPool = new TransactionContextPool(environment, documentDatabase.Configuration.Memory.MaxContextSizeToKeep);
-
+            _contextPool = new TransactionContextPool(environment, documentDatabase.Configuration.Memory.MaxContextSizeToKeep, _logger.GetLoggerFor(nameof(TransactionContextPool), LogType.Index));
             _indexStorage = new IndexStorage(this, _contextPool, documentDatabase);
             _indexStorage.Initialize(environment);
 
@@ -871,7 +892,7 @@ namespace Raven.Server.Documents.Indexes
                 {
                     ReportUnexpectedIndexingError(e);
                 }
-            }, null, IndexingThreadName);
+            }, null, IndexingThreadName, _logger.GetLoggerFor(nameof(PoolOfThreads.LongRunningWork), LogType.Index));
 
             RollIfNeeded();
         }
@@ -4266,7 +4287,7 @@ namespace Raven.Server.Documents.Indexes
                         }
 
                         HandleStoppedBatchesConcurrently(stats, count,
-                            canContinue: MemoryUsageGuard.CanIncreaseMemoryUsageForThread,
+                            canContinue: () => MemoryUsageGuard.CanIncreaseMemoryUsageForThread(_logger),
                             reason: "cannot budget additional memory");
 
                         stats.RecordMapCompletedReason("Cannot budget additional memory for batch");
@@ -4412,7 +4433,7 @@ namespace Raven.Server.Documents.Indexes
                         var environmentOptions =
                                                 (StorageEnvironmentOptions.DirectoryStorageEnvironmentOptions)storageEnvironmentOptions;
                         var srcOptions = StorageEnvironmentOptions.ForPath(environmentOptions.BasePath.FullPath, environmentOptions.TempPath?.FullPath, null, DocumentDatabase.IoChanges,
-                            DocumentDatabase.CatastrophicFailureNotification);
+                            DocumentDatabase.CatastrophicFailureNotification, _logger);
 
                         InitializeOptions(srcOptions, DocumentDatabase, Name, schemaUpgrader: false);
 
@@ -4421,7 +4442,7 @@ namespace Raven.Server.Documents.Indexes
 
                         using (var compactOptions = (StorageEnvironmentOptions.DirectoryStorageEnvironmentOptions)
                             StorageEnvironmentOptions.ForPath(compactPath.FullPath, tempPath?.FullPath, null, DocumentDatabase.IoChanges,
-                                DocumentDatabase.CatastrophicFailureNotification))
+                                DocumentDatabase.CatastrophicFailureNotification, _logger))
                         {
                             InitializeOptions(compactOptions, DocumentDatabase, Name, schemaUpgrader: false);
 

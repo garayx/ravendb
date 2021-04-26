@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Raven.Server.ServerWide;
 using Raven.Server.Utils.Stats;
 using Sparrow.Json;
+using Sparrow.Logging;
 
 namespace Raven.Server.Documents.Queries
 {
@@ -14,7 +15,8 @@ namespace Raven.Server.Documents.Queries
         private readonly HashSet<string> _dbNames;
 
         public LiveRunningQueriesCollector(ServerStore serverStore, HashSet<string> dbNames)
-            : base(serverStore.ServerShutdown, "Server")
+            : base(serverStore.ServerShutdown, 
+                serverStore.Logger.GetLoggerFor(nameof(LivePerformanceCollector<ExecutingQueryCollection>), LogType.Server))
         {
             _dbNames = dbNames;
             _serverStore = serverStore;

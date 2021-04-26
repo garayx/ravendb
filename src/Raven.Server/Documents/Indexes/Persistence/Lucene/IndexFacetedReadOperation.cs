@@ -40,7 +40,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             QueryBuilderFactories queryBuilderFactories,
             Transaction readTransaction,
             DocumentDatabase documentDatabase)
-            : base(index, LoggingSource.Instance.GetLogger<IndexFacetedReadOperation>(documentDatabase.Name))
+            : base(index, index._logger.GetLoggerFor(nameof(IndexFacetedReadOperation), LogType.Index))
         {
             try
             {
@@ -423,6 +423,8 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
         {
             _releaseSearcher?.Dispose();
             _releaseReadTransaction?.Dispose();
+
+            base.Dispose();
         }
 
         private class IntersectDocs

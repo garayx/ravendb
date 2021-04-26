@@ -37,7 +37,7 @@ namespace Raven.Server.Documents
             _database = database;
             _maxWarnSize = maxWarnSize;
             _hugeDocs = new SizeLimitedConcurrentDictionary<Tuple<string, DateTime>, long>(maxCollectionSize);
-            _logger = LoggingSource.Instance.GetLogger(database, GetType().FullName);
+            _logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(HugeDocuments), database), LogType.Server);
         }
 
         public void AddIfDocIsHuge(Document doc)

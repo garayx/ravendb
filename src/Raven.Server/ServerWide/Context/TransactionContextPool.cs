@@ -6,6 +6,7 @@
 
 using Sparrow;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Voron;
 
 namespace Raven.Server.ServerWide.Context
@@ -14,7 +15,7 @@ namespace Raven.Server.ServerWide.Context
     {
         private StorageEnvironment _storageEnvironment;
 
-        public TransactionContextPool(StorageEnvironment storageEnvironment, Size? maxContextSizeToKeepInMb = null) : base(maxContextSizeToKeepInMb)
+        public TransactionContextPool(StorageEnvironment storageEnvironment, Size? maxContextSizeToKeepInMb = null, Logger logger = null) : base(maxContextSizeToKeepInMb, logger)
         {
             _storageEnvironment = storageEnvironment;
         }
@@ -37,7 +38,7 @@ namespace Raven.Server.ServerWide.Context
                 maxNumberOfAllocatedStringValues = 8 * 1024;
             }
 
-            return new TransactionOperationContext(_storageEnvironment, initialSize, longLivedSize, maxNumberOfAllocatedStringValues, LowMemoryFlag);
+            return new TransactionOperationContext(_storageEnvironment, initialSize, longLivedSize, maxNumberOfAllocatedStringValues, LowMemoryFlag, _logger.GetLoggerFor(nameof(RavenTransaction), _logger.Type));
         }
 
         public override void Dispose()

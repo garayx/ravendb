@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
+using Sparrow.Logging;
 using Sparrow.Platform;
 using Sparrow.Server.LowMemory;
 using Sparrow.Server.Platform.Posix;
@@ -15,9 +16,12 @@ namespace Sparrow.Server.Platform
         {
             public static string IsSwappingOnHddInsteadOfSsd()
             {
-                if (PlatformDetails.RunningOnPosix)
-                    return CheckPageFileOnHdd.PosixIsSwappingOnHddInsteadOfSsd();
-                return CheckPageFileOnHdd.WindowsIsSwappingOnHddInsteadOfSsd();
+                using (var logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(CheckPageFileOnHdd), LogType.Server))
+                {
+                    if (PlatformDetails.RunningOnPosix)
+                        return CheckPageFileOnHdd.PosixIsSwappingOnHddInsteadOfSsd(logger);
+                    return CheckPageFileOnHdd.WindowsIsSwappingOnHddInsteadOfSsd(logger);
+                }
             }
 
             public static bool WillCauseHardPageFault(byte* address, long length) => PlatformDetails.RunningOnPosix ? PosixMemoryQueryMethods.WillCauseHardPageFault(address, length) : Win32MemoryQueryMethods.WillCauseHardPageFault(address, length);

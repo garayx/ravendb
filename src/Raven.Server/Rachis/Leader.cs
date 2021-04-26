@@ -16,6 +16,7 @@ using Raven.Server.ServerWide.Commands;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.Utils;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Sparrow.Server;
 using Sparrow.Server.Utils;
 using Sparrow.Threading;
@@ -99,7 +100,7 @@ namespace Raven.Server.Rachis
             RefreshAmbassadors(clusterTopology, connections);
 
             _leaderLongRunningWork =
-                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => Run(), null, $"Consensus Leader - {_engine.Tag} in term {Term}");
+                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => Run(), null, $"Consensus Leader - {_engine.Tag} in term {Term}", _engine.Log);
         }
 
         private int _steppedDown;
@@ -487,7 +488,7 @@ namespace Raven.Server.Rachis
                             return;
                         }
                         tuple.TaskCompletionSource.TrySetResult((tuple.CommandIndex, tuple.Result));
-                    }, value);
+                    }, value, _engine.Log.GetLoggerFor(nameof(TaskExecutor), LogType.Cluster));
                 }
             }
 
@@ -864,7 +865,7 @@ namespace Raven.Server.Rachis
                                 entry.Value.TaskCompletionSource.TrySetException(te);
                             }
                         }
-                    }, null);
+                    }, null, _engine.Log.GetLoggerFor(nameof(TaskExecutor), LogType.Cluster));
 
                     if (_leaderLongRunningWork != null && _leaderLongRunningWork.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
                         _leaderLongRunningWork.Join(int.MaxValue);

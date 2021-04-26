@@ -102,7 +102,7 @@ namespace Raven.Server.Rachis
                         return;
                     }
 
-                    ClusterCommandsVersionManager.SetClusterVersion(appendEntries.MinCommandVersion);
+                    ClusterCommandsVersionManager.SetClusterVersion(appendEntries.MinCommandVersion, _engine.Log);
 
                     _debugRecorder.Record("Got entries");
                     _engine.Timeout.Defer(_connection.Source);
@@ -987,7 +987,8 @@ namespace Raven.Server.Rachis
                 PoolOfThreads.GlobalRavenThreadPool.LongRunning(
                     action: x => Run(x),
                     state: negotiation,
-                    name: $"Follower thread from {_connection} in term {negotiation.Term}");
+                    name: $"Follower thread from {_connection} in term {negotiation.Term}",
+                    _engine.Log);
                 
         }
 

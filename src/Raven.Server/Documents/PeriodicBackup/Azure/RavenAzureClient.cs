@@ -38,7 +38,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Azure
         private readonly string _serverUrlForAccountName;
         private const string AzureStorageVersion = "2019-02-02";
         private const long TotalBlocksSizeLimitInBytes = 475L * 1024 * 1024 * 1024 * 1024L / 100; // 4.75TB
-        private readonly Logger _logger;
+        internal readonly Logger _logger;
         internal int MaxUploadPutBlobInBytes = 256 * 1024 * 1024; // 256MB
         internal int OnePutBlockSizeLimitInBytes = 100 * 1024 * 1024; // 100MB
 

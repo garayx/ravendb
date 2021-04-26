@@ -98,7 +98,6 @@ namespace Raven.Server.Documents.Indexes
             return true;
         }
 
-
         public bool TryGetByName(string name, out Index index)
         {
             return _indexesByName.TryGetValue(name, out index);

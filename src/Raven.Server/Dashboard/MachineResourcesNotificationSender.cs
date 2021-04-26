@@ -8,6 +8,7 @@ using Raven.Server.Utils;
 using Raven.Server.Utils.Cpu;
 using Sparrow;
 using Sparrow.Collections;
+using Sparrow.Logging;
 using Sparrow.LowMemory;
 using Sparrow.Platform;
 using Sparrow.Platform.Posix;
@@ -24,17 +25,16 @@ namespace Raven.Server.Dashboard
         private DateTime _lastSentNotification = DateTime.MinValue;
 
         public MachineResourcesNotificationSender(
-            string resourceName,
             RavenServer server,
             ConcurrentSet<ConnectedWatcher> watchers,
             TimeSpan notificationsThrottle,
-            CancellationToken shutdown)
-            : base(resourceName, shutdown)
+            CancellationToken shutdown, Logger logger)
+            : base(shutdown, logger)
         {
             _server = server;
             _watchers = watchers;
             _notificationsThrottle = notificationsThrottle;
-            _lowMemoryMonitor = new LowMemoryMonitor();
+            _lowMemoryMonitor = new LowMemoryMonitor(logger);
         }
 
         protected override async Task DoWork()

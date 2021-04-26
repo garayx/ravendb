@@ -21,9 +21,9 @@ namespace Raven.Server.Documents
 
         private readonly TableSchema _databaseInfoSchema = new TableSchema();
 
-        public DatabaseInfoCache()
+        public DatabaseInfoCache(Logger logger)
         {
-            Logger = LoggingSource.Instance.GetLogger<DatabaseInfoCache>("Server");
+            Logger = logger;
             _databaseInfoSchema.DefineKey(new TableSchema.SchemaIndexDef
             {
                 StartIndex = 0,

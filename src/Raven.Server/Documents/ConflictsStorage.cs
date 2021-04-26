@@ -41,7 +41,6 @@ namespace Raven.Server.Documents
 
         private readonly DocumentDatabase _documentDatabase;
         private readonly DocumentsStorage _documentsStorage;
-        private readonly Logger _logger;
 
         public long ConflictsCount;
 
@@ -122,7 +121,6 @@ namespace Raven.Server.Documents
         {
             _documentDatabase = documentDatabase;
             _documentsStorage = documentDatabase.DocumentsStorage;
-            _logger = LoggingSource.Instance.GetLogger<ConflictsStorage>(documentDatabase.Name);
 
             ConflictsSchema.Create(tx, ConflictsSlice, 32);
 
@@ -574,10 +572,11 @@ namespace Raven.Server.Documents
             string incomingChangeVector,
             string incomingTombstoneCollection,
             DocumentFlags flags,
+            Logger logger,
             NonPersistentDocumentFlags nonPersistentFlags = NonPersistentDocumentFlags.None)
         {
-            if (_logger.IsInfoEnabled)
-                _logger.Info($"Adding conflict to {id} (Incoming change vector {incomingChangeVector})");
+            if (logger.IsInfoEnabled)
+                logger.Info($"Adding conflict to {id} (Incoming change vector {incomingChangeVector})");
 
             var tx = context.Transaction.InnerTransaction;
             var conflictsTable = tx.OpenTable(ConflictsSchema, ConflictsSlice);

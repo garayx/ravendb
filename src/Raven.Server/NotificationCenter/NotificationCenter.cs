@@ -18,18 +18,19 @@ namespace Raven.Server.NotificationCenter
 {
     public class NotificationCenter : NotificationsBase, IDisposable
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<NotificationCenter>("Server");
         private readonly NotificationsStorage _notificationsStorage;
         private readonly string _database;
         private readonly CancellationToken _shutdown;
         private PostponedNotificationsSender _postponedNotificationSender;
+        internal readonly Logger _logger;
 
-        public NotificationCenter(NotificationsStorage notificationsStorage, string database, CancellationToken shutdown, RavenConfiguration config)
+        public NotificationCenter(NotificationsStorage notificationsStorage, string database, CancellationToken shutdown, RavenConfiguration config, Logger logger)
         {
             _notificationsStorage = notificationsStorage;
             _database = database;
             _shutdown = shutdown;
             _config = config;
+            _logger = logger;
             Options = new NotificationCenterOptions();
             Paging = new Paging(this, _notificationsStorage, database);
             RequestLatency = new RequestLatency(this, _notificationsStorage, database);
@@ -42,11 +43,11 @@ namespace Raven.Server.NotificationCenter
 
         public void Initialize(DocumentDatabase database = null)
         {
-            _postponedNotificationSender = new PostponedNotificationsSender(_database, _notificationsStorage, Watchers, _shutdown);
+            _postponedNotificationSender = new PostponedNotificationsSender(_database, _notificationsStorage, Watchers, _shutdown, _logger.GetLoggerFor(nameof(PostponedNotificationsSender), _logger.Type));
             BackgroundWorkers.Add(_postponedNotificationSender);
 
             if (database != null)
-                BackgroundWorkers.Add(new DatabaseStatsSender(database, this));
+                BackgroundWorkers.Add(new DatabaseStatsSender(database, this, _logger.GetLoggerFor(nameof(DatabaseStatsSender), _logger.Type)));
 
             IsInitialized = true;
         }
@@ -66,8 +67,8 @@ namespace Raven.Server.NotificationCenter
             {
                 if (_config.Notifications.ShouldFilterOut(notification))
                 {
-                    if (Logger.IsInfoEnabled)
-                        Logger.Info($"Filtered out notification. Id: '{notification.Id}', Title: '{notification.Title}', message: '{notification.Message}'");
+                    if (_logger.IsInfoEnabled)
+                        _logger.Info($"Filtered out notification. Id: '{notification.Id}', Title: '{notification.Title}', message: '{notification.Message}'");
                     return;
                 }
 
@@ -83,10 +84,10 @@ namespace Raven.Server.NotificationCenter
                         // if we fail to save the persistent notification in the storage,
                         // (OOME or any other storage error)
                         // we still want to send it to any of the connected watchers
-                        if (Logger.IsInfoEnabled)
-                            Logger.Info($"Failed to save a persistent notification '{notification.Id}' " +
-                                        $"to the notification center. " +
-                                        $"Title: {notification.Title}, message: {notification.Message}", e);
+                        if (_logger.IsInfoEnabled)
+                            _logger.Info($"Failed to save a persistent notification '{notification.Id}' " +
+                                         $"to the notification center. " +
+                                         $"Title: {notification.Title}, message: {notification.Message}", e);
                     }
                 }
 
@@ -117,8 +118,8 @@ namespace Raven.Server.NotificationCenter
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failed to add notification '{notification.Id}' to the notification center. Title: {notification.Title}, message: {notification.Message}", e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info($"Failed to add notification '{notification.Id}' to the notification center. Title: {notification.Title}, message: {notification.Message}", e);
             }
         }
 
@@ -184,6 +185,8 @@ namespace Raven.Server.NotificationCenter
             SlowWrites?.Dispose();
 
             base.Dispose();
+
+            _logger.Dispose();
         }
     }
 

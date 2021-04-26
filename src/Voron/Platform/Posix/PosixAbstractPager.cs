@@ -16,7 +16,7 @@ namespace Voron.Platform.Posix
 
         private readonly bool _supportsUnmapping;
 
-        private readonly Logger _log = LoggingSource.Instance.GetLogger<PosixAbstractPager>("PosixAbstractPager");
+        private readonly Logger _log;
 
         public override int CopyPage(I4KbBatchWrites destwI4KbBatchWrites, long p, PagerState pagerState)
         {
@@ -44,6 +44,7 @@ namespace Voron.Platform.Posix
             : base(options, canPrefetchAhead, usePageProtection: usePageProtection)
         {
             _supportsUnmapping = supportsUnmapping;
+            _log = options._log.GetLoggerFor(nameof(PosixAbstractPager), LogType.Database);
         }
 
         public override unsafe void ReleaseAllocationInfo(byte* baseAddress, long size)

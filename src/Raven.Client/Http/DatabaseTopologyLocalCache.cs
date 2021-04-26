@@ -13,7 +13,7 @@ namespace Raven.Client.Http
 {
     internal static class DatabaseTopologyLocalCache
     {
-        private static readonly Logger _logger = LoggingSource.Instance.GetLogger("Client", typeof(DatabaseTopologyLocalCache).FullName);
+        private static readonly Logger _logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(DatabaseTopologyLocalCache), LogType.Client);
 
         private static void Clear(string path)
         {

@@ -14,6 +14,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Raven.Client.Documents.Operations.Backups;
+using Sparrow.Logging;
 
 namespace Raven.Server.Documents.PeriodicBackup
 {
@@ -28,8 +29,9 @@ namespace Raven.Server.Documents.PeriodicBackup
         private readonly bool _useSsl;
         private const int DefaultBufferSize = 81920;
         private const int DefaultFtpPort = 21;
+        internal readonly Logger _logger;
 
-        public RavenFtpClient(FtpSettings ftpSettings, Progress progress = null, CancellationToken? cancellationToken = null)
+        public RavenFtpClient(FtpSettings ftpSettings, Progress progress = null, Logger logger = null, CancellationToken? cancellationToken = null)
             : base(progress, cancellationToken)
         {
             _url = ftpSettings.Url;
@@ -38,6 +40,7 @@ namespace Raven.Server.Documents.PeriodicBackup
             _password = ftpSettings.Password;
             _certificateAsBase64 = ftpSettings.CertificateAsBase64;
             _certificateFileName = ftpSettings.CertificateFileName;
+            _logger = logger;
 
             if (_url.StartsWith("ftp://", StringComparison.OrdinalIgnoreCase) == false &&
                 _url.StartsWith("ftps://", StringComparison.OrdinalIgnoreCase) == false)

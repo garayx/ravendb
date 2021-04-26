@@ -5,6 +5,7 @@ using Raven.Server.Documents.Replication;
 using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Context;
 using Sparrow;
+using Sparrow.Logging;
 using Voron.Impl;
 
 namespace Raven.Server.Documents
@@ -14,6 +15,8 @@ namespace Raven.Server.Documents
         private readonly DocumentsOperationContext _context;
 
         private readonly DocumentsChanges _changes;
+
+        private readonly Logger _logger;
 
         private List<DocumentChange> _documentNotifications;
 
@@ -25,18 +28,19 @@ namespace Raven.Server.Documents
 
         private Dictionary<string, CollectionName> _collectionCache;
 
-        public DocumentsTransaction(DocumentsOperationContext context, Transaction transaction, DocumentsChanges changes)
-            : base(transaction)
+        public DocumentsTransaction(DocumentsOperationContext context, Transaction transaction, DocumentsChanges changes, Logger logger)
+            : base(transaction, logger)
         {
             _context = context;
             _changes = changes;
+            _logger = logger;
         }
 
         public DocumentsTransaction BeginAsyncCommitAndStartNewTransaction(DocumentsOperationContext context)
         {
             _replaced = true;
             var tx = InnerTransaction.BeginAsyncCommitAndStartNewTransaction(context.PersistentContext);
-            return new DocumentsTransaction(context, tx, _changes);
+            return new DocumentsTransaction(context, tx, _changes, _logger);
         }
 
         public void AddAfterCommitNotification(DocumentChange change)

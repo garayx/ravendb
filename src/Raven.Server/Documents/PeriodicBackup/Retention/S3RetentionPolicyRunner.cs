@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Raven.Server.Documents.PeriodicBackup.Aws;
+using Sparrow.Logging;
 using Constants = Raven.Client.Constants;
 
 namespace Raven.Server.Documents.PeriodicBackup.Retention
@@ -18,7 +19,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Retention
         private string _folderContinuationToken = null;
 
         public S3RetentionPolicyRunner(RetentionPolicyBaseParameters parameters, RavenAwsS3Client client)
-            : base(parameters)
+            : base(parameters, client._logger)
         {
             _client = client;
         }

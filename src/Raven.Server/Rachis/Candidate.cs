@@ -165,7 +165,7 @@ namespace Raven.Server.Rachis
                             }
                             StateChange();
 
-                            var minimalVersion = ClusterCommandsVersionManager.GetClusterMinimalVersion(versions, _engine.MaximalVersion);
+                            var minimalVersion = ClusterCommandsVersionManager.GetClusterMinimalVersion(versions, _engine.Log, _engine.MaximalVersion);
                             string msg = $"Was elected by {realElectionsCount} nodes for leadership in term {ElectionTerm} with cluster version of {minimalVersion}";
 
                             _engine.SwitchToLeaderState(ElectionTerm, minimalVersion, msg, connections);
@@ -294,7 +294,7 @@ namespace Raven.Server.Rachis
 
         public void Start()
         {
-            _longRunningWork = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x=>Run(), null, "Candidate for - " + _engine.Tag);
+            _longRunningWork = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x=>Run(), null, "Candidate for - " + _engine.Tag, _engine.Log);
         }
 
         public void Dispose()

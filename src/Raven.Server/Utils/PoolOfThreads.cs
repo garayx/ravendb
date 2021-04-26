@@ -30,7 +30,6 @@ namespace Raven.Server.Utils
         });
 
         public static PoolOfThreads GlobalRavenThreadPool => _globalRavenThreadPool.Value;
-        private static Logger _log = LoggingSource.Instance.GetLogger<PoolOfThreads>("Server");
 
         public int TotalNumberOfThreads;
 
@@ -86,13 +85,13 @@ namespace Raven.Server.Utils
             }
         }
 
-        public LongRunningWork LongRunning(Action<object> action, object state, string name)
+        public LongRunningWork LongRunning(Action<object> action, object state, string name, Logger logger)
         {
             if (_pool.TryDequeue(out var pooled) == false)
             {
-                MemoryInformation.AssertNotAboutToRunOutOfMemory();
+                MemoryInformation.AssertNotAboutToRunOutOfMemory(logger);
 
-                pooled = new PooledThread(this);
+                pooled = new PooledThread(this, logger);
                 var thread = new Thread(pooled.Run, PlatformDetails.Is32Bits ? 512 * Constants.Size.Kilobyte : 0)
                 {
                     Name = name,
@@ -135,6 +134,7 @@ namespace Raven.Server.Utils
             private string _name;
             private readonly PoolOfThreads _parent;
             private LongRunningWork _workIsDone;
+            private Logger _logger;
 
             public Process CurrentProcess { get; private set; }
             public ulong CurrentUnmanagedThreadId { get; private set; }
@@ -151,9 +151,10 @@ namespace Raven.Server.Utils
                 Debug.Assert(ThreadFieldName != null);
             }
 
-            public PooledThread(PoolOfThreads pool)
+            public PooledThread(PoolOfThreads pool, Logger logger)
             {
                 _parent = pool;
+                _logger = logger;
             }
 
             public LongRunningWork SetWorkForThread(Action<object> action, object state, string name)
@@ -217,9 +218,9 @@ namespace Raven.Server.Utils
                 }
                 catch (Exception e)
                 {
-                    if (_log.IsOperationsEnabled)
+                    if (_logger.IsOperationsEnabled)
                     {
-                        _log.Operations($"An uncaught exception occurred in '{_name}' and killed the process", e);
+                        _logger.Operations($"An uncaught exception occurred in '{_name}' and killed the process", e);
                     }
 
                     throw;
@@ -240,7 +241,7 @@ namespace Raven.Server.Utils
                 ResetCurrentThreadName();
                 Thread.CurrentThread.Name = "Available Pool Thread";
 
-                var resetThread = ResetThreadPriority();
+                var resetThread = ResetThreadPriority(_logger);
                 resetThread &= ResetThreadAffinity();
                 if (resetThread == false)
                     return false;
@@ -265,10 +266,10 @@ namespace Raven.Server.Utils
                 NumberOfCoresToReduce = 0;
                 ThreadMask = null;
 
-                return AffinityHelper.ResetThreadAffinity(this);
+                return AffinityHelper.ResetThreadAffinity(this, _logger);
             }
 
-            private static bool ResetThreadPriority()
+            private static bool ResetThreadPriority(Logger logger)
             {
                 try
                 {
@@ -279,9 +280,9 @@ namespace Raven.Server.Utils
                 catch (Exception e)
                 {
                     // if we can't reset it, better just kill it
-                    if (_log.IsInfoEnabled)
+                    if (logger.IsInfoEnabled)
                     {
-                        _log.Info($"Unable to set this thread priority to normal, since we don't want its priority of {Thread.CurrentThread.Priority}, we'll let it exit", e);
+                        logger.Info($"Unable to set this thread priority to normal, since we don't want its priority of {Thread.CurrentThread.Priority}, we'll let it exit", e);
                     }
                     return false;
                 }
@@ -313,7 +314,7 @@ namespace Raven.Server.Utils
                         throw new InvalidOperationException("Unable to get the current process thread: " + CurrentUnmanagedThreadId + ", this should not be possible");
                 }
 
-                AffinityHelper.ResetThreadAffinity(this);
+                AffinityHelper.ResetThreadAffinity(this, _logger);
             }
 
             public static void ResetCurrentThreadName()
@@ -330,7 +331,7 @@ namespace Raven.Server.Utils
                 NumberOfCoresToReduce = numberOfCoresToReduce;
                 ThreadMask = threadMask;
 
-                AffinityHelper.SetCustomThreadAffinity(this);
+                AffinityHelper.SetCustomThreadAffinity(this, _logger);
             }
         }
     }

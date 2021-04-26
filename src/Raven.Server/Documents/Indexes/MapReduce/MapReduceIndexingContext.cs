@@ -11,8 +11,6 @@ namespace Raven.Server.Documents.Indexes.MapReduce
 {
     public class MapReduceIndexingContext : IDisposable
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<MapReduceResultsStore>("MapReduceIndexingContext");
-
         internal static Slice LastMapResultIdKey;
 
         public FixedSizeTree DocumentMapEntries;
@@ -48,7 +46,7 @@ namespace Raven.Server.Documents.Indexes.MapReduce
             FreedPages.Clear();
         }
 
-        public unsafe void StoreNextMapResultId()
+        public unsafe void StoreNextMapResultId(Logger logger)
         {
             if (MapPhaseTree.Llt.Environment.Options.IsCatastrophicFailureSet)
                 return; // avoid re-throwing it
@@ -60,8 +58,8 @@ namespace Raven.Server.Documents.Indexes.MapReduce
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Failed to store next map result id", e);
+                if (logger.IsInfoEnabled)
+                    logger.Info("Failed to store next map result id", e);
 
                 throw;
             }

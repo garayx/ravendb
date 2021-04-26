@@ -66,10 +66,10 @@ namespace Raven.Client.Documents.Subscriptions
                 throw new ArgumentException("SubscriptionConnectionOptions must specify the SubscriptionName", nameof(options));
             _store = documentStore;
             _dbName = _store.GetDatabase(dbName);
-            _logger = LoggingSource.Instance.GetLogger<SubscriptionWorker<T>>(_dbName);
+            _logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor($"{nameof(SubscriptionWorker<T>)}: {_dbName}", LogType.Client);
         }
 
-        public void Dispose()
+    public void Dispose()
         {
             Dispose(true);
         }

@@ -22,8 +22,7 @@ namespace Raven.Server.Documents
 {
     public class CompactDatabaseTask
     {
-        private const string ResourceName = nameof(CompactDatabaseTask);
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<CompactDatabaseTask>(ResourceName);
+        private static Logger _logger;
 
         private readonly ServerStore _serverStore;
         private readonly string _database;
@@ -35,6 +34,7 @@ namespace Raven.Server.Documents
             _serverStore = serverStore;
             _database = database;
             _token = token;
+            _logger = serverStore.Logger.GetLoggerFor(nameof(CompactDatabaseTask), LogType.Server);
         }
 
         public async Task Execute(Action<IOperationProgress> onProgress, CompactionResult result)
@@ -68,10 +68,10 @@ namespace Raven.Server.Documents
                     {
                         DisableIoMetrics = true
                     },
-                new CatastrophicFailureNotification((endId, path, exception, stacktrace) => throw new InvalidOperationException($"Failed to compact database {_database} ({path}), StackTrace='{stacktrace}'", exception))))
+                new CatastrophicFailureNotification((endId, path, exception, stacktrace) => throw new InvalidOperationException($"Failed to compact database {_database} ({path}), StackTrace='{stacktrace}'", exception)), _logger))
                 {
                     InitializeOptions(src, configuration, documentDatabase, encryptionKey);
-                    DirectoryExecUtils.SubscribeToOnDirectoryInitializeExec(src, configuration.Storage, documentDatabase.Name, DirectoryExecUtils.EnvironmentType.Compaction, Logger);
+                    DirectoryExecUtils.SubscribeToOnDirectoryInitializeExec(src, configuration.Storage, documentDatabase.Name, DirectoryExecUtils.EnvironmentType.Compaction, _logger);
 
                     var basePath = configuration.Core.DataDirectory.FullPath;
                     compactDirectory = basePath + "-compacting";
@@ -103,10 +103,10 @@ namespace Raven.Server.Documents
                         {
                             DisableIoMetrics = true
                         },
-                        new CatastrophicFailureNotification((envId, path, exception, stacktrace) => throw new InvalidOperationException($"Failed to compact database {_database} ({path}). StackTrace='{stacktrace}'", exception))))
+                        new CatastrophicFailureNotification((envId, path, exception, stacktrace) => throw new InvalidOperationException($"Failed to compact database {_database} ({path}). StackTrace='{stacktrace}'", exception)), _logger))
                     {
                         InitializeOptions(dst, configuration, documentDatabase, encryptionKey);
-                        DirectoryExecUtils.SubscribeToOnDirectoryInitializeExec(dst, configuration.Storage, documentDatabase.Name, DirectoryExecUtils.EnvironmentType.Compaction, Logger);
+                        DirectoryExecUtils.SubscribeToOnDirectoryInitializeExec(dst, configuration.Storage, documentDatabase.Name, DirectoryExecUtils.EnvironmentType.Compaction, _logger);
 
                         _token.ThrowIfCancellationRequested();
                         StorageCompaction.Execute(src, (StorageEnvironmentOptions.DirectoryStorageEnvironmentOptions)dst, progressReport =>

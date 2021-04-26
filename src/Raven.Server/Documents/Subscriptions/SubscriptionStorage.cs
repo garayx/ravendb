@@ -45,8 +45,7 @@ namespace Raven.Server.Documents.Subscriptions
         {
             _db = db;
             _serverStore = serverStore;
-            _logger = LoggingSource.Instance.GetLogger<SubscriptionStorage>(db.Name);
-
+            _logger = db._logger.GetLoggerFor(nameof(SubscriptionStorage), LogType.Database);
             _concurrentConnectionsSemiSemaphore = new SemaphoreSlim(db.Configuration.Subscriptions.MaxNumberOfConcurrentConnections);
             LowMemoryNotification.Instance.RegisterLowMemoryHandler(this);
         }
@@ -59,7 +58,11 @@ namespace Raven.Server.Documents.Subscriptions
                 aggregator.Execute(state.Dispose);
                 aggregator.Execute(_concurrentConnectionsSemiSemaphore.Dispose);
             }
-            aggregator.ThrowIfNeeded();
+
+            using (_logger)
+            {
+                aggregator.ThrowIfNeeded();
+            }
         }
 
         public void Initialize()

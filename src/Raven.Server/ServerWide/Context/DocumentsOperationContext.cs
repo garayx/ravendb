@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Raven.Server.Documents;
 using Raven.Server.Documents.Replication;
+using Sparrow.Logging;
 using Sparrow.Threading;
 using Voron;
 
@@ -37,6 +38,7 @@ namespace Raven.Server.ServerWide.Context
         internal Dictionary<string, long> LastReplicationEtagFrom;
         private bool _skipChangeVectorValidation;
         internal HashSet<string> DbIdsToIgnore;
+        private readonly Logger _logger;
 
         internal bool SkipChangeVectorValidation
         {
@@ -64,21 +66,23 @@ namespace Raven.Server.ServerWide.Context
 
         public static DocumentsOperationContext ShortTermSingleUse(DocumentDatabase documentDatabase)
         {
-            var shortTermSingleUse = new DocumentsOperationContext(documentDatabase, 4096, 1024, 8 * 1024, SharedMultipleUseFlag.None);
-            return shortTermSingleUse;
+            var logger = documentDatabase._logger.GetLoggerFor(nameof(DocumentsContextPool), LogType.Database).GetLoggerFor(nameof(DocumentsTransaction), LogType.Database);
+            return new DocumentsOperationContext(documentDatabase, 4096, 1024, 8 * 1024, SharedMultipleUseFlag.None, logger);
         }
 
-        public DocumentsOperationContext(DocumentDatabase documentDatabase, int initialSize, int longLivedSize, int maxNumberOfAllocatedStringValues, SharedMultipleUseFlag lowMemoryFlag)
+        public DocumentsOperationContext(DocumentDatabase documentDatabase, int initialSize, int longLivedSize, int maxNumberOfAllocatedStringValues, SharedMultipleUseFlag lowMemoryFlag, Logger logger)
             : base(initialSize, longLivedSize, maxNumberOfAllocatedStringValues, lowMemoryFlag)
         {
             _documentDatabase = documentDatabase;
+            _logger = logger;
         }
 
         protected override DocumentsTransaction CloneReadTransaction(DocumentsTransaction previous)
         {
             var clonedTransaction = new DocumentsTransaction(this,
                 _documentDatabase.DocumentsStorage.Environment.CloneReadTransaction(previous.InnerTransaction, PersistentContext, Allocator),
-                _documentDatabase.Changes);
+                _documentDatabase.Changes,
+                _logger);
 
             previous.Dispose();
 
@@ -89,14 +93,16 @@ namespace Raven.Server.ServerWide.Context
         {
             return new DocumentsTransaction(this,
                 _documentDatabase.DocumentsStorage.Environment.ReadTransaction(PersistentContext, Allocator),
-                _documentDatabase.Changes);
+                _documentDatabase.Changes,
+                _logger);
         }
 
         protected override DocumentsTransaction CreateWriteTransaction(TimeSpan? timeout = null)
         {
             var tx = new DocumentsTransaction(this,
                 _documentDatabase.DocumentsStorage.Environment.WriteTransaction(PersistentContext, Allocator, timeout),
-                _documentDatabase.Changes);
+                _documentDatabase.Changes,
+                _logger);
 
             CurrentTxMarker = (short)tx.InnerTransaction.LowLevelTransaction.Id;
 

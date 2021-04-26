@@ -12,7 +12,7 @@ namespace Sparrow.LowMemory
     {
         private const string NotificationThreadName = "Low memory notification thread";
 
-        private readonly Logger _logger;
+        private Logger _logger;
 
         private readonly ConcurrentSet<WeakReference<ILowMemoryHandler>> _lowMemoryHandlers = new ConcurrentSet<WeakReference<ILowMemoryHandler>>();
 
@@ -134,6 +134,7 @@ namespace Sparrow.LowMemory
             bool enableHighTemporaryDirtyMemoryUse,
             float temporaryDirtyMemoryAllowedPercentage,
             AbstractLowMemoryMonitor monitor,
+            Logger logger,
             CancellationToken shutdownNotification)
         {
             if (_initialized)
@@ -145,6 +146,7 @@ namespace Sparrow.LowMemory
                     return;
 
                 _initialized = true;
+                _logger = logger;
                 LowMemoryThreshold = lowMemoryThreshold;
                 ExtremelyLowMemoryThreshold = lowMemoryThreshold * 0.2;
                 UseTotalDirtyMemInsteadOfMemUsage = useTotalDirtyMemInsteadOfMemUsage;
@@ -175,7 +177,6 @@ namespace Sparrow.LowMemory
 
         private LowMemoryNotification()
         {
-            _logger = LoggingSource.Instance.GetLogger<LowMemoryNotification>("Server");
         }
 
         private void MonitorMemoryUsage()

@@ -11,8 +11,7 @@ namespace Raven.Client.Documents.Session.Operations
     internal class LoadOperation
     {
         private readonly InMemoryDocumentSessionOperations _session;
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<LoadOperation>("Client");
-
+        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(LoadOperation), LogType.Client);
         private string[] _ids;
         private string[] _includes;
         private string[] _countersToInclude;

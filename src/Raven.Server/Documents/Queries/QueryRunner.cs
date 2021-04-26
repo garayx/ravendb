@@ -16,12 +16,13 @@ using Raven.Server.Documents.Queries.Timings;
 using Raven.Server.ServerWide;
 using Sparrow.Collections;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Index = Raven.Server.Documents.Indexes.Index;
 using PatchRequest = Raven.Server.Documents.Patch.PatchRequest;
 
 namespace Raven.Server.Documents.Queries
 {
-    public class QueryRunner : AbstractQueryRunner
+    public class QueryRunner : AbstractQueryRunner, IDisposable
     {
         private const int NumberOfRetries = 3;
 
@@ -30,15 +31,17 @@ namespace Raven.Server.Documents.Queries
         private readonly AbstractQueryRunner _dynamic;
         private readonly CollectionQueryRunner _collection;
         private long _nextQueryId;
+        private readonly Logger _logger;
 
         public QueryRunner(DocumentDatabase database) : base(database)
         {
+            _logger = database._logger.GetLoggerFor(nameof(QueryRunner), LogType.Database);
             _static = new StaticIndexQueryRunner(database);
             _dynamic = database.Configuration.Indexing.DisableQueryOptimizerGeneratedIndexes
                 ? (AbstractQueryRunner)new InvalidQueryRunner(database)
                 : new DynamicQueryRunner(database);
             _collection = new CollectionQueryRunner(database);
-            _graph = new GraphQueryRunner(database);
+            _graph = new GraphQueryRunner(database, _logger);
             _currentlyRunningQueries = new ConcurrentSet<ExecutingQueryInfo>();
         }
 
@@ -323,6 +326,11 @@ namespace Raven.Server.Documents.Queries
             _currentlyRunningQueries.TryAdd(executingQueryInfo);
 
             return new QueryMarker(this, executingQueryInfo);
+        }
+
+        public void Dispose()
+        {
+            _logger.Dispose();
         }
 
         public class QueryMarker : IDisposable

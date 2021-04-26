@@ -7,6 +7,11 @@ using Raven.Server.Background;
 using Raven.Server.NotificationCenter;
 using Raven.Server.ServerWide;
 using Sparrow.Collections;
+using Sparrow.Json;
+using Sparrow.Logging;
+using Sparrow.Server.Utils;
+using Voron;
+using Size = Sparrow.Size;
 
 namespace Raven.Server.Dashboard
 {
@@ -17,9 +22,9 @@ namespace Raven.Server.Dashboard
         private readonly TimeSpan _notificationsThrottle;
         private DateTime _lastSentNotification = DateTime.MinValue;
 
-        public DatabasesInfoNotificationSender(string resourceName, ServerStore serverStore,
-            ConcurrentSet<ConnectedWatcher> watchers, TimeSpan notificationsThrottle, CancellationToken shutdown)
-            : base(resourceName, shutdown)
+        public DatabasesInfoNotificationSender(ServerStore serverStore,
+            ConcurrentSet<ConnectedWatcher> watchers, TimeSpan notificationsThrottle, CancellationToken shutdown, Logger logger)
+            : base(shutdown, logger)
         {
             _serverStore = serverStore;
             _watchers = watchers;

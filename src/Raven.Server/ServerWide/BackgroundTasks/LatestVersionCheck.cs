@@ -17,7 +17,7 @@ namespace Raven.Server.ServerWide.BackgroundTasks
     {
         private const string ApiRavenDbNet = "https://api.ravendb.net";
 
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger("Server", typeof(LatestVersionCheck).FullName);
+        private static Logger Logger;
 
         public static LatestVersionCheck Instance = new LatestVersionCheck();
 
@@ -42,7 +42,7 @@ namespace Raven.Server.ServerWide.BackgroundTasks
         {
         }
 
-        public void Initialize(UpdatesConfiguration configuration)
+        public void Initialize(UpdatesConfiguration configuration, Logger logger)
         {
             if (configuration.BackgroundChecksDisabled)
                 return;
@@ -50,11 +50,12 @@ namespace Raven.Server.ServerWide.BackgroundTasks
             if (_timer != null)
                 return;
 
+            Logger = logger;
+
             lock (_locker)
             {
                 if (_timer != null)
                     return;
-
                 _releaseChannel = configuration.Channel.ToString();
                 _timer = new Timer(async state => await PerformAsync(), null, (int)TimeSpan.FromMinutes(5).TotalMilliseconds, (int)TimeSpan.FromHours(12).TotalMilliseconds);
             }

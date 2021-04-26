@@ -12,7 +12,7 @@ namespace Raven.Server.Indexing
 {
     public class VoronIndexOutput : BufferedIndexOutput
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<LuceneVoronDirectory>("VoronIndexOutput");
+        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(LuceneVoronDirectory), LogType.Server);
 
         private readonly TempFileCache _fileCache;
         private readonly string _name;
@@ -168,7 +168,7 @@ namespace Raven.Server.Indexing
         private void ThrowDiskFullException()
         {
             var folderPath = _fileCache.FullPath;
-            var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(folderPath);
+            var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(folderPath, Logger);
             var freeSpace = driveInfo != null ? driveInfo.TotalFreeSpace.ToString() : "N/A";
             throw new DiskFullException($"There isn't enough space to flush the buffer in: {folderPath}. " +
                                         $"Currently available space: {freeSpace}");

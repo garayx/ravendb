@@ -78,7 +78,7 @@ namespace Raven.Server.Documents.TcpHandlers
         public readonly TcpConnectionOptions TcpConnection;
         public readonly string ClientUri;
         private readonly MemoryStream _buffer = new MemoryStream();
-        private readonly Logger _logger;
+        private Logger _logger;
         public readonly SubscriptionConnectionStats Stats;
 
         private SubscriptionConnectionStatsScope _connectionScope;
@@ -145,7 +145,6 @@ namespace Raven.Server.Documents.TcpHandlers
             TcpConnection = connectionOptions;
             _tcpConnectionDisposable = tcpConnectionDisposable;
             ClientUri = connectionOptions.TcpClient.Client.RemoteEndPoint.ToString();
-            _logger = LoggingSource.Instance.GetLogger<SubscriptionConnection>(connectionOptions.DocumentDatabase.Name);
             CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(TcpConnection.DocumentDatabase.DatabaseShutdown);
             _supportedFeatures = TcpConnectionHeaderMessage.GetSupportedFeaturesFor(TcpConnectionHeaderMessage.OperationTypes.Subscription, connectionOptions.ProtocolVersion);
             _waitForMoreDocuments = new AsyncManualResetEvent(CancellationTokenSource.Token);
@@ -187,6 +186,7 @@ namespace Raven.Server.Documents.TcpHandlers
         private async Task InitAsync()
         {
             await ParseSubscriptionOptionsAsync();
+            _logger = TcpConnection.DocumentDatabase._logger.GetLoggerFor(Logger.GetNameFor(nameof(SubscriptionConnection), _options.SubscriptionName), LogType.Database);
 
             var message = $"A connection for subscription ID {SubscriptionId} was received from remote IP {TcpConnection.TcpClient.Client.RemoteEndPoint}";
             AddToStatusDescription(message);
@@ -650,7 +650,7 @@ namespace Raven.Server.Documents.TcpHandlers
                 _startEtag = GetStartEtagForSubscription(SubscriptionState);
                 _filterAndProjectionScript = SetupFilterAndProjectionScript();
                 var useRevisions = Subscription.Revisions;
-                _documentsFetcher = new SubscriptionDocumentsFetcher(TcpConnection.DocumentDatabase, _options.MaxDocsPerBatch, SubscriptionId, TcpConnection.TcpClient.Client.RemoteEndPoint, Subscription.Collection, useRevisions, SubscriptionState, _filterAndProjectionScript);
+                _documentsFetcher = new SubscriptionDocumentsFetcher(TcpConnection.DocumentDatabase, _options.MaxDocsPerBatch, SubscriptionId, TcpConnection.TcpClient.Client.RemoteEndPoint, Subscription.Collection, useRevisions, SubscriptionState, _filterAndProjectionScript, _logger.GetLoggerFor(nameof(SubscriptionDocumentsFetcher), LogType.Database));
 
                 while (CancellationTokenSource.IsCancellationRequested == false)
                 {
@@ -1162,6 +1162,7 @@ namespace Raven.Server.Documents.TcpHandlers
                 
                 _activeConnectionScope?.Dispose();
                 _connectionScope.Dispose();
+                _logger.Dispose();
             }
         }
 

@@ -27,7 +27,7 @@ namespace Voron.Impl.Journal
             _options = options;
             _lazyTransactionPager = CreateBufferPager();
             _transactionPersistentContext = new TransactionPersistentContext(true);
-            _log = LoggingSource.Instance.GetLogger<LazyTransactionBuffer>(options.BasePath.FullPath);
+            _log = options._log.GetLoggerFor($"{nameof(LazyTransactionBuffer)}: '{options.BasePath.FullPath}'", LogType.Database);
         }
 
         private AbstractPager CreateBufferPager()

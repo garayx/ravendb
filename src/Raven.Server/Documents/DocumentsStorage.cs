@@ -169,7 +169,7 @@ namespace Raven.Server.Documents
             }
         }
 
-        private readonly Logger _logger;
+        internal readonly Logger _logger;
         private readonly string _name;
 
         // this is only modified by write transactions under lock
@@ -182,7 +182,7 @@ namespace Raven.Server.Documents
         {
             DocumentDatabase = documentDatabase;
             _name = DocumentDatabase.Name;
-            _logger = LoggingSource.Instance.GetLogger<DocumentsStorage>(documentDatabase.Name);
+            _logger = documentDatabase._logger.GetLoggerFor(nameof(DocumentsStorage), LogType.Database);
             _addToInitLog = addToInitLog;
         }
 
@@ -216,7 +216,10 @@ namespace Raven.Server.Documents
                 Environment?.Dispose();
             });
 
-            exceptionAggregator.ThrowIfNeeded();
+            using (_logger)
+            {
+                exceptionAggregator.ThrowIfNeeded();
+            }
         }
 
         public void Initialize(bool generateNewDatabaseId = false)
@@ -229,7 +232,7 @@ namespace Raven.Server.Documents
                      : DocumentDatabase.Configuration.Core.DataDirectory.FullPath));
             }
 
-            var options = GetStorageEnvironmentOptionsFromConfiguration(DocumentDatabase.Configuration, DocumentDatabase.IoChanges, DocumentDatabase.CatastrophicFailureNotification);
+            var options = GetStorageEnvironmentOptionsFromConfiguration(DocumentDatabase.Configuration, DocumentDatabase.IoChanges, DocumentDatabase.CatastrophicFailureNotification, _logger);
 
             options.OnNonDurableFileSystemError += DocumentDatabase.HandleNonDurableFileSystemError;
             options.OnRecoveryError += DocumentDatabase.HandleOnDatabaseRecoveryError;
@@ -266,21 +269,23 @@ namespace Raven.Server.Documents
             }
         }
 
-        public static StorageEnvironmentOptions GetStorageEnvironmentOptionsFromConfiguration(RavenConfiguration config, IoChangesNotifications ioChanges, CatastrophicFailureNotification catastrophicFailureNotification)
+        public static StorageEnvironmentOptions GetStorageEnvironmentOptionsFromConfiguration(RavenConfiguration config, IoChangesNotifications ioChanges, CatastrophicFailureNotification catastrophicFailureNotification, Logger logger)
         {
             if (config.Core.RunInMemory)
                 return StorageEnvironmentOptions.CreateMemoryOnly(
                     config.Core.DataDirectory.FullPath,
                     config.Storage.TempPath?.FullPath,
                     ioChanges,
-                    catastrophicFailureNotification);
+                    catastrophicFailureNotification,
+                    logger);
 
             return StorageEnvironmentOptions.ForPath(
                 config.Core.DataDirectory.FullPath,
                 config.Storage.TempPath?.FullPath,
                 null,
                 ioChanges,
-                catastrophicFailureNotification
+                catastrophicFailureNotification, 
+                logger
             );
         }
 

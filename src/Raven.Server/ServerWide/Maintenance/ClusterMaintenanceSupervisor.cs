@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client.Exceptions.Security;
+using Raven.Client.Http;
 using Raven.Client.ServerWide.Commands;
 using Raven.Client.ServerWide.Tcp;
 using Raven.Client.Util;
@@ -34,14 +35,16 @@ namespace Raven.Server.ServerWide.Maintenance
         private readonly JsonContextPool _contextPool;
 
         internal readonly ClusterConfiguration Config;
-        private readonly ServerStore _server;
+        internal readonly ServerStore _server;
+        internal readonly Logger _logger;
 
         public ClusterMaintenanceSupervisor(ServerStore server, string leaderClusterTag, long term)
         {
             _leaderClusterTag = leaderClusterTag;
             _term = term;
             _server = server;
-            _contextPool = new JsonContextPool(server.Configuration.Memory.MaxContextSizeToKeep);
+            _logger = _server.Logger.GetLoggerFor(nameof(ClusterMaintenanceSupervisor), LogType.Cluster);
+            _contextPool = new JsonContextPool(server.Configuration.Memory.MaxContextSizeToKeep, _logger.GetLoggerFor(nameof(JsonContextPool), LogType.Cluster));
             Config = server.Configuration.Cluster;
         }
 
@@ -141,7 +144,7 @@ namespace Raven.Server.ServerWide.Maintenance
                 _token = _cts.Token;
                 _readStatusUpdateDebugString = $"ClusterMaintenanceServer/{ClusterTag}/UpdateState/Read-Response in term {term}";
                 _name = $"Heartbeats supervisor from {_parent._server.NodeTag} to {ClusterTag} in term {term}";
-                _log = LoggingSource.Instance.GetLogger<ClusterNode>(_name);
+                _log = parent._logger.GetLoggerFor(nameof(ClusterNode), LogType.Cluster);
             }
 
             public void Start()
@@ -168,7 +171,7 @@ namespace Raven.Server.ServerWide.Maintenance
                         }
                         // we don't want to crash the process so we don't propagate this exception.
                     }
-                }, null, _name);
+                }, null, _name, _log);
             }
 
             private void ListenToMaintenanceWorker()
@@ -218,7 +221,7 @@ namespace Raven.Server.ServerWide.Maintenance
                         using (tcpClient)
                         using (_cts.Token.Register(tcpClient.Dispose))
                         using (_contextPool.AllocateOperationContext(out JsonOperationContext context))
-                        using (var timeoutEvent = new TimeoutEvent(receiveFromWorkerTimeout, $"Timeout event for: {_name}", singleShot: false))
+                        using (var timeoutEvent = new TimeoutEvent(receiveFromWorkerTimeout, _log.GetLoggerFor($"Timeout event for: {_name}", LogType.Cluster), singleShot: false))
                         {
                             timeoutEvent.Start(OnTimeout);
                             var unchangedReports = new List<DatabaseStatusReport>();

@@ -37,10 +37,11 @@ namespace Raven.Server.Documents.TcpHandlers
         public SubscriptionDocumentsFetcher(DocumentDatabase db, int maxBatchSize, long subscriptionId, EndPoint remoteEndpoint, string collection,
             bool revisions,
             SubscriptionState subscription,
-            SubscriptionPatchDocument patch)
+            SubscriptionPatchDocument patch,
+            Logger logger)
         {
             _db = db;
-            _logger = LoggingSource.Instance.GetLogger<SubscriptionDocumentsFetcher>(db.Name);
+            _logger = logger;
             _maxBatchSize = maxBatchSize;
             _subscriptionId = subscriptionId;
             _remoteEndpoint = remoteEndpoint;

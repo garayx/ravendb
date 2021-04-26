@@ -224,7 +224,7 @@ namespace Raven.Server.Documents.Replication
             }
         }
 
-        private readonly Logger _log;
+        internal readonly Logger _log;
 
         // PERF: _incoming locks if you do _incoming.Values. Using .Select
         // directly and fetching the Value avoids this problem.
@@ -254,7 +254,7 @@ namespace Raven.Server.Documents.Replication
             Database = database;
             var config = Database.Configuration.Replication;
             var reconnectTime = config.RetryReplicateAfter.AsTimeSpan;
-            _log = LoggingSource.Instance.GetLogger<ReplicationLoader>(Database.Name);
+            _log = database._logger.GetLoggerFor(Logger.GetNameFor(nameof(ReplicationLoader), database.Name), LogType.Database);
             _reconnectAttemptTimer = new Timer(state => ForceTryReconnectAll(),
                 null, reconnectTime, reconnectTime);
             MinimalHeartbeatInterval = (int)config.ReplicationMinimalHeartbeat.AsTimeSpan.TotalMilliseconds;
@@ -792,7 +792,7 @@ namespace Raven.Server.Documents.Replication
                 return;
 
             ConflictSolverConfig = record.ConflictSolverConfig;
-            ConflictResolver = new ResolveConflictOnReplicationConfigurationChange(this, _log);
+            ConflictResolver = new ResolveConflictOnReplicationConfigurationChange(this);
             ConflictResolver.RunConflictResolversOnce();
             _isInitialized.Raise();
         }
@@ -1735,6 +1735,7 @@ namespace Raven.Server.Documents.Replication
             }
             finally
             {
+                _log.Dispose();
                 _locker.ExitWriteLock();
             }
         }

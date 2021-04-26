@@ -42,7 +42,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
         private byte[] _buffer;
 
         public IndexWriteOperation(Index index, LuceneVoronDirectory directory, LuceneDocumentConverterBase converter, Transaction writeTransaction, LuceneIndexPersistence persistence)
-            : base(index, LoggingSource.Instance.GetLogger<IndexWriteOperation>(index._indexStorage.DocumentDatabase.Name))
+            : base(index, index._logger.GetLoggerFor(nameof(IndexWriteOperation), LogType.Index))
         {
             _converter = converter;
             DocumentDatabase = index._indexStorage.DocumentDatabase;
@@ -92,6 +92,8 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
                 }
 
                 _releaseWriteTransaction?.Dispose();
+
+                base.Dispose();
             }
             finally
             {

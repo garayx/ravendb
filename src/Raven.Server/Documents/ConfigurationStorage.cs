@@ -14,10 +14,6 @@ namespace Raven.Server.Documents
 {
     public class ConfigurationStorage : IDisposable
     {
-        private const string ResourceName = nameof(ConfigurationStorage);
-
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<ConfigurationStorage>(ResourceName);
-
         public TransactionContextPool ContextPool { get; }
 
         public NotificationsStorage NotificationsStorage { get; }
@@ -25,6 +21,8 @@ namespace Raven.Server.Documents
         public OperationsStorage OperationsStorage { get; }
 
         public StorageEnvironment Environment { get; }
+
+        private  Logger _logger { get; }
 
         public ConfigurationStorage(DocumentDatabase db)
         {
@@ -35,9 +33,10 @@ namespace Raven.Server.Documents
                 tempPath = db.Configuration.Storage.TempPath.Combine("Configuration").ToFullPath();
             }
 
+            _logger = db._logger.GetLoggerFor(nameof(ConfigurationStorage), LogType.Database);
             var options = db.Configuration.Core.RunInMemory
-                ? StorageEnvironmentOptions.CreateMemoryOnly(path.FullPath, tempPath, db.IoChanges, db.CatastrophicFailureNotification)
-                : StorageEnvironmentOptions.ForPath(path.FullPath, tempPath, null, db.IoChanges, db.CatastrophicFailureNotification);
+                ? StorageEnvironmentOptions.CreateMemoryOnly(path.FullPath, tempPath, db.IoChanges, db.CatastrophicFailureNotification, _logger)
+                : StorageEnvironmentOptions.ForPath(path.FullPath, tempPath, null, db.IoChanges, db.CatastrophicFailureNotification, _logger);
 
             options.OnNonDurableFileSystemError += db.HandleNonDurableFileSystemError;
             options.OnRecoverableFailure += db.HandleRecoverableFailure;
@@ -61,15 +60,15 @@ namespace Raven.Server.Documents
             options.SkipChecksumValidationOnDatabaseLoading = db.Configuration.Storage.SkipChecksumValidationOnDatabaseLoading;
             options.IgnoreDataIntegrityErrorsOfAlreadySyncedTransactions = db.Configuration.Storage.IgnoreDataIntegrityErrorsOfAlreadySyncedTransactions;
 
-            DirectoryExecUtils.SubscribeToOnDirectoryInitializeExec(options, db.Configuration.Storage, db.Name, DirectoryExecUtils.EnvironmentType.Configuration, Logger);
+            DirectoryExecUtils.SubscribeToOnDirectoryInitializeExec(options, db.Configuration.Storage, db.Name, DirectoryExecUtils.EnvironmentType.Configuration, _logger);
 
-            NotificationsStorage = new NotificationsStorage(db.Name);
+            NotificationsStorage = new NotificationsStorage(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor($"{nameof(NotificationsStorage)}: '{db.Name}'", LogType.Database));
 
             OperationsStorage = new OperationsStorage();
 
             Environment = StorageLoader.OpenEnvironment(options, StorageEnvironmentWithType.StorageEnvironmentType.Configuration);
 
-            ContextPool = new TransactionContextPool(Environment, db.Configuration.Memory.MaxContextSizeToKeep);
+            ContextPool = new TransactionContextPool(Environment, db.Configuration.Memory.MaxContextSizeToKeep, _logger.GetLoggerFor(nameof(TransactionContextPool), _logger.Type));
         }
 
         public void Initialize()
@@ -82,6 +81,7 @@ namespace Raven.Server.Documents
         {
             ContextPool?.Dispose();
             Environment.Dispose();
+            _logger.Dispose();
         }
     }
 }

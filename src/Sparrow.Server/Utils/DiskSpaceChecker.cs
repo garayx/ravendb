@@ -12,14 +12,12 @@ namespace Sparrow.Server.Utils
 {
     public static class DiskSpaceChecker
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger("Server", typeof(DiskSpaceChecker).FullName);
-
         // from https://github.com/dotnet/corefx/blob/9c06da6a34fcefa6fb37776ac57b80730e37387c/src/Common/src/System/IO/PathInternal.Windows.cs#L52
         public const short WindowsMaxPath = short.MaxValue;
 
         public const int LinuxMaxPath = 4096;
 
-        public static DiskSpaceResult GetDiskSpaceInfo(string pathToCheck, DriveInfoBase driveInfoBase = null)
+        public static DiskSpaceResult GetDiskSpaceInfo(string pathToCheck, Logger logger, DriveInfoBase driveInfoBase = null)
         {
             if (string.IsNullOrEmpty(pathToCheck))
                 return null;
@@ -27,8 +25,8 @@ namespace Sparrow.Server.Utils
             var result = Pal.rvn_get_path_disk_space(pathToCheck, out var totalFreeBytes, out var totalDiskBytes, out int error);
             if (result != PalFlags.FailCodes.Success)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failed to get file system statistics for path: {pathToCheck}, error: {error}");
+                if (logger.IsInfoEnabled)
+                    logger.Info($"Failed to get file system statistics for path: {pathToCheck}, error: {error}");
 
                 return null;
             }
@@ -64,9 +62,9 @@ namespace Sparrow.Server.Utils
             }
         }
 
-        public static DriveInfoBase GetDriveInfo(string path, DriveInfo[] drivesInfo, out string realPath)
+        public static DriveInfoBase GetDriveInfo(string path, DriveInfo[] drivesInfo, Logger logger, out string realPath)
         {
-            var driveName = GetDriveName(path, drivesInfo, out realPath);
+            var driveName = GetDriveName(path, drivesInfo, logger, out realPath);
 
             return new DriveInfoBase
             {
@@ -74,13 +72,13 @@ namespace Sparrow.Server.Utils
             };
         }
 
-        private static string GetDriveName(string path, DriveInfo[] drivesInfo, out string realPath)
+        private static string GetDriveName(string path, DriveInfo[] drivesInfo, Logger logger, out string realPath)
         {
             try
             {
                 if (PlatformDetails.RunningOnPosix == false)
                 {
-                    realPath = GetWindowsRealPathByPath(path);
+                    realPath = GetWindowsRealPathByPath(path, logger);
                     return Path.GetPathRoot(realPath);
                 }
 
@@ -90,8 +88,8 @@ namespace Sparrow.Server.Utils
             catch (Exception e)
             {
                 // failing here will prevent us from starting the storage environment
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failed to get the real path for: {path}", e);
+                if (logger.IsInfoEnabled)
+                    logger.Info($"Failed to get the real path for: {path}", e);
 
                 realPath = path;
                 return path;
@@ -144,7 +142,7 @@ namespace Sparrow.Server.Utils
             return root;
         }
 
-        private static string GetWindowsRealPathByPath(string path)
+        private static string GetWindowsRealPathByPath(string path, Logger logger)
         {
             var handle = CreateFile(path,
                 FILE_READ_EA,
@@ -156,10 +154,10 @@ namespace Sparrow.Server.Utils
 
             if (handle == INVALID_HANDLE_VALUE)
             {
-                if (Logger.IsInfoEnabled)
+                if (logger.IsInfoEnabled)
                 {
                     var error = Marshal.GetLastWin32Error();
-                    Logger.Info($"Failed to the handle for path: {path}, error: {error}");
+                    logger.Info($"Failed to the handle for path: {path}, error: {error}");
                 }
 
                 return path;
@@ -167,7 +165,7 @@ namespace Sparrow.Server.Utils
 
             try
             {
-                return GetWindowsRealPathByHandle(handle) ?? path;
+                return GetWindowsRealPathByHandle(handle, logger) ?? path;
             }
             finally
             {
@@ -175,7 +173,7 @@ namespace Sparrow.Server.Utils
             }
         }
 
-        private static unsafe string GetWindowsRealPathByHandle(IntPtr handle)
+        private static unsafe string GetWindowsRealPathByHandle(IntPtr handle, Logger logger)
         {
             bool GetPath(uint bufferSize, out string outputPath)
             {
@@ -188,10 +186,10 @@ namespace Sparrow.Server.Utils
                         var result = GetFinalPathNameByHandle(handle, buffer, bufferSize, 0);
                         if (result == 0)
                         {
-                            if (Logger.IsInfoEnabled)
+                            if (logger.IsInfoEnabled)
                             {
                                 var error = Marshal.GetLastWin32Error();
-                                Logger.Info($"Failed to get the final path name by handle, error: {error}");
+                                logger.Info($"Failed to get the final path name by handle, error: {error}");
                             }
 
                             outputPath = null;

@@ -40,7 +40,6 @@ namespace Raven.Server.Documents.Handlers
             var progress = new BulkInsertProgress();
             try
             {
-                var logger = LoggingSource.Instance.GetLogger<MergedInsertBulkCommand>(Database.Name);
                 IDisposable currentCtxReset = null, previousCtxReset = null;
 
                 try
@@ -82,7 +81,6 @@ namespace Raven.Server.Documents.Handlers
                                                 Commands = array,
                                                 NumberOfCommands = numberOfCommands,
                                                 Database = Database,
-                                                Logger = logger,
                                                 TotalSize = totalSize
                                             });
                                         }
@@ -148,7 +146,6 @@ namespace Raven.Server.Documents.Handlers
                                     Commands = array,
                                     NumberOfCommands = numberOfCommands,
                                     Database = Database,
-                                    Logger = logger,
                                     TotalSize = totalSize
                                 });
 
@@ -315,7 +312,6 @@ namespace Raven.Server.Documents.Handlers
 
         public class MergedInsertBulkCommand : TransactionOperationsMerger.MergedTransactionCommand
         {
-            public Logger Logger;
             public DocumentDatabase Database;
             public BatchRequestParser.CommandData[] Commands;
             public int NumberOfCommands;
@@ -429,9 +425,10 @@ namespace Raven.Server.Documents.Handlers
                     }
                 }
 
-                if (Logger.IsInfoEnabled)
+                var logger = Database._logger.GetLoggerFor(nameof(MergedInsertBulkCommand), LogType.Database);
+                if (logger.IsInfoEnabled)
                 {
-                    Logger.Info($"Executed {NumberOfCommands:#,#;;0} bulk insert operations, size: ({new Size(TotalSize, SizeUnit.Bytes)})");
+                    logger.Info($"Executed {NumberOfCommands:#,#;;0} bulk insert operations, size: ({new Size(TotalSize, SizeUnit.Bytes)})");
                 }
 
                 return NumberOfCommands;
@@ -486,9 +483,8 @@ namespace Raven.Server.Documents.Handlers
                 NumberOfCommands = Commands.Length,
                 TotalSize = Commands.Sum(c => c.Document.Size),
                 Commands = Commands,
-                Database = database,
-                Logger = LoggingSource.Instance.GetLogger<DatabaseDestination>(database.Name)
-            };
+                Database = database
+        };
         }
     }
 }

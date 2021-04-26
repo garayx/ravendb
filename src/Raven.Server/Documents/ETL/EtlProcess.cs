@@ -128,7 +128,7 @@ namespace Raven.Server.Documents.ETL
         private TestMode _testMode;
 
         protected readonly Transformation Transformation;
-        protected readonly Logger Logger;
+        internal readonly Logger Logger;
         protected readonly DocumentDatabase Database;
         protected EtlProcessState LastProcessState;
 
@@ -145,7 +145,7 @@ namespace Raven.Server.Documents.ETL
             ConfigurationName = Configuration.Name;
             TransformationName = Transformation.Name;
             Name = $"{Configuration.Name}/{Transformation.Name}";
-            Logger = LoggingSource.Instance.GetLogger(database.Name, GetType().FullName);
+            Logger = database._logger.GetLoggerFor(Logger.GetNameFor(nameof(EtlProcess), Configuration.GetDefaultTaskName()), LogType.Database);
             Database = database;
             _serverStore = serverStore;
             Statistics = new EtlProcessStatistics(Tag, Name, Database.NotificationCenter);
@@ -622,7 +622,7 @@ namespace Raven.Server.Documents.ETL
                     if (Logger.IsOperationsEnabled)
                         Logger.Operations($"Failed to run ETL {Name}", e);
                 }
-            }, null, threadName);
+            }, null, threadName, Logger);
 
             if (Logger.IsOperationsEnabled)
                 Logger.Operations($"Starting {Tag} process: '{Name}'.");
@@ -1256,6 +1256,7 @@ namespace Raven.Server.Documents.ETL
             exceptionAggregator.Execute(() => _waitForChanges.Dispose());
 
             exceptionAggregator.ThrowIfNeeded();
+            Logger.Dispose();
         }
 
         private class TestMode

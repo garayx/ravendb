@@ -57,7 +57,7 @@ namespace Raven.Server.Documents.Indexes.MapReduce
             _indexStorage = indexStorage;
             _metrics = metrics;
             _mapReduceContext = mapReduceContext;
-            _logger = LoggingSource.Instance.GetLogger<ReduceMapResultsBase<T>>(indexStorage.DocumentDatabase.Name);
+            _logger = _index._logger.GetLoggerFor(nameof(ReduceMapResultsBase<T>), LogType.Index);
         }
 
         static ReduceMapResultsBase()
@@ -143,13 +143,13 @@ namespace Raven.Server.Documents.Indexes.MapReduce
 
             if (stats.Duration >= MinReduceDurationToCalculateProcessMemoryUsage)
             {
-                var workingSet = MemoryInformation.GetWorkingSetInBytes();
+                var workingSet = MemoryInformation.GetWorkingSetInBytes(_logger);
                 var privateMemory = AbstractLowMemoryMonitor.GetManagedMemoryInBytes() + AbstractLowMemoryMonitor.GetUnmanagedAllocationsInBytes();
                 stats.RecordReduceMemoryStats(workingSet, privateMemory);
             }
 
             WriteLastEtags(indexContext);
-            _mapReduceContext.StoreNextMapResultId();
+            _mapReduceContext.StoreNextMapResultId(_logger);
 
             return (false, Index.CanContinueBatchResult.None);
         }

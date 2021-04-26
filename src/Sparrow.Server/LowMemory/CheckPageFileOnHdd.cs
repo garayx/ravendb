@@ -19,12 +19,10 @@ namespace Sparrow.Server.LowMemory
 {
     public static class CheckPageFileOnHdd
     {
-        private static readonly Logger Log = LoggingSource.Instance.GetLogger("Server", typeof(CheckPageFileOnHdd).FullName);
-
         private const string PageFileName = "pagefile.sys";
 
         // ReSharper disable InconsistentNaming
-        public static string WindowsIsSwappingOnHddInsteadOfSsd()
+        public static string WindowsIsSwappingOnHddInsteadOfSsd(Logger logger)
         {
             try
             {
@@ -38,11 +36,11 @@ namespace Sparrow.Server.LowMemory
                 {
                     var fullDriveName = drives[i].RootDirectory.FullName;
                     var currentDriveLetter = fullDriveName.Substring(0, 1);
-                    var driveNumber = GetPhysicalDriveNumber(currentDriveLetter);
+                    var driveNumber = GetPhysicalDriveNumber(currentDriveLetter, logger);
                     if (driveNumber == null)
                         continue;
 
-                    var driveType = GetDriveType(driveNumber.Value);
+                    var driveType = GetDriveType(driveNumber.Value, logger);
                     switch (driveType)
                     {
                         case RavenDriveType.SSD:
@@ -52,8 +50,8 @@ namespace Sparrow.Server.LowMemory
                             break;
 
                         case RavenDriveType.Unknown:
-                            if (Log.IsOperationsEnabled)
-                                Log.Operations($"Failed to determine if drive {currentDriveLetter} is SSD or HDD");
+                            if (logger.IsOperationsEnabled)
+                                logger.Operations($"Failed to determine if drive {currentDriveLetter} is SSD or HDD");
                             //we can't figure out the drive type
                             continue;
                         default:
@@ -80,15 +78,15 @@ namespace Sparrow.Server.LowMemory
                               $"{string.Join(", ", hddDrivesWithPageFile)} while there is {ssdDriveCount} " +
                               $"SSD drive{(ssdDriveCount > 1 ? "s" : string.Empty)}. This can cause a slowdown, consider moving it to SSD";
 
-                if (Log.IsInfoEnabled)
-                    Log.Info(message);
+                if (logger.IsInfoEnabled)
+                    logger.Info(message);
 
                 return string.Join(", ", hddDrivesWithPageFile);
             }
             catch (Exception e)
             {
-                if (Log.IsInfoEnabled)
-                    Log.Info("Failed to determine page file that is located on HDD", e);
+                if (logger.IsInfoEnabled)
+                    logger.Info("Failed to determine page file that is located on HDD", e);
                 return null;
             }
         }
@@ -100,11 +98,11 @@ namespace Sparrow.Server.LowMemory
             Unknown
         }
 
-        private static RavenDriveType GetDriveType(uint physicalDriveNumber)
+        private static RavenDriveType GetDriveType(uint physicalDriveNumber, Logger logger)
         {
             var sDrive = "\\\\.\\PhysicalDrive" + physicalDriveNumber;
-            var driveType = HasNoSeekPenalty(sDrive);
-            return driveType != RavenDriveType.Unknown ? driveType : HasNominalMediaRotationRate(sDrive);
+            var driveType = HasNoSeekPenalty(sDrive, logger);
+            return driveType != RavenDriveType.Unknown ? driveType : HasNominalMediaRotationRate(sDrive, logger);
         }
 
         //for CreateFile to get handle to drive
@@ -204,7 +202,7 @@ namespace Sparrow.Server.LowMemory
         private static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
 
         //method for no seek penalty
-        private static RavenDriveType HasNoSeekPenalty(string sDrive)
+        private static RavenDriveType HasNoSeekPenalty(string sDrive, Logger logger)
         {
             var hDrive = CreateFileW(sDrive, 0, // No access to drive
                 FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
@@ -216,8 +214,8 @@ namespace Sparrow.Server.LowMemory
                 if (hDrive == INVALID_HANDLE_VALUE)
                 {
                     var message = GetErrorMessage(Marshal.GetLastWin32Error());
-                    if (Log.IsInfoEnabled)
-                        Log.Info("CreateFile failed. " + message);
+                    if (logger.IsInfoEnabled)
+                        logger.Info("CreateFile failed. " + message);
                     return RavenDriveType.Unknown;
                 }
 
@@ -243,8 +241,8 @@ namespace Sparrow.Server.LowMemory
             if (querySeekPenaltyResult == false)
             {
                 var message = GetErrorMessage(Marshal.GetLastWin32Error());
-                if (Log.IsInfoEnabled)
-                    Log.Info("DeviceIoControl failed. " + message);
+                if (logger.IsInfoEnabled)
+                    logger.Info("DeviceIoControl failed. " + message);
                 return RavenDriveType.Unknown;
             }
 
@@ -253,7 +251,7 @@ namespace Sparrow.Server.LowMemory
 
         //method for nominal media rotation rate
         //(administrative privilege is required)
-        private static RavenDriveType HasNominalMediaRotationRate(string sDrive)
+        private static RavenDriveType HasNominalMediaRotationRate(string sDrive, Logger logger)
         {
             var hDrive = CreateFileW(sDrive, GENERIC_READ | GENERIC_WRITE, //administrative privilege is required
                 FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
@@ -265,8 +263,8 @@ namespace Sparrow.Server.LowMemory
                 if (hDrive == INVALID_HANDLE_VALUE)
                 {
                     var message = GetErrorMessage(Marshal.GetLastWin32Error());
-                    if (Log.IsInfoEnabled)
-                        Log.Info("CreateFile failed. " + message);
+                    if (logger.IsInfoEnabled)
+                        logger.Info("CreateFile failed. " + message);
                     return RavenDriveType.Unknown;
                 }
 
@@ -299,8 +297,8 @@ namespace Sparrow.Server.LowMemory
             if (result == false)
             {
                 var message = GetErrorMessage(Marshal.GetLastWin32Error());
-                if (Log.IsInfoEnabled)
-                    Log.Info("DeviceIoControl failed. " + message);
+                if (logger.IsInfoEnabled)
+                    logger.Info("DeviceIoControl failed. " + message);
                 return RavenDriveType.Unknown;
             }
 
@@ -342,7 +340,7 @@ namespace Sparrow.Server.LowMemory
         private static extern bool DeviceIoControl(IntPtr hDevice, uint dwIoControlCode, IntPtr lpInBuffer, uint nInBufferSize, ref VOLUME_DISK_EXTENTS lpOutBuffer, uint nOutBufferSize, out uint lpBytesReturned, IntPtr lpOverlapped);
 
         //method for disk extents
-        public static uint? GetPhysicalDriveNumber(string driveLetter)
+        public static uint? GetPhysicalDriveNumber(string driveLetter, Logger logger)
         {
             var sDrive = "\\\\.\\" + driveLetter + ":";
 
@@ -356,8 +354,8 @@ namespace Sparrow.Server.LowMemory
                 if (hDrive == INVALID_HANDLE_VALUE)
                 {
                     var message = GetErrorMessage(Marshal.GetLastWin32Error());
-                    if (Log.IsInfoEnabled)
-                        Log.Info("CreateFile failed. " + message);
+                    if (logger.IsInfoEnabled)
+                        logger.Info("CreateFile failed. " + message);
                     return uint.MinValue;
                 }
 
@@ -378,19 +376,19 @@ namespace Sparrow.Server.LowMemory
             if (query_disk_extents_result == false || query_disk_extents.Extents.Length != 1)
             {
                 var message = GetErrorMessage(Marshal.GetLastWin32Error());
-                if (Log.IsInfoEnabled)
-                    Log.Info("DeviceIoControl failed. " + message);
+                if (logger.IsInfoEnabled)
+                    logger.Info("DeviceIoControl failed. " + message);
                 return null;
             }
 
             return query_disk_extents.Extents[0].DiskNumber;
         }
 
-        public static string PosixIsSwappingOnHddInsteadOfSsd()
+        public static string PosixIsSwappingOnHddInsteadOfSsd(Logger logger)
         {
             try
             {
-                var swaps = KernelVirtualFileSystemUtils.ReadSwapInformationFromSwapsFile();
+                var swaps = KernelVirtualFileSystemUtils.ReadSwapInformationFromSwapsFile(logger);
                 if (swaps.Length == 0) // on error return as if no swap problem
                     return null;
 
@@ -418,15 +416,15 @@ namespace Sparrow.Server.LowMemory
                     if (File.Exists(filename) == false)
                         continue;
 
-                    var isHdd = KernelVirtualFileSystemUtils.ReadNumberFromFile(filename);
+                    var isHdd = KernelVirtualFileSystemUtils.ReadNumberFromFile(filename, logger);
                     if (isHdd == -1)
                         return null;
                     if (isHdd == 1)
                         foundRotationalDiskDrive = filename;
                     else if (isHdd != 0)
                     {
-                        if (Log.IsOperationsEnabled)
-                            Log.Operations($"Got invalid value (not 0 or 1) from {filename} = {isHdd}, assumes this is not a rotational disk");
+                        if (logger.IsOperationsEnabled)
+                            logger.Operations($"Got invalid value (not 0 or 1) from {filename} = {isHdd}, assumes this is not a rotational disk");
                         foundRotationalDiskDrive = null;
                     }
                 }
@@ -435,7 +433,7 @@ namespace Sparrow.Server.LowMemory
                 if (foundRotationalDiskDrive != null)
                 {
                     // search if ssd drive is available
-                    foreach (var partitionDisk in KernelVirtualFileSystemUtils.GetAllDisksFromPartitionsFile())
+                    foreach (var partitionDisk in KernelVirtualFileSystemUtils.GetAllDisksFromPartitionsFile(logger))
                     {
                         //ignore ramdisks (ram0..ram15 etc)
                         if (partitionDisk.StartsWith("ram", StringComparison.OrdinalIgnoreCase))
@@ -448,7 +446,7 @@ namespace Sparrow.Server.LowMemory
                         if (File.Exists(filename) == false)
                             continue;
 
-                        var isHdd = KernelVirtualFileSystemUtils.ReadNumberFromFile(filename);
+                        var isHdd = KernelVirtualFileSystemUtils.ReadNumberFromFile(filename, logger);
                         if (isHdd == 0)
                         {
                             hddSwapsInsteadOfSsd = disk;
@@ -482,7 +480,7 @@ namespace Sparrow.Server.LowMemory
             }
             catch (Exception ex)
             {
-                Log.Info("Error while trying to determine if hdd swaps instead of ssd on linux, ignoring this check and assuming no hddswap", ex);
+                logger.Info("Error while trying to determine if hdd swaps instead of ssd on linux, ignoring this check and assuming no hddswap", ex);
                 // ignore
                 return null;
             }

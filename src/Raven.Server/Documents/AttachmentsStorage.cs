@@ -14,7 +14,6 @@ using Sparrow;
 using Sparrow.Binary;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
-using Sparrow.Logging;
 using Sparrow.Server;
 using Sparrow.Server.Utils;
 using Voron;
@@ -86,7 +85,6 @@ namespace Raven.Server.Documents
         {
             _documentDatabase = documentDatabase;
             _documentsStorage = documentDatabase.DocumentsStorage;
-            LoggingSource.Instance.GetLogger<AttachmentsStorage>(documentDatabase.Name);
 
             tx.CreateTree(AttachmentsSlice);
             AttachmentsSchema.Create(tx, AttachmentsMetadataSlice, 44);

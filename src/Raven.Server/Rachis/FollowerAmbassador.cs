@@ -16,6 +16,7 @@ using Raven.Server.Utils;
 using Sparrow;
 using Sparrow.Binary;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Sparrow.Server.Utils;
 using Sparrow.Threading;
 using Voron;
@@ -192,7 +193,7 @@ namespace Raven.Server.Rachis
 
                                     var stream = connection.Stream;
                                     var disconnect = connection.Disconnect;
-                                    var con = new RemoteConnection(_tag, _engine.Tag, _term, stream, disconnect);
+                                    var con = new RemoteConnection(_tag, _engine.Tag, _term, stream, disconnect, _engine.Log.GetLoggerFor($"{_engine.Tag} > {_tag}", LogType.Cluster));
                                     Interlocked.Exchange(ref _connection, con);
                                     ClusterTopology topology;
                                     using (context.OpenReadTransaction())
@@ -799,8 +800,8 @@ namespace Raven.Server.Rachis
 
                 FollowerCommandsVersion = GetFollowerVersion(llr);
                 _leader.PeersVersion[_tag] = FollowerCommandsVersion;
-                var minimalVersion = ClusterCommandsVersionManager.GetClusterMinimalVersion(_leader.PeersVersion.Values.ToList(), _engine.MaximalVersion);
-                ClusterCommandsVersionManager.SetClusterVersion(minimalVersion);
+                var minimalVersion = ClusterCommandsVersionManager.GetClusterMinimalVersion(_leader.PeersVersion.Values.ToList(), _engine.Log, _engine.MaximalVersion);
+                ClusterCommandsVersionManager.SetClusterVersion(minimalVersion, _engine.Log);
 
                 if (_engine.Log.IsInfoEnabled)
                 {
@@ -916,7 +917,7 @@ namespace Raven.Server.Rachis
         {
             UpdateLastMatchFromFollower(0);
             _followerAmbassadorLongRunningOperation =
-                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => Run(), null, ToString());
+                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => Run(), null, ToString(), _engine.Log);
         }
 
         public override string ToString()

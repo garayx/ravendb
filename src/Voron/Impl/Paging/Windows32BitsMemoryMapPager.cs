@@ -121,7 +121,7 @@ namespace Voron.Impl.Paging
                 {
                     fileLength = NearestSizeToAllocationGranularity(fileLength);
 
-                    SetFileLength(_handle, fileLength, file.FullPath);
+                    SetFileLength(_handle, fileLength, file.FullPath, Log);
                 }
                 _totalAllocationSize = fileLength;
             }
@@ -620,7 +620,7 @@ namespace Voron.Impl.Paging
 
             var allocationSize = newLengthAfterAdjustment - _totalAllocationSize;
 
-            SetFileLength(_handle, _totalAllocationSize + allocationSize, _fileInfo.FullName);
+            SetFileLength(_handle, _totalAllocationSize + allocationSize, _fileInfo.FullName, Log);
             _totalAllocationSize += allocationSize;
             NumberOfAllocatedPages = _totalAllocationSize / Constants.Storage.PageSize;
 

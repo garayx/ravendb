@@ -43,7 +43,7 @@ namespace Raven.Server.Documents.ETL.Providers.SQL.RelationalWriters
         {
             _etl = etl;
             _database = database;
-            _logger = LoggingSource.Instance.GetLogger<RelationalDatabaseWriter>(_database.Name);
+            _logger = etl.Logger.GetLoggerFor(nameof(RelationalDatabaseWriter), LogType.Database);
             _providerFactory = GetDbProviderFactory(etl.Configuration);
             _commandBuilder = _providerFactory.InitializeCommandBuilder();
             _connection = _providerFactory.CreateConnection();
@@ -149,6 +149,8 @@ namespace Raven.Server.Documents.ETL.Providers.SQL.RelationalWriters
             {
 
             }
+
+            _logger.Dispose();
         }
 
         public void Commit()

@@ -8,6 +8,7 @@ using Raven.Client.ServerWide;
 using Raven.Server.Rachis.Remote;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.Utils;
+using Sparrow.Logging;
 using Sparrow.Threading;
 
 namespace Raven.Server.Rachis
@@ -55,7 +56,7 @@ namespace Raven.Server.Rachis
         public void Start()
         {
             _candidateAmbassadorLongRunningWork =
-                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => Run(), null, $"Candidate Ambassador for {_engine.Tag} > {_tag}");
+                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => Run(), null, $"Candidate Ambassador for {_engine.Tag} > {_tag}", _engine.Log);
         }
 
         public void Dispose()
@@ -139,7 +140,8 @@ namespace Raven.Server.Rachis
 
                         Stopwatch sp;
                         _connection?.Dispose();
-                        _connection = new RemoteConnection(_tag, _engine.Tag, _candidate.ElectionTerm, stream, disconnect);
+
+                        _connection = new RemoteConnection(_tag, _engine.Tag, _candidate.ElectionTerm, stream, disconnect, _engine.Log.GetLoggerFor($"{_engine.Tag} > {_tag}", LogType.Cluster));
 
                         using (_engine.ContextPool.AllocateOperationContext(out ClusterOperationContext context))
                         {

@@ -22,6 +22,8 @@ namespace Sparrow.Logging
 {
     public sealed class LoggingSource
     {
+        public static string Generic = "Generic";
+
         [ThreadStatic]
         private static string _currentThreadId;
 
@@ -599,7 +601,28 @@ namespace Sparrow.Logging
 
         public Logger GetLogger(string source, string logger)
         {
-            return new Logger(this, source, logger);
+            //TODO: remove
+            if (source == null)
+            {
+
+            }
+
+            var holder = Loggers.GetOrAdd(source, _ => new LoggingSourceHolder
+            {
+                Source = source, 
+                Type = logger, 
+                Logger = new Logger(loggingSource: this, source, logger, LogType.Instance), 
+                Mode = LogMode
+            });
+
+            return holder.Logger;
+        }
+
+        public ConcurrentDictionary<string, LoggingSourceHolder> Loggers = new ConcurrentDictionary<string, LoggingSourceHolder>(StringComparer.OrdinalIgnoreCase);
+
+        public void TryRemoveLogger(string name)
+        {
+            Loggers.TryRemove(name, out _);
         }
 
         private void BackgroundLogger()
@@ -608,7 +631,6 @@ namespace Sparrow.Logging
             try
             {
                 Interlocked.Increment(ref _generation);
-                var threadStatesToRemove = new FastStack<WeakReference<LocalThreadWriterState>>();
                 while (_keepLogging)
                 {
                     try

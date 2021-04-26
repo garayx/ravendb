@@ -61,7 +61,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
         private FieldQuery _highlighterQuery;
 
         public IndexReadOperation(Index index, LuceneVoronDirectory directory, IndexSearcherHolder searcherHolder, QueryBuilderFactories queryBuilderFactories, Transaction readTransaction)
-            : base(index, LoggingSource.Instance.GetLogger<IndexReadOperation>(index._indexStorage.DocumentDatabase.Name))
+            : base(index, index._logger.GetLoggerFor(nameof(IndexReadOperation), LogType.Index))
         {
             try
             {
@@ -847,6 +847,8 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             _analyzer?.Dispose();
             _releaseSearcher?.Dispose();
             _releaseReadTransaction?.Dispose();
+
+            base.Dispose();
         }
 
         internal static unsafe BlittableJsonReaderObject ParseJsonStringIntoBlittable(string json, JsonOperationContext context)

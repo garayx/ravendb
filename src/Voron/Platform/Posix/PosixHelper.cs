@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using Sparrow;
+using Sparrow.Logging;
 using Sparrow.Server.Exceptions;
 using Sparrow.Server.Platform;
 using Sparrow.Server.Platform.Posix;
@@ -26,7 +27,7 @@ namespace Voron.Platform.Posix
 
             if (result == (int)Errno.ENOSPC)
             {
-                var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file);
+                var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file, options._log.GetLoggerFor(nameof(DiskSpaceChecker), LogType.Database));
 
                 // Use Pal's detailed error string (until PosixHelper will be entirely removed)
                 var nativeMsg = PalHelper.GetNativeErrorString(result, "Failed to AllocateFileSpace (PosixHelper)", out _);

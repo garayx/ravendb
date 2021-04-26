@@ -15,10 +15,12 @@ namespace Raven.Server.Utils.Cpu
 {
     public static class CpuHelper
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<MachineResources>("Server");
+        internal static Logger _logger;
 
-        internal static ICpuUsageCalculator GetOSCpuUsageCalculator()
+        internal static ICpuUsageCalculator GetOSCpuUsageCalculator(Logger logger = null)
         {
+            _logger = logger;
+
             ICpuUsageCalculator calculator;
             if (PlatformDetails.RunningOnPosix == false)
             {
@@ -32,22 +34,23 @@ namespace Raven.Server.Utils.Cpu
             {
                 calculator = new LinuxCpuUsageCalculator();
             }
-            calculator.Init();
+            //    calculator.Init(); // TODO: remove called in RavenServer.Initialize()
             return calculator;
         }
 
         internal static ExtensionPointCpuUsageCalculator GetExtensionPointCpuUsageCalculator(
             JsonContextPool contextPool,
             MonitoringConfiguration configuration,
-            NotificationCenter.NotificationCenter notificationCenter)
+            NotificationCenter.NotificationCenter notificationCenter,
+            Logger logger)
         {
+            _logger = logger;
             var extensionPoint = new ExtensionPointCpuUsageCalculator(
                 contextPool,
                 configuration.CpuUsageMonitorExec,
                 configuration.CpuUsageMonitorExecArguments,
-                notificationCenter);
-
-            
+                notificationCenter,
+                _logger);
 
             return extensionPoint;
         }
@@ -64,8 +67,8 @@ namespace Raven.Server.Utils.Cpu
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Failure to get the number of active cores", e);
+                if (_logger?.IsInfoEnabled == true)
+                    _logger.Info("Failure to get the number of active cores", e);
 
                 return ProcessorInfo.ProcessorCount;
             }
@@ -85,8 +88,8 @@ namespace Raven.Server.Utils.Cpu
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failure to get process times, error: {e.Message}", e);
+                if (_logger?.IsInfoEnabled == true)
+                    _logger.Info($"Failure to get process times, error: {e.Message}", e);
 
                 return (0, 0);
             }

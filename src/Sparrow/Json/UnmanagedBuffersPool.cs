@@ -12,20 +12,15 @@ namespace Sparrow.Json
 {
     public unsafe class UnmanagedBuffersPool : IDisposable
     {
-        protected readonly string _debugTag;
-
-        protected readonly string _databaseName;
-
-        private static readonly Logger _log = LoggingSource.Instance.GetLogger<UnmanagedBuffersPool>("Client");
+        private readonly Logger _log;/* = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(UnmanagedBuffersPool), LogType.Client);*/
 
         private readonly ConcurrentStack<AllocatedMemoryData>[] _freeSegments;
 
         private bool _isDisposed;
 
-        public UnmanagedBuffersPool(string debugTag, string databaseName = null)
+        public UnmanagedBuffersPool(Logger logger)
         {
-            _debugTag = debugTag;
-            _databaseName = databaseName ?? string.Empty;
+            _log = logger;
             _freeSegments = new ConcurrentStack<AllocatedMemoryData>[32];
             for (int i = 0; i < _freeSegments.Length; i++)
             {
@@ -40,7 +35,7 @@ namespace Sparrow.Json
 
             var size = FreeAllPooledMemory();
             if (_log.IsInfoEnabled)
-                _log.Info($"{_debugTag}: HandleLowMemory freed {size:#,#;;0} bytes in {_debugTag}");
+                _log.Info($"HandleLowMemory freed {size:#,#;;0} bytes");
         }
 
         private long FreeAllPooledMemory()
@@ -87,7 +82,7 @@ namespace Sparrow.Json
             if (_isDisposed == false)
             {
                 if (_log.IsOperationsEnabled)
-                    _log.Operations($"UnmanagedBuffersPool for {_debugTag} wasn't properly disposed");
+                    _log.Operations("UnmanagedBuffersPool wasn't properly disposed");
             }
 
             try
@@ -110,6 +105,7 @@ namespace Sparrow.Json
 
             _isDisposed = true;
             GC.SuppressFinalize(this);
+            _log.Dispose();
         }
 
         public AllocatedMemoryData Allocate(int size)

@@ -46,6 +46,7 @@ using Raven.Server.Web.System;
 using Sparrow.Json;
 using FacetSetup = Raven.Client.Documents.Queries.Facets.FacetSetup;
 using Raven.Server.Documents.ETL.Providers.OLAP.Test;
+using Sparrow.Logging;
 
 namespace Raven.Server.Json
 {
@@ -204,6 +205,8 @@ namespace Raven.Server.Json
         public static readonly Func<BlittableJsonReaderObject, LegacySourceReplicationInformation> LegacySourceReplicationInformation = GenerateJsonDeserializationRoutine<LegacySourceReplicationInformation>();
 
         public static readonly Func<BlittableJsonReaderObject, BackupConfiguration> BackupConfiguration = GenerateJsonDeserializationRoutine<BackupConfiguration>();
+
+        public static readonly Func<BlittableJsonReaderObject, LoggerHolder> LoggerHolder = GenerateJsonDeserializationRoutine<LoggerHolder>();
 
         public class Parameters
         {

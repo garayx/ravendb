@@ -21,14 +21,15 @@ namespace Raven.Server.Utils.Metrics
         private readonly ConcurrentSet<WeakReference<MeterMetric>> _scheduledActions =
             new ConcurrentSet<WeakReference<MeterMetric>>();
 
-        private readonly Logger _logger;
+        private readonly Logger _logger; // TODO
 
         public static readonly MetricsScheduler Instance = new MetricsScheduler();
 
         private MetricsScheduler()
         {
-            _logger = LoggingSource.Instance.GetLogger<MetricsScheduler>("Server");
-            _tickIntervalInNanoseconds = Clock.NanosecondsInSecond;
+            _logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(MetricsScheduler), LogType.Server);
+
+        _tickIntervalInNanoseconds = Clock.NanosecondsInSecond;
             _schedulerThread = new Thread(SchedulerTicking)
             {
                 IsBackground = true,

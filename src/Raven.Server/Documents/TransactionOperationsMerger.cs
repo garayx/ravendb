@@ -53,7 +53,7 @@ namespace Raven.Server.Documents
         public TransactionOperationsMerger(DocumentDatabase parent, CancellationToken shutdown)
         {
             _parent = parent;
-            _log = LoggingSource.Instance.GetLogger<TransactionOperationsMerger>(_parent.Name);
+            _log = parent._logger.GetLoggerFor(nameof(TransactionOperationsMerger), LogType.Database);
             _shutdown = shutdown;
 
             _maxTimeToWaitForPreviousTxInMs = _parent.Configuration.TransactionMergerConfiguration.MaxTimeToWaitForPreviousTx.AsTimeSpan.TotalMilliseconds;
@@ -72,7 +72,7 @@ namespace Raven.Server.Documents
 
         public void Start()
         {
-            _txLongRunningOperation = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => MergeOperationThreadProc(), null, TransactionMergerThreadName);
+            _txLongRunningOperation = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => MergeOperationThreadProc(), null, TransactionMergerThreadName, _log);
         }
 
         public interface IRecordableCommand
@@ -1066,7 +1066,7 @@ namespace Raven.Server.Documents
 
         private void NotifyOnThreadPool(MergedTransactionCommand cmd)
         {
-            TaskExecutor.Execute(DoCommandNotification, cmd);
+            TaskExecutor.Execute(DoCommandNotification, cmd, _log.GetLoggerFor(nameof(TaskExecutor), LogType.Database));
         }
 
         private void NotifyOnThreadPool(List<MergedTransactionCommand> cmds)
@@ -1074,7 +1074,7 @@ namespace Raven.Server.Documents
             if (cmds == null)
                 return;
 
-            TaskExecutor.Execute(DoCommandsNotification, cmds);
+            TaskExecutor.Execute(DoCommandsNotification, cmds, _log.GetLoggerFor(nameof(TaskExecutor), LogType.Database));
         }
 
         private void RunEachOperationIndependently(List<MergedTransactionCommand> pendingOps)
@@ -1166,6 +1166,8 @@ namespace Raven.Server.Documents
             {
                 result.TaskCompletionSource.TrySetCanceled();
             }
+
+            _log.Dispose();
         }
 
         private RecordingTx _recording = default;

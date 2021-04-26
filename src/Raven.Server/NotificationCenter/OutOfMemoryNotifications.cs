@@ -5,6 +5,7 @@ using System.Threading;
 using Raven.Server.NotificationCenter.Notifications;
 using Raven.Server.NotificationCenter.Notifications.Details;
 using Sparrow;
+using Sparrow.Logging;
 using Sparrow.LowMemory;
 using Voron;
 
@@ -57,16 +58,16 @@ namespace Raven.Server.NotificationCenter
                 AlertType.OutOfMemoryException,
                 NotificationSeverity.Error,
                 notificationMetadata.Key,
-                OutOfMemoryDetails(exception));
+                OutOfMemoryDetails(exception, _notificationsCenter._logger));
 
             _notificationsCenter.Add(alert);
 
             Volatile.Write(ref notificationMetadata.IsInProgress, 0);
         }
 
-        private static MessageDetails OutOfMemoryDetails(Exception exception)
+        private static MessageDetails OutOfMemoryDetails(Exception exception, Logger logger)
         {
-            var memoryInfo = MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader();
+            var memoryInfo = MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader(logger);
 
             return new MessageDetails
             {

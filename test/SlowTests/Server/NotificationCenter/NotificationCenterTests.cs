@@ -552,7 +552,7 @@ namespace SlowTests.Server.NotificationCenter
         [LinuxFact]
         public void WhenActualSwapSmallerThenMinSwapConfigured_ShouldRaiseNotification()
         {
-            var memoryInfoResult = MemoryInformation.GetMemoryInfo();
+            var memoryInfoResult = MemoryInformation.GetMemoryInfo(logger: null);
             var minSwapConfig = memoryInfoResult.TotalSwapSize + new Sparrow.Size(130, SizeUnit.Megabytes);
             var customSettings = new Dictionary<string, string>
             {

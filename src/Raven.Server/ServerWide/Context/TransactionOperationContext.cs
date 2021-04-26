@@ -1,5 +1,6 @@
 ﻿using System;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Sparrow.Server;
 using Sparrow.Threading;
 using Voron;
@@ -11,16 +12,18 @@ namespace Raven.Server.ServerWide.Context
         public bool IgnoreStalenessDueToReduceOutputsToDelete;
 
         public readonly StorageEnvironment Environment;
+        private readonly Logger _logger;
 
-        public TransactionOperationContext(StorageEnvironment environment, int initialSize, int longLivedSize, int maxNumberOfAllocatedStringValues, SharedMultipleUseFlag lowMemoryFlag)
+        public TransactionOperationContext(StorageEnvironment environment, int initialSize, int longLivedSize, int maxNumberOfAllocatedStringValues, SharedMultipleUseFlag lowMemoryFlag, Logger logger = null)
             : base(initialSize, longLivedSize, maxNumberOfAllocatedStringValues, lowMemoryFlag)
         {
             Environment = environment;
+            _logger = logger;
         }
 
         protected override RavenTransaction CloneReadTransaction(RavenTransaction previous)
         {
-            var clonedTx = new RavenTransaction(Environment.CloneReadTransaction(previous.InnerTransaction, PersistentContext, Allocator));
+            var clonedTx = new RavenTransaction(Environment.CloneReadTransaction(previous.InnerTransaction, PersistentContext, Allocator), _logger);
 
             previous.Dispose();
 
@@ -29,12 +32,12 @@ namespace Raven.Server.ServerWide.Context
 
         protected override RavenTransaction CreateReadTransaction()
         {
-            return new RavenTransaction(Environment.ReadTransaction(PersistentContext, Allocator));
+            return new RavenTransaction(Environment.ReadTransaction(PersistentContext, Allocator), _logger);
         }
 
         protected override RavenTransaction CreateWriteTransaction(TimeSpan? timeout = null)
         {
-            return new RavenTransaction(Environment.WriteTransaction(PersistentContext, Allocator, timeout));
+            return new RavenTransaction(Environment.WriteTransaction(PersistentContext, Allocator, timeout), _logger);
         }
     }
 

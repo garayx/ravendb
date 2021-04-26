@@ -18,8 +18,6 @@ namespace Raven.Server.TrafficWatch
 {
     public class TrafficWatchHandler : RequestHandler
     {
-        private static readonly Logger _logger = LoggingSource.Instance.GetLogger<TrafficWatchHandler>("Server");
-
         [RavenAction("/admin/traffic-watch", "GET", AuthorizationStatus.Operator)]
         public async Task TrafficWatchWebsockets()
         {
@@ -27,11 +25,12 @@ namespace Raven.Server.TrafficWatch
             {
                 using (ServerStore.ContextPool.AllocateOperationContext(out JsonOperationContext context))
                 {
+                    var logger = ServerStore.Logger.GetLoggerFor(nameof(TrafficWatchHandler), LogType.Server);
                     try
                     {
                         var resourceName = GetStringQueryString("resourceName", required: false);
                         resourceName = resourceName != null ? "db/" + resourceName : null;
-                        var connection = new TrafficWatchConnection(webSocket, resourceName, context, ServerStore.ServerShutdown);
+                        var connection = new TrafficWatchConnection(webSocket, resourceName, context, logger, ServerStore.ServerShutdown);
                         TrafficWatchManager.AddConnection(connection);
                         await connection.StartSendingNotifications();
                     }
@@ -41,8 +40,8 @@ namespace Raven.Server.TrafficWatch
                     }
                     catch (Exception ex)
                     {
-                        if (_logger.IsInfoEnabled)
-                            _logger.Info("Error encountered in TrafficWatch handler", ex);
+                        if (logger.IsInfoEnabled)
+                            logger.Info("Error encountered in TrafficWatch handler", ex);
 
                         try
                         {
@@ -62,8 +61,8 @@ namespace Raven.Server.TrafficWatch
                         }
                         catch (Exception)
                         {
-                            if (_logger.IsInfoEnabled)
-                                _logger.Info("Failed to send the error in TrafficWatch handler to the client", ex);
+                            if (logger.IsInfoEnabled)
+                                logger.Info("Failed to send the error in TrafficWatch handler to the client", ex);
                         }
                     }
                 }

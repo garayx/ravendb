@@ -28,7 +28,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Aws
         private const long MultiPartUploadLimitInBytes = 40L * 1024 * 1024 * 1024 * 1024; // 40TB
 
         private readonly string _vaultName;
-        private readonly Logger _logger;
+        internal readonly Logger _logger;
 
         public RavenAwsGlacierClient(GlacierSettings glacierSettings, Progress progress = null, Logger logger = null, CancellationToken? cancellationToken = null)
             : base(glacierSettings, progress, cancellationToken)

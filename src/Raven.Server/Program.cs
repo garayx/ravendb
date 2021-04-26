@@ -12,6 +12,7 @@ using Raven.Client.Properties;
 using Raven.Server.Commercial;
 using Raven.Server.Config;
 using Raven.Server.Config.Settings;
+using Raven.Server.Dashboard;
 using Raven.Server.Documents.Indexes.Static.NuGet;
 using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.BackgroundTasks;
@@ -20,6 +21,7 @@ using Raven.Server.Utils;
 using Raven.Server.Utils.Cli;
 using Sparrow;
 using Sparrow.Logging;
+using Sparrow.LowMemory;
 using Sparrow.Platform;
 using Sparrow.Server.Platform;
 using Sparrow.Utils;
@@ -105,20 +107,22 @@ namespace Raven.Server
             if (Logger.IsInfoEnabled)
                 Logger.Info($"Logging to {configuration.Logs.Path} set to {configuration.Logs.Mode} level.");
 
+            EncryptionBuffersPool.Instance.Logger = Logger.GetLoggerFor(nameof(EncryptionBuffersPool), LogType.Server);
+
             InitializeThreadPoolThreads(configuration);
 
             MultiSourceNuGetFetcher.Instance.Initialize(configuration.Indexing.NuGetPackagesPath, configuration.Indexing.NuGetPackageSourceUrl);
 
-            LatestVersionCheck.Instance.Initialize(configuration.Updates);
+            LatestVersionCheck.Instance.Initialize(configuration.Updates, Logger.GetLoggerFor(nameof(LatestVersionCheck), LogType.Server));
 
             if (Logger.IsOperationsEnabled)
-                Logger.Operations(RavenCli.GetInfoText());
+                Logger.Operations(RavenCli.GetInfoText(Logger.GetLoggerFor(nameof(MemoryInformation), LogType.Server)));
 
             if (WindowsServiceRunner.ShouldRunAsWindowsService())
             {
                 try
                 {
-                    WindowsServiceRunner.Run(CommandLineSwitches.ServiceName, configuration, configurationArgs);
+                    WindowsServiceRunner.Run(CommandLineSwitches.ServiceName, configuration, configurationArgs, Logger);
                 }
                 catch (Exception e)
                 {
@@ -161,7 +165,7 @@ namespace Raven.Server
 
                 try
                 {
-                    using (var server = new RavenServer(configuration))
+                    using (var server = new RavenServer(configuration, Logger))
                     {
                         try
                         {
@@ -303,7 +307,8 @@ namespace Raven.Server
         {
             // doing this before the schema upgrade to allow to downgrade in case we cannot start the server
 
-            using (var contextPool = new TransactionContextPool(storageEnvironment, serverStore.Configuration.Memory.MaxContextSizeToKeep))
+            using (var contextPool = new TransactionContextPool(storageEnvironment, serverStore.Configuration.Memory.MaxContextSizeToKeep,
+                serverStore.Logger.GetLoggerFor(nameof(TransactionContextPool), LogType.Server)))
             {
                 var license = serverStore.LoadLicense(contextPool);
                 if (license == null)

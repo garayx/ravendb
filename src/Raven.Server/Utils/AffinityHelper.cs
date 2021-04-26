@@ -13,9 +13,8 @@ namespace Raven.Server.Utils
     public class AffinityHelper
     {
         private static readonly ConcurrentSet<PoolOfThreads.PooledThread> _customAffinityThreads = new ConcurrentSet<PoolOfThreads.PooledThread>();
-        private static readonly Logger _logger = LoggingSource.Instance.GetLogger<AffinityHelper>("Server");
 
-        public static void SetProcessAffinity(Process process, int cores, long? processAffinityMask, out long currentlyAssignedCores)
+        public static void SetProcessAffinity(Process process, int cores, Logger logger, long? processAffinityMask, out long currentlyAssignedCores)
         {
             currentlyAssignedCores = Bits.NumberOfSetBits(process.ProcessorAffinity.ToInt64());
             if (currentlyAssignedCores == cores)
@@ -59,29 +58,29 @@ namespace Raven.Server.Utils
             // we need to change the custom affinity threads as well
             foreach (var pooledThread in _customAffinityThreads)
             {
-                SetCustomThreadAffinity(pooledThread);
+                SetCustomThreadAffinity(pooledThread, logger);
             }
         }
 
-        internal static bool ResetThreadAffinity(PoolOfThreads.PooledThread pooledThread)
+        internal static bool ResetThreadAffinity(PoolOfThreads.PooledThread pooledThread, Logger logger)
         {
             _customAffinityThreads.TryRemove(pooledThread);
 
             return ChangeThreadAffinityWithRetries(pooledThread.CurrentProcess, currentAffinity =>
             {
                 SetThreadAffinity(pooledThread, currentAffinity);
-            });
+            }, logger);
         }
 
-        internal static void SetCustomThreadAffinity(PoolOfThreads.PooledThread pooledThread)
+        internal static void SetCustomThreadAffinity(PoolOfThreads.PooledThread pooledThread, Logger logger)
         {
             ChangeThreadAffinityWithRetries(pooledThread.CurrentProcess, currentAffinity =>
             {
                 SetCustomThreadAffinityInternal(pooledThread, currentAffinity);
-            });
+            }, logger);
         }
 
-        private static bool ChangeThreadAffinityWithRetries(Process currentProcess, Action<long> action)
+        private static bool ChangeThreadAffinityWithRetries(Process currentProcess, Action<long> action, Logger logger)
         {
             if (PlatformDetails.RunningOnMacOsx)
             {
@@ -117,8 +116,8 @@ namespace Raven.Server.Utils
                 {
                     if (retries-- == 0)
                     {
-                        if (_logger.IsOperationsEnabled)
-                            _logger.Operations("Failed to set thread affinity", e);
+                        if (logger.IsOperationsEnabled)
+                            logger.Operations("Failed to set thread affinity", e);
                         return false;
                     }
 

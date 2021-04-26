@@ -15,14 +15,12 @@ using Raven.Server.ServerWide;
 using Raven.Server.Utils;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
-using Sparrow.Logging;
 using Sparrow.LowMemory;
 
 namespace Raven.Server.Documents.Operations
 {
     public class Operations : ILowMemoryHandler
     {
-        private readonly Logger _logger;
         private readonly ConcurrentDictionary<long, Operation> _active = new ConcurrentDictionary<long, Operation>();
         private readonly ConcurrentDictionary<long, Operation> _completed = new ConcurrentDictionary<long, Operation>();
         private readonly string _name;
@@ -42,7 +40,6 @@ namespace Raven.Server.Documents.Operations
             _notificationCenter = notificationCenter;
             _changes = changes;
             _maxCompletedTaskLifeTime = maxCompletedTaskLifeTime;
-            _logger = LoggingSource.Instance.GetLogger<Operations>(name ?? "Server");
             LowMemoryNotification.Instance.RegisterLowMemoryHandler(this);
         }
 

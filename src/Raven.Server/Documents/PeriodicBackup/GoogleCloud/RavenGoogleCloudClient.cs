@@ -12,6 +12,7 @@ using Google.Cloud.Storage.V1;
 using Newtonsoft.Json.Linq;
 using Raven.Client.Documents.Operations.Backups;
 using Sparrow;
+using Sparrow.Logging;
 using Sparrow.Server.Utils;
 using Object = Google.Apis.Storage.v1.Data.Object;
 
@@ -26,10 +27,11 @@ namespace Raven.Server.Documents.PeriodicBackup.GoogleCloud
         protected readonly CancellationToken CancellationToken;
         private readonly string _bucketName;
         private readonly Progress _progress;
+        internal readonly Logger _logger;
 
         private const string ProjectIdPropertyName = "project_id";
 
-        public RavenGoogleCloudClient(GoogleCloudSettings settings, Progress progress = null, CancellationToken? cancellationToken = null)
+        public RavenGoogleCloudClient(GoogleCloudSettings settings, Progress progress = null, Logger logger = null, CancellationToken? cancellationToken = null)
         {
             if (string.IsNullOrWhiteSpace(settings.BucketName))
                 throw new ArgumentException("Google Cloud Bucket name cannot be null or empty");
@@ -52,6 +54,7 @@ namespace Raven.Server.Documents.PeriodicBackup.GoogleCloud
                 _projectId = value.Value<string>();
             }
 
+            _logger = logger;
             _bucketName = settings.BucketName;
             CancellationToken = cancellationToken ?? CancellationToken.None;
 

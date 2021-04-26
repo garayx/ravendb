@@ -578,7 +578,7 @@ namespace Raven.Server.Utils.Cli
         {
             new ClusterMessage(Console.Out, cli._server.ServerStore).Print();
 
-            WriteText(GetInfoText(), ConsoleColor.Cyan, cli);
+            WriteText(GetInfoText(cli._server.ServerStore.Logger.GetLoggerFor(nameof(MemoryInformation), LogType.Server)), ConsoleColor.Cyan, cli);
 
             if (cli._server.Configuration.Storage.ForceUsing32BitsPager || PlatformDetails.Is32Bits)
                 WriteText(" Running in 32 bits mode", ConsoleColor.DarkCyan, cli);
@@ -586,9 +586,9 @@ namespace Raven.Server.Utils.Cli
             return true;
         }
 
-        public static string GetInfoText()
+        public static string GetInfoText(Logger logger)
         {
-            var memoryInfo = MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader();
+            var memoryInfo = MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader(logger);
             using (var currentProcess = Process.GetCurrentProcess())
             {
                 return $" Build {ServerVersion.Build}, Version {ServerVersion.Version}, SemVer {ServerVersion.FullVersion}, Commit {ServerVersion.CommitHash}" +
@@ -1118,7 +1118,7 @@ namespace Raven.Server.Utils.Cli
             }
 
             return (
-                SizeClient.Humane(MemoryInformation.GetWorkingSetInBytes()),
+                SizeClient.Humane(MemoryInformation.GetWorkingSetInBytes(logger: null)),
                 SizeClient.Humane(AbstractLowMemoryMonitor.GetUnmanagedAllocationsInBytes()),
                 SizeClient.Humane(AbstractLowMemoryMonitor.GetManagedMemoryInBytes()),
                 SizeClient.Humane(MemoryInformation.GetTotalScratchAllocatedMemory()),

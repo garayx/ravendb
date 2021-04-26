@@ -49,7 +49,7 @@ namespace Raven.Server.Commercial
 {
     public class LicenseManager : IDisposable
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<LicenseManager>("Server");
+        private static Logger Logger;
         private static readonly RSAParameters _rsaParameters;
         private readonly LicenseStorage _licenseStorage = new LicenseStorage();
         private Timer _leaseLicenseTimer;
@@ -69,7 +69,7 @@ namespace Raven.Server.Commercial
 
         public event Action OnBeforeInitialize;
 
-        public static readonly OsInfo OsInfo = OsInfoExtensions.GetOsInfo();
+        public readonly OsInfo OsInfo;
 
         public static readonly BuildNumber BuildInfo = new BuildNumber
         {
@@ -104,8 +104,10 @@ namespace Raven.Server.Commercial
 
         public LicenseManager(ServerStore serverStore)
         {
+            Logger = serverStore.Logger.GetLoggerFor(nameof(LicenseManager), LogType.Server);
+            OsInfo = OsInfoExtensions.GetOsInfo(Logger);
             _serverStore = serverStore;
-            _licenseHelper = new LicenseHelper(serverStore);
+            _licenseHelper = new LicenseHelper(serverStore, Logger);
             _skipLeasingErrorsLogging = serverStore.Configuration.Licensing.SkipLeasingErrorsLogging;
         }
 
@@ -762,7 +764,7 @@ namespace Raven.Server.Commercial
                 if (ShouldIgnoreProcessorAffinityChanges(cores, licenseLimits))
                     return;
 
-                AffinityHelper.SetProcessAffinity(process, cores, _serverStore.Configuration.Server.ProcessAffinityMask, out var currentlyAssignedCores);
+                AffinityHelper.SetProcessAffinity(process, cores, Logger, _serverStore.Configuration.Server.ProcessAffinityMask, out var currentlyAssignedCores);
 
                 if (cores == ProcessorInfo.ProcessorCount)
                 {
@@ -844,6 +846,7 @@ namespace Raven.Server.Commercial
         public void Dispose()
         {
             _leaseLicenseTimer?.Dispose();
+            Logger.Dispose();
         }
 
         private void ThrowIfCannotActivateLicense(LicenseStatus newLicenseStatus)

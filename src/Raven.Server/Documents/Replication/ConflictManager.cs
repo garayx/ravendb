@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Raven.Client.Extensions;
 using Raven.Client.ServerWide;
 using Raven.Server.Documents.Handlers;
 using Raven.Server.ServerWide.Context;
@@ -24,7 +23,7 @@ namespace Raven.Server.Documents.Replication
         {
             _conflictResolver = conflictResolver;
             _database = database;
-            _log = LoggingSource.Instance.GetLogger<ConflictManager>(_database.Name);
+            _log = database._logger.GetLoggerFor(nameof(ConflictManager), LogType.Database);
         }
 
         public unsafe void HandleConflictForDocument(
@@ -91,7 +90,7 @@ namespace Raven.Server.Documents.Replication
                     return;
                 }
 
-                _database.DocumentsStorage.ConflictsStorage.AddConflict(documentsContext, id, lastModifiedTicks, doc, changeVector, collection, flags);
+                _database.DocumentsStorage.ConflictsStorage.AddConflict(documentsContext, id, lastModifiedTicks, doc, changeVector, collection, flags, _log);
             }
         }
 

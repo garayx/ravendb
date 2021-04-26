@@ -7,6 +7,7 @@ using Raven.Server.Documents;
 using Raven.Server.Documents.Indexes;
 using Raven.Server.Extensions;
 using Raven.Server.NotificationCenter.Notifications;
+using Sparrow.Logging;
 
 namespace Raven.Server.NotificationCenter.BackgroundWork
 {
@@ -17,8 +18,8 @@ namespace Raven.Server.NotificationCenter.BackgroundWork
 
         private Stats _latest;
 
-        public DatabaseStatsSender(DocumentDatabase database, NotificationCenter notificationCenter)
-            : base(database.Name, database.DatabaseShutdown)
+        public DatabaseStatsSender(DocumentDatabase database, NotificationCenter notificationCenter, Logger logger)
+            : base(database.DatabaseShutdown, logger)
         {
             _database = database;
             _notificationCenter = notificationCenter;

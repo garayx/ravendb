@@ -16,8 +16,6 @@ namespace Sparrow.LowMemory
 {
     public static class MemoryInformation
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<MemoryInfoResult>("Server");
-
         private static readonly ConcurrentQueue<Tuple<long, DateTime>> MemByTime = new ConcurrentQueue<Tuple<long, DateTime>>();
         private static DateTime _memoryRecordsSet;
         private static readonly TimeSpan MemByTimeThrottleTime = TimeSpan.FromMilliseconds(100);
@@ -50,7 +48,7 @@ namespace Sparrow.LowMemory
             using (var process = Process.GetCurrentProcess())
                 ProcessId = process.Id;
 
-            TotalPhysicalMemory = GetMemoryInfo().TotalPhysicalMemory;
+            TotalPhysicalMemory = GetMemoryInfo(logger: null).TotalPhysicalMemory;
         }
 
         private static bool _failedToGetAvailablePhysicalMemory;
@@ -116,7 +114,7 @@ namespace Sparrow.LowMemory
             _lowMemoryCommitLimitInMb = lowMemoryCommitLimitInMb;
         }
 
-        public static void AssertNotAboutToRunOutOfMemory()
+        public static void AssertNotAboutToRunOutOfMemory(Logger logger)
         {
             if (EnableEarlyOutOfMemoryChecks == false)
                 return;
@@ -128,7 +126,7 @@ namespace Sparrow.LowMemory
                 EnableEarlyOutOfMemoryCheck == false)   // but we want to enable this manually if needed
                 return;
 
-            var memInfo = GetMemoryInfo();
+            var memInfo = GetMemoryInfo(logger);
             if (IsEarlyOutOfMemoryInternal(memInfo, earlyOutOfMemoryWarning: false, out _))
                 ThrowInsufficientMemory(memInfo);
         }
@@ -200,7 +198,7 @@ namespace Sparrow.LowMemory
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GetPhysicallyInstalledSystemMemory(out long totalMemoryInKb);
 
-        public static (long Rss, long Swap) GetMemoryUsageFromProcStatus()
+        public static (long Rss, long Swap) GetMemoryUsageFromProcStatus(Logger logger)
         {
             var path = $"/proc/{ProcessId}/status";
 
@@ -218,13 +216,13 @@ namespace Sparrow.LowMemory
             }
             catch (Exception ex)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failed to read value from {path}", ex);
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info($"Failed to read value from {path}", ex);
                 return (-1, -1);
             }
         }
 
-        public static MemoryInfoResult GetMemoryInformationUsingOneTimeSmapsReader()
+        public static MemoryInfoResult GetMemoryInformationUsingOneTimeSmapsReader(Logger logger)
         {
             SmapsReader smapsReader = null;
             byte[][] buffers = null;
@@ -238,7 +236,7 @@ namespace Sparrow.LowMemory
                     smapsReader = new SmapsReader(new[] { buffer1, buffer2 });
                 }
 
-                return GetMemoryInfo(smapsReader, extended: true);
+                return GetMemoryInfo(logger, smapsReader, extended: true);
             }
             finally
             {
@@ -250,7 +248,7 @@ namespace Sparrow.LowMemory
             }
         }
 
-        private static bool GetFromProcMemInfo(SmapsReader smapsReader, ref ProcMemInfoResults procMemInfoResults)
+        private static bool GetFromProcMemInfo(SmapsReader smapsReader, ref ProcMemInfoResults procMemInfoResults, Logger logger)
         {
             const string path = "/proc/meminfo";
 
@@ -305,8 +303,8 @@ namespace Sparrow.LowMemory
             }
             catch (Exception ex)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info($"Failed to read value from {path}", ex);
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info($"Failed to read value from {path}", ex);
 
                 return false;
             }
@@ -314,12 +312,12 @@ namespace Sparrow.LowMemory
             return true;
         }
 
-        internal static MemoryInfoResult GetMemoryInfo(SmapsReader smapsReader = null, bool extended = false)
+        internal static MemoryInfoResult GetMemoryInfo(Logger logger = null, SmapsReader smapsReader = null, bool extended = false)
         {
             if (_failedToGetAvailablePhysicalMemory)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Because of a previous error in getting available memory, we are now lying and saying we have 256MB free");
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info("Because of a previous error in getting available memory, we are now lying and saying we have 256MB free");
                 return FailedResult;
             }
 
@@ -331,11 +329,11 @@ namespace Sparrow.LowMemory
                 using (var process = extended ? Process.GetCurrentProcess() : null)
                 {
                     if (PlatformDetails.RunningOnPosix == false)
-                        result = GetMemoryInfoWindows(process, extended);
+                        result = GetMemoryInfoWindows(process, extended, logger);
                     else if (PlatformDetails.RunningOnMacOsx)
-                        result = GetMemoryInfoMacOs(process, extended);
+                        result = GetMemoryInfoMacOs(process, extended, logger);
                     else
-                        result = GetMemoryInfoLinux(smapsReader, extended);
+                        result = GetMemoryInfoLinux(smapsReader, extended, logger);
                 }
 
                 return result;
@@ -343,8 +341,8 @@ namespace Sparrow.LowMemory
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Error while trying to get available memory, will stop trying and report that there is 256MB free only from now on", e);
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info("Error while trying to get available memory, will stop trying and report that there is 256MB free only from now on", e);
                 _failedToGetAvailablePhysicalMemory = true;
                 return FailedResult;
             }
@@ -361,15 +359,15 @@ namespace Sparrow.LowMemory
             return totalScratchAllocated;
         }
 
-        private static MemoryInfoResult GetMemoryInfoLinux(SmapsReader smapsReader, bool extended)
+        private static MemoryInfoResult GetMemoryInfoLinux(SmapsReader smapsReader, bool extended, Logger logger)
         {
             var fromProcMemInfo = new ProcMemInfoResults();
-            GetFromProcMemInfo(smapsReader, ref fromProcMemInfo);
+            GetFromProcMemInfo(smapsReader, ref fromProcMemInfo, logger);
 
             var totalPhysicalMemoryInBytes = fromProcMemInfo.TotalMemory.GetValue(SizeUnit.Bytes);
 
-            var cgroupMemoryLimit = KernelVirtualFileSystemUtils.ReadNumberFromCgroupFile(CgroupMemoryLimit);
-            var cgroupMaxMemoryUsage = KernelVirtualFileSystemUtils.ReadNumberFromCgroupFile(CgroupMaxMemoryUsage);
+            var cgroupMemoryLimit = KernelVirtualFileSystemUtils.ReadNumberFromCgroupFile(CgroupMemoryLimit, logger);
+            var cgroupMaxMemoryUsage = KernelVirtualFileSystemUtils.ReadNumberFromCgroupFile(CgroupMaxMemoryUsage, logger);
             // here we need to deal with _soft_ limit, so we'll take the largest of these values
             var maxMemoryUsage = Math.Max(cgroupMemoryLimit ?? 0, cgroupMaxMemoryUsage ?? 0);
             if (maxMemoryUsage != 0 && maxMemoryUsage <= totalPhysicalMemoryInBytes)
@@ -378,7 +376,7 @@ namespace Sparrow.LowMemory
                 var commitedMemoryInBytes = 0L;
                 var cgroupMemoryUsage = LowMemoryNotification.Instance.UseTotalDirtyMemInsteadOfMemUsage // RDBS-45
                     ? fromProcMemInfo.TotalDirty.GetValue(SizeUnit.Bytes)
-                    : KernelVirtualFileSystemUtils.ReadNumberFromCgroupFile(CgroupMemoryUsage);
+                    : KernelVirtualFileSystemUtils.ReadNumberFromCgroupFile(CgroupMemoryUsage, logger);
 
                 if (cgroupMemoryUsage != null)
                 {
@@ -401,7 +399,7 @@ namespace Sparrow.LowMemory
             {
                 // extended info is needed
 
-                var procStatus = GetMemoryUsageFromProcStatus();
+                var procStatus = GetMemoryUsageFromProcStatus(logger);
                 workingSet.Set(procStatus.Rss, SizeUnit.Bytes);
                 swapUsage.Set(procStatus.Swap, SizeUnit.Bytes);
             }
@@ -428,7 +426,7 @@ namespace Sparrow.LowMemory
             };
         }
 
-        private static unsafe MemoryInfoResult GetMemoryInfoMacOs(Process process, bool extended)
+        private static unsafe MemoryInfoResult GetMemoryInfoMacOs(Process process, bool extended, Logger logger)
         {
             var mib = new[] { (int)TopLevelIdentifiers.CTL_HW, (int)CtkHwIdentifiers.HW_MEMSIZE };
             ulong physicalMemory = 0;
@@ -436,8 +434,8 @@ namespace Sparrow.LowMemory
 
             if (macSyscall.sysctl(mib, 2, &physicalMemory, &len, null, UIntPtr.Zero) != 0)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Failure when trying to read physical memory info from MacOS, error code was: " + Marshal.GetLastWin32Error());
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info("Failure when trying to read physical memory info from MacOS, error code was: " + Marshal.GetLastWin32Error());
                 return FailedResult;
             }
 
@@ -450,8 +448,8 @@ namespace Sparrow.LowMemory
             if (macSyscall.host_page_size(machPort, &pageSize) != 0 ||
                 macSyscall.host_statistics64(machPort, (int)Flavor.HOST_VM_INFO64, &vmStats, &count) != 0)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Failure when trying to get vm_stats from MacOS, error code was: " + Marshal.GetLastWin32Error());
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info("Failure when trying to get vm_stats from MacOS, error code was: " + Marshal.GetLastWin32Error());
                 return FailedResult;
             }
 
@@ -461,8 +459,8 @@ namespace Sparrow.LowMemory
             mib = new[] { (int)TopLevelIdentifiers.CTL_VM, (int)CtlVmIdentifiers.VM_SWAPUSAGE };
             if (macSyscall.sysctl(mib, 2, &swapu, &len, null, UIntPtr.Zero) != 0)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Failure when trying to read swap info from MacOS, error code was: " + Marshal.GetLastWin32Error());
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info("Failure when trying to read swap info from MacOS, error code was: " + Marshal.GetLastWin32Error());
                 return FailedResult;
             }
 
@@ -502,7 +500,7 @@ namespace Sparrow.LowMemory
             };
         }
 
-        private static unsafe MemoryInfoResult GetMemoryInfoWindows(Process process, bool extended)
+        private static unsafe MemoryInfoResult GetMemoryInfoWindows(Process process, bool extended, Logger logger)
         {
             // windows
             var memoryStatus = new MemoryStatusEx
@@ -512,8 +510,8 @@ namespace Sparrow.LowMemory
 
             if (GlobalMemoryStatusEx(&memoryStatus) == false)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Failure when trying to read memory info from Windows, error code is: " + Marshal.GetLastWin32Error());
+                if (logger?.IsInfoEnabled == true)
+                    logger.Info("Failure when trying to read memory info from Windows, error code is: " + Marshal.GetLastWin32Error());
                 return FailedResult;
             }
 
@@ -612,10 +610,10 @@ namespace Sparrow.LowMemory
             };
         }
 
-        public static long GetWorkingSetInBytes()
+        public static long GetWorkingSetInBytes(Logger logger)
         {
             if (PlatformDetails.RunningOnLinux)
-                return GetMemoryUsageFromProcStatus().Rss;
+                return GetMemoryUsageFromProcStatus(logger).Rss;
 
             using (var currentProcess = Process.GetCurrentProcess())
             {

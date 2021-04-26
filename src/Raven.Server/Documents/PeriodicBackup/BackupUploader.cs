@@ -131,7 +131,7 @@ namespace Raven.Server.Documents.PeriodicBackup
 
         private void UploadToFtp(FtpSettings settings, Stream stream, Progress progress)
         {
-            using (var client = new RavenFtpClient(settings, progress, TaskCancelToken.Token))
+            using (var client = new RavenFtpClient(settings, progress, _logger, TaskCancelToken.Token))
             {
                 client.UploadFile(_uploaderSettings.FolderName, _uploaderSettings.FileName, stream);
 
@@ -169,7 +169,7 @@ namespace Raven.Server.Documents.PeriodicBackup
 
         private void UploadToGoogleCloud(GoogleCloudSettings settings, Stream stream, Progress progress)
         {
-            using (var client = new RavenGoogleCloudClient(settings, progress, TaskCancelToken.Token))
+            using (var client = new RavenGoogleCloudClient(settings, progress, _logger, TaskCancelToken.Token))
             {
                 var key = CombinePathAndKey(settings.RemoteFolderName);
                 client.UploadObject(key, stream, new Dictionary<string, string>
@@ -278,7 +278,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                     localUploadStatus.Exception = (exception ?? e).ToString();
                     _exceptions.Add(exception ?? new InvalidOperationException(error, e));
                 }
-            }, null, $"Upload backup file of database '{_uploaderSettings.DatabaseName}' to {targetName} (task: '{_uploaderSettings.TaskName}')");
+            }, null, $"Upload backup file of database '{_uploaderSettings.DatabaseName}' to {targetName} (task: '{_uploaderSettings.TaskName}')", _logger);
 
             _threads.Add(thread);
         }

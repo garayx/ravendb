@@ -72,7 +72,8 @@ namespace Voron.Impl.Journal
         {
             _env = env;
             _is32Bit = env.Options.ForceUsing32BitsPager || PlatformDetails.Is32Bits;
-            _logger = LoggingSource.Instance.GetLogger<WriteAheadJournal>(Path.GetFileName(env.ToString()));
+
+            _logger = env._log.GetLoggerFor($"{nameof(WriteAheadJournal)}: '{Path.GetFileName(env.ToString())}'", LogType.Database);
             _dataPager = _env.Options.DataPager;
             _currentJournalFileSize = env.Options.InitialLogFileSize;
             _headerAccessor = env.HeaderAccessor;

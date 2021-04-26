@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Raven.Server.ServerWide;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -14,10 +15,12 @@ namespace FastTests.Blittable
         {
         }
 
+        private readonly Logger Logger = LoggingSource.Instance.GetLogger("Test", "test");
+
         [Fact]
         public void SerialAllocationAndRelease()
         {
-            using (var pool = new UnmanagedBuffersPoolWithLowMemoryHandling(string.Empty))
+            using (var pool = new UnmanagedBuffersPoolWithLowMemoryHandling(Logger))
             {
                 var allocatedMemory = new List<AllocatedMemoryData>();
                 for (var i = 0; i < 1000; i++)
@@ -34,7 +37,7 @@ namespace FastTests.Blittable
         [Fact]
         public void ParallelAllocationAndReleaseSeperately()
         {
-            using (var pool = new UnmanagedBuffersPoolWithLowMemoryHandling(string.Empty))
+            using (var pool = new UnmanagedBuffersPoolWithLowMemoryHandling(Logger))
             {
                 var allocatedMemory = new global::Sparrow.Collections.ConcurrentSet<AllocatedMemoryData>();
                 Parallel.For(0, 100, RavenTestHelper.DefaultParallelOptions, x =>
@@ -55,7 +58,7 @@ namespace FastTests.Blittable
         [Fact]
         public void ParallelSerialAllocationAndRelease()
         {
-            using (var pool = new UnmanagedBuffersPoolWithLowMemoryHandling(string.Empty))
+            using (var pool = new UnmanagedBuffersPoolWithLowMemoryHandling(Logger))
             {
                 var allocatedMemory = new BlockingCollection<AllocatedMemoryData>();
                 Task.Run(() =>

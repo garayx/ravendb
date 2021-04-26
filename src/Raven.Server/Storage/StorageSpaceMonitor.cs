@@ -17,7 +17,7 @@ namespace Raven.Server.Storage
     {
         private static readonly TimeSpan CheckFrequency = TimeSpan.FromMinutes(10);
 
-        private readonly Logger _logger = LoggingSource.Instance.GetLogger<StorageSpaceMonitor>(nameof(StorageSpaceMonitor));
+        private readonly Logger _logger;
         private readonly LinkedList<DocumentDatabase> _databases = new LinkedList<DocumentDatabase>();
 
         private readonly object _runLock = new object();
@@ -29,10 +29,10 @@ namespace Raven.Server.Storage
 
         internal bool SimulateLowDiskSpace;
 
-        public StorageSpaceMonitor(NotificationCenter.NotificationCenter notificationCenter)
+        public StorageSpaceMonitor(NotificationCenter.NotificationCenter notificationCenter, Logger logger)
         {
             _notificationCenter = notificationCenter;
-
+            _logger = logger;
             _timer = new Timer(Run, null, CheckFrequency, CheckFrequency);
         }
 
@@ -117,7 +117,7 @@ namespace Raven.Server.Storage
             {
                 var database = current.Value;
                 var storageConfig = database.Configuration.Storage;
-
+                var logger = database._logger.GetLoggerFor(nameof(DiskSpaceChecker), LogType.Database);
                 try
                 {
                     foreach (var item in database.GetAllStoragesEnvironment())
@@ -126,13 +126,13 @@ namespace Raven.Server.Storage
 
                         var options = (StorageEnvironmentOptions.DirectoryStorageEnvironmentOptions)item.Environment.Options;
 
-                        var dataDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.BasePath.FullPath, driveInfo?.BasePath);
+                        var dataDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.BasePath.FullPath, logger, driveInfo?.BasePath);
 
                         AddEnvironmentIfLowSpace(dataDisk);
 
                         if (options.JournalPath != null)
                         {
-                            var journalDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.JournalPath.FullPath, driveInfo?.JournalPath);
+                            var journalDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.JournalPath.FullPath, logger, driveInfo?.JournalPath);
 
                             if (dataDisk?.DriveName != journalDisk?.DriveName)
                                 AddEnvironmentIfLowSpace(journalDisk);
@@ -140,7 +140,7 @@ namespace Raven.Server.Storage
 
                         if (options.TempPath != null)
                         {
-                            var tempDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.TempPath.FullPath, driveInfo?.TempPath);
+                            var tempDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.TempPath.FullPath, logger, driveInfo?.TempPath);
 
                             if (dataDisk?.DriveName != tempDisk?.DriveName)
                                 AddEnvironmentIfLowSpace(tempDisk);

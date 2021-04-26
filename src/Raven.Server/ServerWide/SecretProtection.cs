@@ -30,12 +30,13 @@ namespace Raven.Server.ServerWide
     {
         public static readonly byte[] EncryptionContext = Encoding.UTF8.GetBytes("Secrets!");
 
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<SecretProtection>("Server");
+        private static Logger Logger;
         private readonly Lazy<byte[]> _serverMasterKey;
         private readonly SecurityConfiguration _config;
 
-        public SecretProtection(SecurityConfiguration config)
+        public SecretProtection(SecurityConfiguration config, Logger logger)
         {
+            Logger = logger;
             _config = config;
             _serverMasterKey = new Lazy<byte[]>(LoadMasterKey);
         }

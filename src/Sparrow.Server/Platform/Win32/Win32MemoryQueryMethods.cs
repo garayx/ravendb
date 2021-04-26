@@ -5,6 +5,7 @@ using System.Text;
 using Sparrow.Exceptions;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
+using Sparrow.Logging;
 using Sparrow.Utils;
 
 // ReSharper disable InconsistentNaming
@@ -86,7 +87,7 @@ namespace Sparrow.Server.Platform.Win32
             Encoding.ASCII.GetBytes(".buffers")
         };
 
-        private static readonly UnmanagedBuffersPool BuffersPool = new UnmanagedBuffersPool("AddressWillCauseHardPageFault");
+        private static readonly UnmanagedBuffersPool BuffersPool = new UnmanagedBuffersPool(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(UnmanagedBuffersPool), "AddressWillCauseHardPageFault"), LogType.Server));
 
         private static uint? _pageSize;
 

@@ -65,7 +65,7 @@ namespace Raven.Server.ServerWide.Maintenance
             _engine = engine;
             _term = term;
             _contextPool = contextPool;
-            _logger = LoggingSource.Instance.GetLogger<ClusterObserver>(_nodeTag);
+            _logger = server.Logger.GetLoggerFor(nameof(ClusterObserver), LogType.Cluster);
             _cts = CancellationTokenSource.CreateLinkedTokenSource(token);
 
             var config = server.Configuration.Cluster;
@@ -88,7 +88,7 @@ namespace Raven.Server.ServerWide.Maintenance
                 {
                     // nothing we can do here
                 }
-            }, null, $"Cluster observer for term {_term}");
+            }, null, $"Cluster observer for term {_term}", _logger);
         }
 
         public bool Suspended = false; // don't really care about concurrency here

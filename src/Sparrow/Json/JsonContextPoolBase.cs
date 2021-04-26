@@ -13,7 +13,6 @@ namespace Sparrow.Json
         where T : JsonOperationContext
     {
         private readonly object _locker = new object();
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<JsonContextPoolBase<T>>("Memory");
 
         private bool _disposed;
 
@@ -29,9 +28,11 @@ namespace Sparrow.Json
         private readonly PerCoreContainer<T> _perCoreCache = new PerCoreContainer<T>();
         private readonly CountingConcurrentStack<T> _globalStack = new CountingConcurrentStack<T>();
         private readonly Timer _cleanupTimer;
+        protected readonly Logger _logger;
 
-        protected JsonContextPoolBase()
+        protected JsonContextPoolBase(Logger logger)
         {
+            _logger = logger;
             _cleanupTimer = new Timer(Cleanup, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
             LowMemoryNotification.Instance?.RegisterLowMemoryHandler(this);
             _maxContextSizeToKeepInBytes = long.MaxValue;
@@ -40,15 +41,15 @@ namespace Sparrow.Json
                 : 1024;
         }
 
-        protected JsonContextPoolBase(Size? maxContextSizeToKeep)
-            : this()
+        protected JsonContextPoolBase(Size? maxContextSizeToKeep, Logger logger)
+            : this(logger)
         {
             if (maxContextSizeToKeep.HasValue)
                 _maxContextSizeToKeepInBytes = maxContextSizeToKeep.Value.GetValue(SizeUnit.Bytes);
         }
 
-        protected JsonContextPoolBase(Size? maxContextSizeToKeep, long? maxNumberOfContextsToKeepInGlobalStack)
-            : this(maxContextSizeToKeep)
+        protected JsonContextPoolBase(Size? maxContextSizeToKeep, long? maxNumberOfContextsToKeepInGlobalStack, Logger logger)
+            : this(maxContextSizeToKeep, logger)
         {
             if (maxNumberOfContextsToKeepInGlobalStack.HasValue)
                 _maxNumberOfContextsToKeepInGlobalStack = maxNumberOfContextsToKeepInGlobalStack.Value;
@@ -255,8 +256,8 @@ namespace Sparrow.Json
             catch (Exception e)
             {
                 Debug.Assert(e is OutOfMemoryException, $"Expecting OutOfMemoryException but got: {e}");
-                if (Logger.IsOperationsEnabled)
-                    Logger.Operations("Error during cleanup.", e);
+                if (_logger?.IsOperationsEnabled == true)
+                    _logger.Operations("Error during cleanup.", e);
             }
             finally
             {
@@ -298,6 +299,7 @@ namespace Sparrow.Json
                     return;
 
                 _cts.Cancel();
+                _logger?.Dispose();
                 _disposed = true;
                 _cleanupTimer.Dispose();
 

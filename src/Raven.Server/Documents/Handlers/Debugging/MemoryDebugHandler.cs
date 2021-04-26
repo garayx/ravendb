@@ -11,6 +11,7 @@ using Raven.Server.Web;
 using Sparrow;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
+using Sparrow.Logging;
 using Sparrow.LowMemory;
 using Sparrow.Platform;
 using Sparrow.Platform.Posix;
@@ -200,7 +201,7 @@ namespace Raven.Server.Documents.Handlers.Debugging
                 try
                 {
                     var result = new SmapsReader(buffers).CalculateMemUsageFromSmaps<SmapsReaderJsonResults>();
-                    var procStatus = MemoryInformation.GetMemoryUsageFromProcStatus();
+                    var procStatus = MemoryInformation.GetMemoryUsageFromProcStatus(ServerStore.Logger.GetLoggerFor(nameof(MemoryInformation), LogType.Server));
                     var djv = new DynamicJsonValue
                     {
                         ["Totals"] = new DynamicJsonValue
@@ -247,7 +248,7 @@ namespace Raven.Server.Documents.Handlers.Debugging
             {
                 await using (var writer = new AsyncBlittableJsonTextWriter(context, ResponseBodyStream()))
                 {
-                    WriteMemoryStats(writer, context, includeThreads, includeMappings);
+                    WriteMemoryStats(writer, context, includeThreads, includeMappings, ServerStore.Logger.GetLoggerFor(nameof(MemoryInformation), LogType.Server));
                 }
             }
         }
@@ -264,11 +265,11 @@ namespace Raven.Server.Documents.Handlers.Debugging
             }
         }
 
-        private static void WriteMemoryStats(AsyncBlittableJsonTextWriter writer, JsonOperationContext context, bool includeThreads, bool includeMappings)
+        private static void WriteMemoryStats(AsyncBlittableJsonTextWriter writer, JsonOperationContext context, bool includeThreads, bool includeMappings, Logger logger)
         {
             writer.WriteStartObject();
 
-            var memInfo = MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader();
+            var memInfo = MemoryInformation.GetMemoryInformationUsingOneTimeSmapsReader(logger);
             long managedMemoryInBytes = AbstractLowMemoryMonitor.GetManagedMemoryInBytes();
             long totalUnmanagedAllocations = NativeMemory.TotalAllocatedMemory;
             var encryptionBuffers = EncryptionBuffersPool.Instance.GetStats();

@@ -62,18 +62,19 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
         private bool _initialized;
         private readonly Dictionary<string, IndexField> _fields;
         internal IndexReader _lastReader;
-        private readonly Logger _logger;
 
         internal LuceneVoronDirectory LuceneDirectory => _directory;
+        private readonly Logger _logger;
 
         private readonly object _readersLock = new object();
 
         public LuceneIndexPersistence(Index index)
         {
             _index = index;
-            _logger = LoggingSource.Instance.GetLogger<LuceneIndexPersistence>(index.DocumentDatabase.Name);
             _suggestionsDirectories = new Dictionary<string, LuceneVoronDirectory>();
             _suggestionsIndexSearcherHolders = new Dictionary<string, IndexSearcherHolder>();
+            _logger = _index._logger.GetLoggerFor(nameof(LuceneIndexPersistence), LogType.Index);
+
             _disposeOnce = new DisposeOnce<SingleAttempt>(() =>
             {
                 DisposeWriters();
@@ -87,6 +88,8 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
                 {
                     directory.Value?.Dispose();
                 }
+
+                _logger.Dispose();
             });
 
             var fields = index.Definition.IndexFields.Values;
@@ -139,8 +142,8 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             }
 
             _fields = fields.ToDictionary(x => x.Name, x => x);
-
-            _indexSearcherHolder = new IndexSearcherHolder(CreateIndexSearcher, _index._indexStorage.DocumentDatabase);
+            var logger = _logger.GetLoggerFor(nameof(IndexSearcherHolder), LogType.Index);
+            _indexSearcherHolder = new IndexSearcherHolder(CreateIndexSearcher, logger);
 
             foreach (var field in _fields)
             {
@@ -148,7 +151,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
                     continue;
 
                 string fieldName = field.Key;
-                _suggestionsIndexSearcherHolders[fieldName] = new IndexSearcherHolder(state => new IndexSearcher(_suggestionsDirectories[fieldName], true, state), _index._indexStorage.DocumentDatabase);
+                _suggestionsIndexSearcherHolders[fieldName] = new IndexSearcherHolder(state => new IndexSearcher(_suggestionsDirectories[fieldName], true, state), logger);
             }
 
             IndexSearcher CreateIndexSearcher(IState state)
@@ -177,8 +180,8 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
                             }
                             catch (Exception e)
                             {
-                                if (_logger.IsInfoEnabled)
-                                    _logger.Info($"Could not reopen the index reader for index '{_index.Name}'.", e);
+                                if (logger.IsInfoEnabled)
+                                    logger.Info($"Could not reopen the index reader for index '{_index.Name}'.", e);
 
                                 // fallback strategy in case of a reader to be closed
                                 // before Reopen and DecRef are executed
@@ -507,13 +510,14 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
                     continue;
 
                 string field = item.Key;
+                var logger = _logger.GetLoggerFor(nameof(IndexSearcherHolder), LogType.Index);
 
                 try
                 {
                     var snapshotter = new SnapshotDeletionPolicy(new KeepOnlyLastCommitDeletionPolicy());
                     var writer = new LuceneSuggestionIndexWriter(field, _suggestionsDirectories[field],
                                         snapshotter, IndexWriter.MaxFieldLength.UNLIMITED,
-                        _index, state);
+                        _index, state, logger);
 
                     _suggestionsIndexWriters[field] = writer;
                 }

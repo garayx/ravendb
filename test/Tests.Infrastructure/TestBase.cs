@@ -648,7 +648,7 @@ namespace FastTests
                 if (options.DeletePrevious)
                     IOExtensions.DeleteDirectory(configuration.Core.DataDirectory.FullPath);
 
-                var server = new RavenServer(configuration)
+                var server = new RavenServer(configuration, LoggingSource.Instance.GetLogger<TestBase>(nameof(TestBase)))
                 {
                     ThrowOnLicenseActivationFailure = true,
                     DebugTag = caller

@@ -88,9 +88,7 @@ namespace Raven.Server.ServerWide
     /// </summary>
     public class ServerStore : IDisposable
     {
-        private const string ResourceName = nameof(ServerStore);
-
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<ServerStore>(ResourceName);
+        internal Logger Logger;
 
         public const string LicenseStorageKey = "License/Key";
 
@@ -138,6 +136,8 @@ namespace Raven.Server.ServerWide
             // we want our servers to be robust get early errors about such issues
             MemoryInformation.EnableEarlyOutOfMemoryChecks = true;
 
+            Logger = server.RavenServerLogger.GetLoggerFor(nameof(ServerStore), LogType.Server);
+
             Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
 
             _server = server;
@@ -146,9 +146,9 @@ namespace Raven.Server.ServerWide
 
             DatabasesLandlord = new DatabasesLandlord(this);
 
-            _notificationsStorage = new NotificationsStorage(ResourceName);
+            _notificationsStorage = new NotificationsStorage(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor($"{nameof(NotificationsStorage)}: '{nameof(ServerStore)}'", LogType.Server));
 
-            NotificationCenter = new NotificationCenter.NotificationCenter(_notificationsStorage, null, ServerShutdown, configuration);
+            NotificationCenter = new NotificationCenter.NotificationCenter(_notificationsStorage, database: null, ServerShutdown, configuration, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor($"{nameof(NotificationCenter)}: '{nameof(ServerStore)}'", LogType.Server));
 
             ServerDashboardNotifications = new ServerDashboardNotifications(this, ServerShutdown);
 
@@ -157,17 +157,17 @@ namespace Raven.Server.ServerWide
             Operations = new Operations(null, _operationsStorage, NotificationCenter, null,
                 (PlatformDetails.Is32Bits || Configuration.Storage.ForceUsing32BitsPager
                         ? TimeSpan.FromHours(12)
-                        : TimeSpan.FromDays(2)));
+                        : TimeSpan.FromDays(2))/*, serverStoreLogger.GetLoggerFor(nameof(Documents.Operations.Operations), LogType.Server)*/);
 
             LicenseManager = new LicenseManager(this);
 
             FeedbackSender = new FeedbackSender();
 
-            StorageSpaceMonitor = new StorageSpaceMonitor(NotificationCenter);
+            StorageSpaceMonitor = new StorageSpaceMonitor(NotificationCenter, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(Storage.StorageSpaceMonitor), LogType.Server));
 
-            DatabaseInfoCache = new DatabaseInfoCache();
-
-            Secrets = new SecretProtection(configuration.Security);
+            DatabaseInfoCache = new DatabaseInfoCache(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(Documents.DatabaseInfoCache), LogType.Server));
+            
+            Secrets = new SecretProtection(configuration.Security, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(SecretProtection), LogType.Server));
 
             InitializationCompleted = new AsyncManualResetEvent(_shutdownNotification.Token);
 
@@ -514,7 +514,9 @@ namespace Raven.Server.ServerWide
                 Configuration.Memory.UseTotalDirtyMemInsteadOfMemUsage,
                 Configuration.Memory.EnableHighTemporaryDirtyMemoryUse,
                 Configuration.Memory.TemporaryDirtyMemoryAllowedPercentage,
-                new LowMemoryMonitor(), ServerShutdown);
+                new LowMemoryMonitor(Logger.GetLoggerFor(nameof(LowMemoryNotification), LogType.Server)), 
+                Logger.GetLoggerFor(nameof(LowMemoryNotification), LogType.Server), 
+                ServerShutdown);
 
             MemoryInformation.SetFreeCommittedMemory(
                 Configuration.Memory.MinimumFreeCommittedMemoryPercentage,
@@ -539,7 +541,7 @@ namespace Raven.Server.ServerWide
             }
             else
             {
-                options = StorageEnvironmentOptions.ForPath(path.FullPath, null, null, IoChanges, null);
+                options = StorageEnvironmentOptions.ForPath(path.FullPath, null, null, IoChanges, null, null);
                 var secretKey = Path.Combine(path.FullPath, "secret.key.encrypted");
                 if (File.Exists(secretKey))
                 {
@@ -700,7 +702,7 @@ namespace Raven.Server.ServerWide
                 BooleanQuery.MaxClauseCount = Configuration.Queries.MaxClauseCount.Value;
 
             var clusterChanges = new ClusterChanges();
-            ContextPool = new TransactionContextPool(_env, Configuration.Memory.MaxContextSizeToKeep);
+            ContextPool = new TransactionContextPool(_env, Configuration.Memory.MaxContextSizeToKeep, Logger.GetLoggerFor(nameof(TransactionContextPool), LogType.Server));
 
             using (ContextPool.AllocateOperationContext(out JsonOperationContext ctx))
             {
@@ -727,7 +729,7 @@ namespace Raven.Server.ServerWide
             _engine.BeforeAppendToRaftLog = BeforeAppendToRaftLog;
 
             var myUrl = GetNodeHttpServerUrl();
-            _engine.Initialize(_env, Configuration, clusterChanges, myUrl, out _lastClusterTopologyIndex);
+            _engine.Initialize(_env, Configuration, clusterChanges, myUrl, Logger.GetLoggerFor(nameof(RachisConsensus), LogType.Cluster), out _lastClusterTopologyIndex);
 
             SorterCompilationCache.Instance.AddServerWideItems(this);
             AnalyzerCompilationCache.Instance.AddServerWideItems(this);
@@ -751,7 +753,7 @@ namespace Raven.Server.ServerWide
                     return;
 
                 var errorThreshold = new Sparrow.Size(128, SizeUnit.Megabytes);
-                var swapSize = MemoryInformation.GetMemoryInfo().TotalSwapSize;
+                var swapSize = MemoryInformation.GetMemoryInfo(_server.RavenServerLogger.GetLoggerFor(nameof(MemoryInformation), LogType.Server)).TotalSwapSize;
                 if (swapSize < Configuration.PerformanceHints.MinSwapSize - errorThreshold)
                     NotificationCenter.Add(AlertRaised.Create(null,
                         "Low swap size",
@@ -763,7 +765,7 @@ namespace Raven.Server.ServerWide
 
             if (PlatformDetails.RunningOnPosix == false)
             {
-                var memoryInfo = MemoryInformation.GetMemoryInfo();
+                var memoryInfo = MemoryInformation.GetMemoryInfo(_server.RavenServerLogger.GetLoggerFor(nameof(MemoryInformation), LogType.Server));
                 if (memoryInfo.TotalCommittableMemory - memoryInfo.TotalPhysicalMemory <= Sparrow.Size.Zero)
                     NotificationCenter.Add(AlertRaised.Create(null,
                         "No PageFile available",
@@ -878,13 +880,13 @@ namespace Raven.Server.ServerWide
             }
 
             _clusterMaintenanceSetupTask = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x =>
-                ClusterMaintenanceSetupTask(), null, "Cluster Maintenance Setup Task");
+                ClusterMaintenanceSetupTask(), null, "Cluster Maintenance Setup Task", Logger);
 
             _updateTopologyChangeNotification = PoolOfThreads.GlobalRavenThreadPool.LongRunning(x =>
             {
                 Thread.CurrentThread.Priority = ThreadPriority.BelowNormal;
                 UpdateTopologyChangeNotification();
-            }, null, "Update Topology Change Notification Task");
+            }, null, "Update Topology Change Notification Task", Logger);
         }
 
         private void OnStateChanged(object sender, RachisConsensus.StateTransition state)
@@ -3121,7 +3123,7 @@ namespace Raven.Server.ServerWide
             try
             {
                 await TestConnectionHandler.ConnectToClientNodeAsync(_server, connectionInfo.Result, Engine.TcpConnectionTimeout,
-                    LoggingSource.Instance.GetLogger("testing-connection", "testing-connection"), database, result);
+                    Logger.GetLoggerFor(nameof(TestConnectionHandler), LogType.Server), database, result);
             }
             catch (Exception e)
             {
@@ -3184,14 +3186,14 @@ namespace Raven.Server.ServerWide
             return json;
         }
 
-        public static IEnumerable<Client.ServerWide.Operations.MountPointUsage> GetMountPointUsageDetailsFor(StorageEnvironmentWithType environment, bool includeTempBuffers)
+        public static IEnumerable<Client.ServerWide.Operations.MountPointUsage> GetMountPointUsageDetailsFor(StorageEnvironmentWithType environment, bool includeTempBuffers, Logger logger)
         {
             var fullPath = environment?.Environment.Options.BasePath.FullPath;
             if (fullPath == null)
                 yield break;
 
             var driveInfo = environment.Environment.Options.DriveInfoByPath?.Value;
-            var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(fullPath, driveInfo?.BasePath);
+            var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(fullPath, logger, driveInfo?.BasePath);
             if (diskSpaceResult == null)
                 yield break;
 
@@ -3211,7 +3213,7 @@ namespace Raven.Server.ServerWide
                 UsedSpaceByTempBuffers = 0
             };
 
-            var journalPathUsage = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.JournalPath?.FullPath, driveInfo?.JournalPath);
+            var journalPathUsage = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.JournalPath?.FullPath, logger, driveInfo?.JournalPath);
             if (journalPathUsage != null)
             {
                 if (diskSpaceResult.DriveName == journalPathUsage.DriveName)
@@ -3239,7 +3241,7 @@ namespace Raven.Server.ServerWide
 
             if (includeTempBuffers)
             {
-                var tempBuffersDiskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.TempPath.FullPath, driveInfo?.TempPath);
+                var tempBuffersDiskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.TempPath.FullPath, logger, driveInfo?.TempPath);
                 if (tempBuffersDiskSpaceResult != null)
                 {
                     if (diskSpaceResult.DriveName == tempBuffersDiskSpaceResult.DriveName)

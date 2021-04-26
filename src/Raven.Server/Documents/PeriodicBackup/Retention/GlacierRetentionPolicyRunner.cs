@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Raven.Server.Documents.PeriodicBackup.Aws;
+using Sparrow.Logging;
 
 namespace Raven.Server.Documents.PeriodicBackup.Retention
 {
@@ -11,7 +12,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Retention
         protected override string Name => "Glacier";
 
         public GlacierRetentionPolicyRunner(RetentionPolicyBaseParameters parameters, RavenAwsGlacierClient client)
-            : base(parameters)
+            : base(parameters, client._logger)
         {
             _client = client;
         }

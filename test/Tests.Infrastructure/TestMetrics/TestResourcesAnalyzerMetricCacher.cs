@@ -26,7 +26,7 @@ namespace Tests.Infrastructure.TestMetrics
             => MemoryInformation.GetMemoryInfo();
 
         private object CalculateMemoryInfoExtended()
-            => MemoryInformation.GetMemoryInfo(_smapsReader, extended: true);
+            => MemoryInformation.GetMemoryInfo(smapsReader: _smapsReader, extended: true);
 
         public (double MachineCpuUsage, double ProcessCpuUsage, double? MachineIoWait) GetCpuUsage()
             => GetValue<(double MachineCpuUsage, double ProcessCpuUsage, double? MachineIoWait)>(Keys.Server.CpuUsage);

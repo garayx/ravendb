@@ -32,12 +32,12 @@ namespace Raven.Server.Rachis.Remote
         public Stream Stream => _stream;
         public string Dest => _destTag;
 
-        public RemoteConnection(string src, long term, Stream stream, Action disconnect, [CallerMemberName] string caller = null)
-            : this(dest: "?", src, term, stream, disconnect, caller)
+        public RemoteConnection(string src, long term, Stream stream, Action disconnect, Logger logger, [CallerMemberName] string caller = null)
+            : this(dest: "?", src, term, stream, disconnect, logger, caller)
         {
         }
 
-        public RemoteConnection(string dest, string src, long term, Stream stream, Action disconnect, [CallerMemberName] string caller = null)
+        public RemoteConnection(string dest, string src, long term, Stream stream, Action disconnect, Logger logger, [CallerMemberName] string caller = null)
         {
             _destTag = dest;
             _src = src;
@@ -46,7 +46,7 @@ namespace Raven.Server.Rachis.Remote
             _context = JsonOperationContext.ShortTermSingleUse();
             _releaseBuffer = _context.GetMemoryBuffer(out _buffer);
             _disposeOnce = new DisposeOnce<SingleAttempt>(DisposeInternal);
-            _log = LoggingSource.Instance.GetLogger<RemoteConnection>($"{src} > {dest}");
+            _log = logger;
             RegisterConnection(dest, term, caller);
         }
 
@@ -408,7 +408,9 @@ namespace Raven.Server.Rachis.Remote
                 var rachisHello = JsonDeserializationRachis<RachisHello>.Deserialize(json);
                 _src = rachisHello.DebugSourceIdentifier ?? "unknown";
                 _destTag = rachisHello.DebugDestinationIdentifier ?? _destTag;
-                _log = LoggingSource.Instance.GetLogger<RemoteConnection>($"{_src} > {_destTag}");
+
+                _log._parent.TryRemoveLogger(_log._logger);
+                _log = _log._parent.GetLoggerFor($"{_src} > {_destTag}", LogType.Server);
                 _info.Destination = _destTag;
 
                 return rachisHello;

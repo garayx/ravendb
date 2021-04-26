@@ -14,7 +14,7 @@ namespace FastTests.Issues
         [Fact]
         public void Can_check_memory_status()
         {
-            using (var monitor = new LowMemoryMonitor())
+            using (var monitor = new LowMemoryMonitor(logger: null))
             {
                 LowMemoryNotification.Instance.CheckMemoryStatus(monitor);
             }

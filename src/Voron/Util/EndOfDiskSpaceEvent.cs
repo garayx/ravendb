@@ -6,6 +6,7 @@
 
 using System.Runtime.ExceptionServices;
 using Sparrow;
+using Sparrow.Logging;
 using Sparrow.Server.Utils;
 
 namespace Voron.Util
@@ -15,17 +16,19 @@ namespace Voron.Util
         private readonly long _availableSpaceWhenEventOccurred;
         private readonly string _path;
         private readonly ExceptionDispatchInfo _edi;
+        private Logger _logger;
 
-        public EndOfDiskSpaceEvent(string path, long availableSpaceWhenEventOccurred, ExceptionDispatchInfo edi)
+        public EndOfDiskSpaceEvent(string path, long availableSpaceWhenEventOccurred, ExceptionDispatchInfo edi, Logger logger)
         {
             _availableSpaceWhenEventOccurred = availableSpaceWhenEventOccurred;
             _path = path;
             _edi = edi;
+            _logger = logger;
         }
 
         public void AssertCanContinueWriting()
         {
-            var diskInfoResult = DiskSpaceChecker.GetDiskSpaceInfo(_path);
+            var diskInfoResult = DiskSpaceChecker.GetDiskSpaceInfo(_path, _logger);
             if (diskInfoResult == null)
                 return;
 

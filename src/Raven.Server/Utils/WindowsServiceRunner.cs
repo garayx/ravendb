@@ -9,9 +9,9 @@ namespace Raven.Server.Utils
 {
     public static class WindowsServiceRunner
     {
-        public static void Run(string serviceName, RavenConfiguration configuration, string[] args)
+        public static void Run(string serviceName, RavenConfiguration configuration, string[] args, Logger logger)
         {
-            var service = new RavenWin32Service(serviceName, configuration, args);
+            var service = new RavenWin32Service(serviceName, configuration, args, logger);
             Program.RestartServer = service.Restart;
             var serviceHost = new Win32ServiceHost(service);
             serviceHost.Run();
@@ -34,7 +34,7 @@ namespace Raven.Server.Utils
 
     internal class RavenWin32Service : IWin32Service
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<RavenWin32Service>("Server");
+        private static Logger _logger;
 
         private RavenServer _ravenServer;
 
@@ -44,17 +44,18 @@ namespace Raven.Server.Utils
 
         private ServiceStoppedCallback _serviceStoppedCallback;
 
-        public RavenWin32Service(string serviceName, RavenConfiguration configuration, string[] args)
+        public RavenWin32Service(string serviceName, RavenConfiguration configuration, string[] args, Logger logger)
         {
             ServiceName = serviceName;
             _args = args;
-            _ravenServer = new RavenServer(configuration);
+            _logger = logger;
+            _ravenServer = new RavenServer(configuration, logger);
         }
 
         public void Start(string[] startupArguments, ServiceStoppedCallback serviceStoppedCallback)
         {
-            if (Logger.IsInfoEnabled)
-                Logger.Info($"Starting RavenDB Windows Service: {ServiceName}.");
+            if (_logger.IsInfoEnabled)
+                _logger.Info($"Starting RavenDB Windows Service: {ServiceName}.");
 
             _serviceStoppedCallback = serviceStoppedCallback;
 
@@ -64,8 +65,8 @@ namespace Raven.Server.Utils
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Unable to OpenPipe. Admin Channel will not be available to the user", e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info("Unable to OpenPipe. Admin Channel will not be available to the user", e);
 
                 throw;
             }
@@ -76,8 +77,8 @@ namespace Raven.Server.Utils
             }
             catch (Exception e)
             {
-                if (Logger.IsInfoEnabled)
-                    Logger.Info("Error initializing the server", e);
+                if (_logger.IsInfoEnabled)
+                    _logger.Info("Error initializing the server", e);
 
                 throw;
             }
@@ -85,8 +86,8 @@ namespace Raven.Server.Utils
 
         public void Restart()
         {
-            if (Logger.IsInfoEnabled)
-                Logger.Info($"Restarting RavenDB Windows Service: {ServiceName}.");
+            if (_logger.IsInfoEnabled)
+                _logger.Info($"Restarting RavenDB Windows Service: {ServiceName}.");
 
             _ravenServer.Dispose();
             var configuration = RavenConfiguration.CreateForServer(null, CommandLineSwitches.CustomConfigPath);
@@ -95,7 +96,7 @@ namespace Raven.Server.Utils
                 configuration.AddCommandLine(_args);
 
             configuration.Initialize();
-            _ravenServer = new RavenServer(configuration);
+            _ravenServer = new RavenServer(configuration, _logger);
             Start(_args, _serviceStoppedCallback);
 
             configuration.Initialize();
@@ -103,8 +104,8 @@ namespace Raven.Server.Utils
 
         public void Stop()
         {
-            if (Logger.IsOperationsEnabled)
-                Logger.OperationsWithWait($"Stopping RavenDB Windows Service: {ServiceName}.").Wait(TimeSpan.FromSeconds(15));
+            if (_logger.IsOperationsEnabled)
+                _logger.OperationsWithWait($"Stopping RavenDB Windows Service: {ServiceName}.").Wait(TimeSpan.FromSeconds(15));
 
             _ravenServer.Dispose();
             _serviceStoppedCallback();

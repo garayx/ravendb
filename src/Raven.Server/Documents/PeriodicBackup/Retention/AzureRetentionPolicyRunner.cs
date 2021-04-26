@@ -4,6 +4,7 @@ using System.Linq;
 using Raven.Server.Documents.Indexes.Static.Extensions;
 using Raven.Server.Documents.PeriodicBackup.Azure;
 using Raven.Server.Documents.PeriodicBackup.Restore;
+using Sparrow.Logging;
 
 namespace Raven.Server.Documents.PeriodicBackup.Retention
 {
@@ -18,7 +19,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Retention
         private string _nextMarker = null;
 
         public AzureRetentionPolicyRunner(RetentionPolicyBaseParameters parameters, RavenAzureClient client)
-            : base(parameters)
+            : base(parameters, client._logger)
         {
             _client = client;
         }

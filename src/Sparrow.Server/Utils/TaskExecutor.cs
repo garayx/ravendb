@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using Sparrow.Logging;
 using Sparrow.Utils;
 
 namespace Sparrow.Server.Utils
@@ -85,7 +86,7 @@ namespace Sparrow.Server.Utils
             task2.TrySetResult(null);
         }
 
-        public static void CompleteReplaceAndExecute(ref TaskCompletionSource<object> task, Action act)
+        public static void CompleteReplaceAndExecute(ref TaskCompletionSource<object> task, Action act, Logger logger)
         {
             var task2 = Interlocked.Exchange(ref task, new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously));
             Execute(state =>
@@ -93,7 +94,7 @@ namespace Sparrow.Server.Utils
                 var (tcs, action) = ((TaskCompletionSource<object>, Action))state;
                 tcs.TrySetResult(null);
                 act();
-            }, (task2, act));
+            }, (task2, act), logger);
         }
 
         public static void Complete(TaskCompletionSource<object> task)
@@ -104,10 +105,12 @@ namespace Sparrow.Server.Utils
         private class RunOnce
         {
             private WaitCallback _callback;
+            private Logger _logger;
 
-            public RunOnce(WaitCallback callback)
+            public RunOnce(WaitCallback callback, Logger logger)
             {
                 _callback = callback;
+                _logger = logger;
             }
 
             public void Execute(object state)
@@ -125,16 +128,15 @@ namespace Sparrow.Server.Utils
                 }
                 catch (Exception e)
                 {
-                    var logger = Logging.LoggingSource.Instance.GetLogger<RunOnce>("TaskExecutor");
-                    if (logger.IsOperationsEnabled)
-                        logger.Operations("Failed to execute task", e);
+                    if (_logger.IsOperationsEnabled)
+                        _logger.Operations("Failed to execute task", e);
                 }
             }
         }
 
-        public static void Execute(WaitCallback callback, object state)
+        public static void Execute(WaitCallback callback, object state, Logger logger)
         {
-            callback = new RunOnce(callback).Execute;
+            callback = new RunOnce(callback, logger).Execute;
             Instance.Enqueue(callback, state);
             ThreadPool.QueueUserWorkItem(callback, state);
         }

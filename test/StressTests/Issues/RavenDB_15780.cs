@@ -2,6 +2,7 @@
 using FastTests.Voron;
 using Raven.Server.Documents.Indexes;
 using Raven.Server.ServerWide.Context;
+using Sparrow.Logging;
 using Sparrow.Threading;
 using Tests.Infrastructure;
 using Xunit;
@@ -14,6 +15,7 @@ namespace StressTests.Issues
         public RavenDB_15780(ITestOutputHelper output) : base(output)
         {
         }
+        private readonly Logger Logger = LoggingSource.Instance.GetLogger("Test", "test");
 
         [Theory64Bit]
         [InlineData(10_000, 0.999, BloomFilterVersion.CurrentVersion)]
@@ -28,7 +30,7 @@ namespace StressTests.Issues
         [InlineData(1_000_000, 0.140, null)]
         public void SuccessRate_BloomFilters_1(int count, double expectedSuccessRate, long? version)
         {
-            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None))
+            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None, Logger))
             {
                 var added = 0;
 
@@ -65,7 +67,7 @@ namespace StressTests.Issues
         [InlineData(1_000_000, 0.140, null)]
         public void SuccessRate_BloomFilters_2(int count, double expectedSuccessRate, long? version)
         {
-            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None))
+            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None, Logger))
             {
                 var added = 0;
 
@@ -102,7 +104,7 @@ namespace StressTests.Issues
         [InlineData(1_000_000, 0.140, null)]
         public void SuccessRate_BloomFilters_3(int count, double expectedSuccessRate, long? version)
         {
-            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None))
+            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None, Logger))
             {
                 var added = 0;
 
@@ -129,7 +131,7 @@ namespace StressTests.Issues
         [Fact]
         public void BloomFilter_Version()
         {
-            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None))
+            using (var context = new TransactionOperationContext(Env, 1024, 1024, 32 * 1024, SharedMultipleUseFlag.None, Logger))
             {
                 using (var tx = context.OpenWriteTransaction())
                 {

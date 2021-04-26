@@ -30,8 +30,6 @@ namespace Raven.Server.ServerWide
         public static int CurrentClusterMinimalVersion => _currentClusterMinimalVersion;
         private static int _currentClusterMinimalVersion;
 
-        private static readonly Logger Log = LoggingSource.Instance.GetLogger(typeof(ClusterCommandsVersionManager).FullName, typeof(ClusterCommandsVersionManager).FullName);
-
         public static readonly IReadOnlyDictionary<string, int> ClusterCommandsVersions = new Dictionary<string, int>
         {
             [nameof(AddDatabaseCommand)] = Base40CommandsVersion,
@@ -154,7 +152,7 @@ namespace Raven.Server.ServerWide
             MyCommandsVersion = _currentClusterMinimalVersion = Enumerable.Max(ClusterCommandsVersions.Values);
         }
 
-        public static void SetClusterVersion(int version)
+        public static void SetClusterVersion(int version, Logger logger)
         {
             int currentVersion;
             while (true)
@@ -165,13 +163,13 @@ namespace Raven.Server.ServerWide
                 Interlocked.CompareExchange(ref _currentClusterMinimalVersion, version, currentVersion);
             }
 
-            if (currentVersion != version && Log.IsInfoEnabled)
+            if (currentVersion != version && logger.IsInfoEnabled)
             {
-                Log.Info($"Cluster version was changed from {currentVersion} to {version}");
+                logger.Info($"Cluster version was changed from {currentVersion} to {version}");
             }
         }
 
-        public static void SetMinimalClusterVersion(int version)
+        public static void SetMinimalClusterVersion(int version, Logger logger)
         {
             var fromVersion = _currentClusterMinimalVersion;
             int currentVersion;
@@ -184,20 +182,20 @@ namespace Raven.Server.ServerWide
                 Interlocked.CompareExchange(ref _currentClusterMinimalVersion, minimalVersion, currentVersion);
             }
 
-            if (fromVersion != currentVersion && Log.IsInfoEnabled)
+            if (fromVersion != currentVersion && logger.IsInfoEnabled)
             {
-                Log.Info($"Cluster version was changed from {fromVersion} to {currentVersion}");
+                logger.Info($"Cluster version was changed from {fromVersion} to {currentVersion}");
             }
         }
 
-        public static int GetClusterMinimalVersion(List<int> versions, int? maximalVersion)
+        public static int GetClusterMinimalVersion(List<int> versions, Logger logger, int? maximalVersion)
         {
             var minVersion = versions.Min();
             if (maximalVersion < minVersion)
             {
-                if (Log.IsInfoEnabled)
+                if (logger.IsInfoEnabled)
                 {
-                    Log.Info($"Cluster version was clamped from {minVersion} to {maximalVersion.Value}");
+                    logger.Info($"Cluster version was clamped from {minVersion} to {maximalVersion.Value}");
                 }
                 return maximalVersion.Value;
             }

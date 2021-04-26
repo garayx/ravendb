@@ -43,7 +43,7 @@ namespace Raven.Server.ServerWide.Maintenance
             _cts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
             _token = _cts.Token;
             _server = serverStore;
-            _logger = LoggingSource.Instance.GetLogger<ClusterMaintenanceWorker>(serverStore.NodeTag);
+            _logger = serverStore.Logger.GetLoggerFor(nameof(ClusterMaintenanceWorker), LogType.Cluster);
             _name = $"Heartbeats worker connection to leader {leader} in term {term}";
             _temporaryDirtyMemoryAllowedPercentage = _server.Server.ServerStore.Configuration.Memory.TemporaryDirtyMemoryAllowedPercentage;
 
@@ -77,7 +77,7 @@ namespace Raven.Server.ServerWide.Maintenance
                     // we don't want to crash the process so we don't propagate this exception.
                 }
             }
-            , null, _name);
+            , null, _name, _logger);
         }
 
         public void CollectDatabasesStatusReport()

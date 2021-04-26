@@ -62,8 +62,6 @@ namespace Raven.Server.Web.System
 {
     public class AdminDatabasesHandler : ServerRequestHandler
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<AdminDatabasesHandler>("Server");
-
         [RavenAction("/admin/databases", "GET", AuthorizationStatus.Operator)]
         public async Task Get()
         {
@@ -354,11 +352,12 @@ namespace Raven.Server.Web.System
                 return;
             }
 
+            var logger = ServerStore.Logger.GetLoggerFor(nameof(AdminDatabasesHandler), LogType.Server);
             var addToInitLog = new Action<string>(txt =>
             {
                 var msg = $"[Recreating indexes] {DateTime.UtcNow} :: Database '{databaseRecord.DatabaseName}' : {txt}";
-                if (Logger.IsInfoEnabled)
-                    Logger.Info(msg);
+                if (logger.IsInfoEnabled)
+                    logger.Info(msg);
             });
 
             using (var documentDatabase = new DocumentDatabase(databaseRecord.DatabaseName, databaseConfiguration, ServerStore, addToInitLog))
@@ -402,8 +401,8 @@ namespace Raven.Server.Web.System
                     }
                     catch (Exception e)
                     {
-                        if (Logger.IsInfoEnabled)
-                            Logger.Info($"Could not open index {Path.GetFileName(indexPath)}", e);
+                        if (logger.IsInfoEnabled)
+                            logger.Info($"Could not open index {Path.GetFileName(indexPath)}", e);
                     }
                     finally
                     {
@@ -1171,8 +1170,9 @@ namespace Raven.Server.Web.System
                         }
                         catch (Exception e)
                         {
-                            if (Logger.IsOperationsEnabled)
-                                Logger.Operations("Compaction process failed", e);
+                            var logger = ServerStore.Logger.GetLoggerFor(nameof(AdminDatabasesHandler), LogType.Server);
+                            if (logger.IsOperationsEnabled)
+                                logger.Operations("Compaction process failed", e);
 
                             throw;
                         }

@@ -22,8 +22,6 @@ namespace Raven.Server.Web.Studio
 {
     public class DataDirectoryInfo
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<DataDirectoryInfo>("DataDirectoryInfo");
-
         private readonly ServerStore _serverStore;
         private readonly string _path;
         private readonly string _name;
@@ -31,6 +29,7 @@ namespace Raven.Server.Web.Studio
         private readonly bool _getNodesInfo;
         private readonly int _requestTimeoutInMs;
         private readonly Stream _responseBodyStream;
+        private readonly Logger _logger;
 
         public DataDirectoryInfo(
             ServerStore serverStore, string path, string name, bool isBackup,
@@ -43,13 +42,14 @@ namespace Raven.Server.Web.Studio
             _getNodesInfo = getNodesInfo;
             _requestTimeoutInMs = requestTimeoutInMs;
             _responseBodyStream = responseBodyStream;
+            _logger = serverStore.Logger.GetLoggerFor(nameof(DataDirectoryInfo), LogType.Server);
         }
 
         public async Task UpdateDirectoryResult(string databaseName, string error)
         {
             var drivesInfo = PlatformDetails.RunningOnPosix ? DriveInfo.GetDrives() : null;
-            var driveInfo = DiskSpaceChecker.GetDriveInfo(_path, drivesInfo, out var realPath);
-            var diskSpaceInfo = DiskSpaceChecker.GetDiskSpaceInfo(driveInfo.DriveName);
+            var driveInfo = DiskSpaceChecker.GetDriveInfo(_path, drivesInfo, _logger, out var realPath);
+            var diskSpaceInfo = DiskSpaceChecker.GetDiskSpaceInfo(driveInfo.DriveName, _logger);
 
             if (CanAccessPath(_path, out var pathAccessError) == false)
                 error = pathAccessError;
@@ -205,8 +205,8 @@ namespace Raven.Server.Web.Studio
                 }
                 catch (Exception e)
                 {
-                    if (Logger.IsInfoEnabled)
-                        Logger.Info($"Failed to get directory info result from: {serverUrl}", e);
+                    if (_logger.IsInfoEnabled)
+                        _logger.Info($"Failed to get directory info result from: {serverUrl}", e);
 
                     return null;
                 }

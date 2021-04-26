@@ -221,7 +221,7 @@ namespace Voron
 
         public event Action<StorageEnvironmentOptions> OnDirectoryInitialize;
 
-        protected StorageEnvironmentOptions(VoronPathSetting tempPath, IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification)
+        protected StorageEnvironmentOptions(VoronPathSetting tempPath, IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification, Logger logger)
         {
             DisposeWaitTime = TimeSpan.FromSeconds(15);
 
@@ -255,7 +255,7 @@ namespace Voron
                 new IoMetrics(0, 0) : // disabled
                 new IoMetrics(256, 256, ioChangesNotifications);
 
-            _log = LoggingSource.Instance.GetLogger<StorageEnvironmentOptions>(tempPath.FullPath);
+            _log = logger;
 
             _catastrophicFailureNotification = catastrophicFailureNotification ?? new CatastrophicFailureNotification((id, path, e, stacktrace) =>
             {
@@ -315,29 +315,33 @@ namespace Voron
             return new DisposableAction(() => { _skipCatastrophicFailureAssertion = false; });
         }
 
-        public static StorageEnvironmentOptions CreateMemoryOnly(string name, string tempPath, IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification)
+        public static StorageEnvironmentOptions CreateMemoryOnly(string name, string tempPath, IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification, Logger logger)
         {
             var tempPathSetting = new VoronPathSetting(tempPath ?? GetTempPath());
-            return new PureMemoryStorageEnvironmentOptions(name, tempPathSetting, ioChangesNotifications, catastrophicFailureNotification);
+            return new PureMemoryStorageEnvironmentOptions(name, tempPathSetting, ioChangesNotifications, catastrophicFailureNotification, logger == null 
+                ? LoggingSource.Instance.GetLogger<object>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(StorageEnvironmentOptions), tempPathSetting.FullPath), LogType.Server) 
+                : logger.GetLoggerFor(Logger.GetNameFor(nameof(StorageEnvironmentOptions), tempPathSetting.FullPath), logger.Type));
         }
 
         public static StorageEnvironmentOptions CreateMemoryOnly()
         {
-            return CreateMemoryOnly(null, null, null, null);
+            return CreateMemoryOnly(null, null, null, null, null);
         }
 
-        public static StorageEnvironmentOptions ForPath(string path, string tempPath, string journalPath, IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification)
+        public static StorageEnvironmentOptions ForPath(string path, string tempPath, string journalPath, IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification, Logger logger)
         {
             var pathSetting = new VoronPathSetting(path);
             var tempPathSetting = new VoronPathSetting(tempPath ?? GetTempPath(path));
             var journalPathSetting = journalPath != null ? new VoronPathSetting(journalPath) : pathSetting.Combine("Journals");
 
-            return new DirectoryStorageEnvironmentOptions(pathSetting, tempPathSetting, journalPathSetting, ioChangesNotifications, catastrophicFailureNotification);
+            return new DirectoryStorageEnvironmentOptions(pathSetting, tempPathSetting, journalPathSetting, ioChangesNotifications, catastrophicFailureNotification, logger == null 
+                ? LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(StorageEnvironmentOptions), tempPathSetting.FullPath), LogType.Server) 
+                : logger.GetLoggerFor(Logger.GetNameFor(nameof(StorageEnvironmentOptions), tempPathSetting.FullPath), logger.Type));
         }
 
         public static StorageEnvironmentOptions ForPath(string path)
         {
-            return ForPath(path, null, null, null, null);
+            return ForPath(path, null, null, null, null, null);
         }
 
         private static string GetTempPath(string basePath = null)
@@ -391,8 +395,8 @@ namespace Voron
                 new ConcurrentDictionary<string, LazyWithExceptionRetry<IJournalWriter>>(StringComparer.OrdinalIgnoreCase);
 
             public DirectoryStorageEnvironmentOptions(VoronPathSetting basePath, VoronPathSetting tempPath, VoronPathSetting journalPath,
-                IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification)
-                : base(tempPath ?? basePath, ioChangesNotifications, catastrophicFailureNotification)
+                IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification, Logger logger)
+                : base(tempPath ?? basePath, ioChangesNotifications, catastrophicFailureNotification, logger)
             {
                 Debug.Assert(basePath != null);
                 Debug.Assert(journalPath != null);
@@ -421,19 +425,19 @@ namespace Voron
 
                 GatherRecyclableJournalFiles(); // if there are any (e.g. after a rude db shut down) let us reuse them
 
-                InitializePathsInfo();
+                InitializePathsInfo(logger);
             }
 
-            private void InitializePathsInfo()
+            private void InitializePathsInfo(Logger logger)
             {
                 DriveInfoByPath = new LazyWithExceptionRetry<DriveInfoByPath>(() =>
                 {
                     var drivesInfo = PlatformDetails.RunningOnPosix ? DriveInfo.GetDrives() : null;
                     return new DriveInfoByPath
                     {
-                        BasePath = DiskSpaceChecker.GetDriveInfo(BasePath.FullPath, drivesInfo, out _),
-                        JournalPath = DiskSpaceChecker.GetDriveInfo(JournalPath.FullPath, drivesInfo, out _),
-                        TempPath = DiskSpaceChecker.GetDriveInfo(TempPath.FullPath, drivesInfo, out _)
+                        BasePath = DiskSpaceChecker.GetDriveInfo(BasePath.FullPath, drivesInfo, logger, out _),
+                        JournalPath = DiskSpaceChecker.GetDriveInfo(JournalPath.FullPath, drivesInfo, logger, out _),
+                        TempPath = DiskSpaceChecker.GetDriveInfo(TempPath.FullPath, drivesInfo, logger, out _)
                     };
                 });
             }
@@ -917,8 +921,8 @@ namespace Voron
 
 
             public PureMemoryStorageEnvironmentOptions(string name, VoronPathSetting tempPath,
-                IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification)
-                : base(tempPath, ioChangesNotifications, catastrophicFailureNotification)
+                IoChangesNotifications ioChangesNotifications, CatastrophicFailureNotification catastrophicFailureNotification, Logger logger)
+                : base(tempPath, ioChangesNotifications, catastrophicFailureNotification, logger)
             {
                 _name = name;
                 _instanceId = Interlocked.Increment(ref _counter);
@@ -1216,7 +1220,7 @@ namespace Voron
         public bool IgnoreDataIntegrityErrorsOfAlreadySyncedTransactions { get; set; }
         public bool SkipChecksumValidationOnDatabaseLoading { get; set; }
 
-        private readonly Logger _log;
+        internal Logger _log;
 
         private readonly SortedList<long, string> _journalsForReuse = new SortedList<long, string>();
 

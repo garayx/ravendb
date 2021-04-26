@@ -33,7 +33,7 @@ namespace Raven.Embedded
         {
         }
 
-        private readonly Logger _logger = LoggingSource.Instance.GetLogger<EmbeddedServer>("Embedded");
+        private readonly Logger _logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(EmbeddedServer), LogType.Server);
         private Lazy<Task<(Uri ServerUrl, Process ServerProcess)>>? _serverTask;
 
         private readonly ConcurrentDictionary<string, Lazy<Task<IDocumentStore>>> _documentStores = new ConcurrentDictionary<string, Lazy<Task<IDocumentStore>>>();

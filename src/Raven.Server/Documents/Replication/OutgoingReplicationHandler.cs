@@ -97,7 +97,7 @@ namespace Raven.Server.Documents.Replication
             _database = database;
             Destination = node;
             _external = external;
-            _log = LoggingSource.Instance.GetLogger<OutgoingReplicationHandler>(_database.Name);
+            _log = _database._logger.GetLoggerFor(Logger.GetNameFor(nameof(OutgoingReplicationHandler), FromToString), LogType.Database);
             _tcpConnectionOptions = tcpConnectionOptions ??
                                     new TcpConnectionOptions() { DocumentDatabase = database, Operation = TcpConnectionHeaderMessage.OperationTypes.Replication, };
             _connectionInfo = connectionInfo;
@@ -124,7 +124,7 @@ namespace Raven.Server.Documents.Replication
         public void Start()
         {
             _longRunningSendingWork =
-                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => HandleReplicationErrors(Replication), null, OutgoingReplicationThreadName);
+                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => HandleReplicationErrors(Replication), null, OutgoingReplicationThreadName, _log);
         }
 
         public void StartPullReplicationAsHub(Stream stream, TcpConnectionHeaderMessage.SupportedFeatures supportedVersions)
@@ -134,7 +134,7 @@ namespace Raven.Server.Documents.Replication
             IsPullReplicationAsHub = true;
             OutgoingReplicationThreadName = $"Pull replication as hub {FromToString}";
             _longRunningSendingWork =
-                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => HandleReplicationErrors(PullReplication), null, OutgoingReplicationThreadName);
+                PoolOfThreads.GlobalRavenThreadPool.LongRunning(x => HandleReplicationErrors(PullReplication), null, OutgoingReplicationThreadName, _log);
         }
 
         private string _outgoingReplicationThreadName;
@@ -1143,6 +1143,8 @@ namespace Raven.Server.Documents.Replication
                     DisposeTcpClient();
                 }
             }
+
+            _log.Dispose();
 
             try
             {

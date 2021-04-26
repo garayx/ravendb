@@ -409,11 +409,12 @@ namespace Raven.Server.Rachis
             Timeout.TimeoutPeriod = _rand.Next(timeout / 3 * 2, timeout);
         }
 
-        public unsafe void Initialize(StorageEnvironment env, RavenConfiguration configuration, ClusterChanges changes, string myUrl, out long clusterTopologyEtag)
+        public unsafe void Initialize(StorageEnvironment env, RavenConfiguration configuration, ClusterChanges changes, string myUrl, Logger logger, out long clusterTopologyEtag)
         {
             try
             {
                 _persistentState = env;
+                Log = logger;
 
                 OperationTimeout = configuration.Cluster.OperationTimeout.AsTimeSpan;
                 ElectionTimeout = configuration.Cluster.ElectionTimeout.AsTimeSpan;
@@ -423,7 +424,7 @@ namespace Raven.Server.Rachis
                 DebuggerAttachedTimeout.LongTimespanIfDebugging(ref _operationTimeout);
                 DebuggerAttachedTimeout.LongTimespanIfDebugging(ref _electionTimeout);
 
-                ContextPool = new ClusterContextPool(changes, _persistentState, configuration.Memory.MaxContextSizeToKeep);
+                ContextPool = new ClusterContextPool(changes, _persistentState, Log.GetLoggerFor(nameof(ClusterContextPool), LogType.Cluster), configuration.Memory.MaxContextSizeToKeep);
 
                 ClusterTopology topology;
                 using (ContextPool.AllocateOperationContext(out ClusterOperationContext context))
@@ -433,7 +434,6 @@ namespace Raven.Server.Rachis
 
                     RequestSnapshot = GetSnapshotRequest(context);
 
-                    Log = LoggingSource.Instance.GetLogger<RachisConsensus>(_tag);
                     LogsTable.Create(tx.InnerTransaction, EntriesSlice, 16);
 
                     CurrentTerm = ReadTerm(context);
@@ -460,7 +460,7 @@ namespace Raven.Server.Rachis
                     tx.Commit();
                 }
 
-                Timeout = new TimeoutEvent(0, "Consensus");
+                Timeout = new TimeoutEvent(0, Log.GetLoggerFor("Consensus", LogType.Cluster));
                 RandomizeTimeout();
 
                 // if we don't have a topology id, then we are passive
@@ -821,7 +821,7 @@ namespace Raven.Server.Rachis
                             }
 
                             ParallelDispose(toDispose);
-                        });
+                        }, Log.GetLoggerFor(nameof(TaskExecutor), LogType.Cluster));
                     }
                     else
                     {
@@ -915,7 +915,7 @@ namespace Raven.Server.Rachis
             var leader = new Leader(this, electionTerm);
             SetNewState(RachisState.LeaderElect, leader, electionTerm, reason, () =>
             {
-                ClusterCommandsVersionManager.SetClusterVersion(version);
+                ClusterCommandsVersionManager.SetClusterVersion(version, Log);
                 _currentLeader = leader;
             });
             leader.Start(connections);
@@ -1116,7 +1116,8 @@ namespace Raven.Server.Rachis
             RemoteConnection remoteConnection = null;
             try
             {
-                remoteConnection = new RemoteConnection(_tag, CurrentTerm, stream, disconnect);
+
+                remoteConnection = new RemoteConnection(_tag, CurrentTerm, stream, disconnect, Log.GetLoggerFor($"{_tag} > ?", LogType.Cluster));
                 try
                 {
                     RachisHello initialMessage;

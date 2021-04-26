@@ -12,6 +12,7 @@ using System.Security;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
 using Sparrow;
+using Sparrow.Logging;
 using Sparrow.Server.Exceptions;
 using Sparrow.Server.Utils;
 using Sparrow.Utils;
@@ -110,7 +111,7 @@ namespace Voron.Platform.Win32
 
         public static extern bool FlushFileBuffers(SafeFileHandle hFile);
 
-        public static void SetFileLength(SafeFileHandle fileHandle, long length, string filePath)
+        public static void SetFileLength(SafeFileHandle fileHandle, long length, string filePath, Logger logger)
         {
             if (SetFilePointerEx(fileHandle, length, IntPtr.Zero, Win32NativeFileMoveMethod.Begin) == false)
             {
@@ -125,7 +126,7 @@ namespace Voron.Platform.Win32
                 {
                     var directoryPath = Path.GetDirectoryName(filePath);
                     // disk space info is expecting the directory path and not the file path
-                    var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(directoryPath);
+                    var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(directoryPath, logger);
                     throw new DiskFullException(filePath, length, driveInfo?.TotalFreeSpace.GetValue(SizeUnit.Bytes), new Win32Exception(lastError).Message);
                 }
 

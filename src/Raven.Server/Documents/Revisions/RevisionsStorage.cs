@@ -92,7 +92,7 @@ namespace Raven.Server.Documents.Revisions
         {
             _database = database;
             _documentsStorage = _database.DocumentsStorage;
-            _logger = LoggingSource.Instance.GetLogger<RevisionsStorage>(database.Name);
+            _logger = database.DocumentsStorage._logger.GetLoggerFor(nameof(RevisionsStorage), LogType.Database);
             Operations = new RevisionsOperations(_database);
             ConflictConfiguration = new RevisionsConfiguration
             {

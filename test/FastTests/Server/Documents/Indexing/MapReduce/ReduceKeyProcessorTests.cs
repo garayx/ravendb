@@ -4,6 +4,7 @@ using Raven.Server.ServerWide;
 using Sparrow.Server;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
+using Sparrow.Logging;
 using Sparrow.Threading;
 using Xunit;
 using Xunit.Abstractions;
@@ -19,7 +20,7 @@ namespace FastTests.Server.Documents.Indexing.MapReduce
         [Fact]
         public void Can_handle_values_of_different_types()
         {
-            using (var bufferPool = new UnmanagedBuffersPoolWithLowMemoryHandling("ReduceKeyProcessorTests"))
+            using (var bufferPool = new UnmanagedBuffersPoolWithLowMemoryHandling(LoggingSource.Instance.GetLogger("Test", "test")))
             using (var context = JsonOperationContext.ShortTermSingleUse())
             using (var bsc = new ByteStringContext(SharedMultipleUseFlag.None))
             {

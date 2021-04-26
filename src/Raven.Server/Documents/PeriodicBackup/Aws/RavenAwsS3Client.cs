@@ -34,7 +34,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Aws
         protected readonly string DefaultCustomRegion = string.Empty;
         
         private readonly string _bucketName;
-        private readonly Logger _logger;
+        internal readonly Logger _logger;
         private readonly Uri _customS3ServerUrl;
 
 

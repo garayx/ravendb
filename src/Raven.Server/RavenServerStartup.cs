@@ -42,7 +42,7 @@ namespace Raven.Server
         private RequestRouter _router;
         private RavenServer _server;
         private int _requestId;
-        private readonly Logger _logger = LoggingSource.Instance.GetLogger<RavenServerStartup>("Server");
+        private Logger _logger;
 
         public void Configure(IApplicationBuilder app, ILoggerFactory loggerFactory)
         {
@@ -53,6 +53,7 @@ namespace Raven.Server
 
             _router = app.ApplicationServices.GetService<RequestRouter>();
             _server = app.ApplicationServices.GetService<RavenServer>();
+            _logger = _server.RavenServerLogger.GetLoggerFor(nameof(RavenServerStartup), LogType.Server);
 
             if (_server.Configuration.Http.UseResponseCompression)
             {

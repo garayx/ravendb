@@ -25,7 +25,8 @@ namespace Raven.Server.Documents
 
         private readonly HashSet<ITombstoneAware> _subscriptions = new HashSet<ITombstoneAware>();
 
-        public TombstoneCleaner(DocumentDatabase documentDatabase) : base(documentDatabase.Name, documentDatabase.DatabaseShutdown)
+        public TombstoneCleaner(DocumentDatabase documentDatabase) 
+            : base(documentDatabase.DatabaseShutdown, documentDatabase._logger.GetLoggerFor(nameof(TombstoneCleaner), LogType.Database))
         {
             _documentDatabase = documentDatabase;
             _numberOfTombstonesToDeleteInBatch = _documentDatabase.Is32Bits
@@ -85,7 +86,7 @@ namespace Raven.Server.Documents
 
                 while (CancellationToken.IsCancellationRequested == false)
                 {
-                    var command = new DeleteTombstonesCommand(state.Tombstones, state.MinAllDocsEtag, state.MinAllTimeSeriesEtag, batchSize, _documentDatabase, Logger);
+                    var command = new DeleteTombstonesCommand(state.Tombstones, state.MinAllDocsEtag, state.MinAllTimeSeriesEtag, batchSize, _documentDatabase);
                     await _documentDatabase.TxMerger.Enqueue(command);
 
                     numberOfTombstonesDeleted += command.NumberOfTombstonesDeleted;
@@ -223,18 +224,16 @@ namespace Raven.Server.Documents
             private readonly long _minAllTimeSeriesEtag;
             private readonly long _numberOfTombstonesToDeleteInBatch;
             private readonly DocumentDatabase _database;
-            private readonly Logger _logger;
 
             public long NumberOfTombstonesDeleted { get; private set; }
 
-            public DeleteTombstonesCommand(Dictionary<string, StateHolder> tombstones, long minAllDocsEtag, long minAllTimeSeriesEtag, long numberOfTombstonesToDeleteInBatch, DocumentDatabase database, Logger logger)
+            public DeleteTombstonesCommand(Dictionary<string, StateHolder> tombstones, long minAllDocsEtag, long minAllTimeSeriesEtag, long numberOfTombstonesToDeleteInBatch, DocumentDatabase database)
             {
                 _tombstones = tombstones ?? throw new ArgumentNullException(nameof(tombstones));
                 _minAllDocsEtag = minAllDocsEtag;
                 _minAllTimeSeriesEtag = minAllTimeSeriesEtag;
                 _numberOfTombstonesToDeleteInBatch = numberOfTombstonesToDeleteInBatch;
                 _database = database ?? throw new ArgumentNullException(nameof(database));
-                _logger = logger ?? throw new ArgumentNullException(nameof(logger));
                 UpdateAccessTime = false;
             }
 
@@ -267,8 +266,8 @@ namespace Raven.Server.Documents
                     }
                     catch (Exception e)
                     {
-                        if (_logger.IsInfoEnabled)
-                            _logger.Info($"Could not delete tombstones for '{tombstone.Key}' collection before '{Math.Min(tombstone.Value.Documents.Etag, _minAllDocsEtag)}' etag for documents and '{Math.Min(tombstone.Value.TimeSeries.Etag, _minAllTimeSeriesEtag)}' etag for timeseries.", e);
+                        if (_database.TombstoneCleaner.Logger.IsInfoEnabled)
+                            _database.TombstoneCleaner.Logger.Info($"Could not delete tombstones for '{tombstone.Key}' collection before '{Math.Min(tombstone.Value.Documents.Etag, _minAllDocsEtag)}' etag for documents and '{Math.Min(tombstone.Value.TimeSeries.Etag, _minAllTimeSeriesEtag)}' etag for timeseries.", e);
 
                         throw;
                     }
@@ -322,8 +321,7 @@ namespace Raven.Server.Documents
 
         public TombstoneCleaner.DeleteTombstonesCommand ToCommand(DocumentsOperationContext context, DocumentDatabase database)
         {
-            var log = LoggingSource.Instance.GetLogger<TombstoneCleaner.DeleteTombstonesCommand>(database.Name);
-            var command = new TombstoneCleaner.DeleteTombstonesCommand(Tombstones, MinAllDocsEtag, MinAllTimeSeriesEtag, NumberOfTombstonesToDeleteInBatch ?? long.MaxValue, database, log);
+            var command = new TombstoneCleaner.DeleteTombstonesCommand(Tombstones, MinAllDocsEtag, MinAllTimeSeriesEtag, NumberOfTombstonesToDeleteInBatch ?? long.MaxValue, database);
             return command;
         }
     }

@@ -39,7 +39,7 @@ namespace Raven.Server.Monitoring.Snmp
 
         private readonly SemaphoreSlim _locker = new SemaphoreSlim(1, 1);
 
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<SnmpWatcher>("Server");
+        private static Logger Logger;
 
         private readonly RavenServer _server;
 
@@ -50,6 +50,7 @@ namespace Raven.Server.Monitoring.Snmp
         public SnmpWatcher(RavenServer server)
         {
             _server = server;
+            Logger = _server.RavenServerLogger.GetLoggerFor(nameof(SnmpWatcher), LogType.Server);
             _server.ServerStore.LicenseManager.LicenseChanged += OnLicenseChanged;
         }
 
