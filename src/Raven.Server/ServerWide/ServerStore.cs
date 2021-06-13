@@ -131,12 +131,24 @@ namespace Raven.Server.ServerWide
 
         public Operations Operations { get; }
 
+        private List<IDisposable> _genericLoggersDisposables = new List<IDisposable>();
+
         public ServerStore(RavenConfiguration configuration, RavenServer server)
         {
             // we want our servers to be robust get early errors about such issues
             MemoryInformation.EnableEarlyOutOfMemoryChecks = true;
 
-            Logger = server.RavenServerLogger.GetLoggerFor(nameof(ServerStore), LogType.Server);
+            Logger = server.RavenServerLogger.GetLoggerFor<ServerStore>(LogType.Server);
+            var notificationsStorageLogger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(Logger.GetNameFor<NotificationsStorage>(nameof(ServerStore)), LogType.Server);
+            var notificationCenterLogger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(Logger.GetNameFor<NotificationCenter.NotificationCenter>(nameof(ServerStore)), LogType.Server);
+            var storageSpaceMonitorLogger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor<StorageSpaceMonitor>(LogType.Server);
+            var databaseInfoCacheLogger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor<DatabaseInfoCache>(LogType.Server);
+            var secretProtectionLogger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor<SecretProtection>(LogType.Server);
+            _genericLoggersDisposables.Add(notificationsStorageLogger);
+            _genericLoggersDisposables.Add(notificationCenterLogger);
+            _genericLoggersDisposables.Add(storageSpaceMonitorLogger);
+            _genericLoggersDisposables.Add(databaseInfoCacheLogger);
+            _genericLoggersDisposables.Add(secretProtectionLogger);
 
             Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
 
@@ -146,28 +158,24 @@ namespace Raven.Server.ServerWide
 
             DatabasesLandlord = new DatabasesLandlord(this);
 
-            _notificationsStorage = new NotificationsStorage(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor($"{nameof(NotificationsStorage)}: '{nameof(ServerStore)}'", LogType.Server));
 
-            NotificationCenter = new NotificationCenter.NotificationCenter(_notificationsStorage, database: null, ServerShutdown, configuration, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor($"{nameof(NotificationCenter)}: '{nameof(ServerStore)}'", LogType.Server));
-
-            ServerDashboardNotifications = new ServerDashboardNotifications(this, ServerShutdown);
+            _notificationsStorage = new NotificationsStorage(notificationsStorageLogger);
+            NotificationCenter = new NotificationCenter.NotificationCenter(_notificationsStorage, database: null, ServerShutdown, configuration, notificationCenterLogger);
+           ServerDashboardNotifications = new ServerDashboardNotifications(this, ServerShutdown);
 
             _operationsStorage = new OperationsStorage();
 
             Operations = new Operations(null, _operationsStorage, NotificationCenter, null,
                 (PlatformDetails.Is32Bits || Configuration.Storage.ForceUsing32BitsPager
                         ? TimeSpan.FromHours(12)
-                        : TimeSpan.FromDays(2))/*, serverStoreLogger.GetLoggerFor(nameof(Documents.Operations.Operations), LogType.Server)*/);
+                        : TimeSpan.FromDays(2)));
 
             LicenseManager = new LicenseManager(this);
 
             FeedbackSender = new FeedbackSender();
-
-            StorageSpaceMonitor = new StorageSpaceMonitor(NotificationCenter, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(Storage.StorageSpaceMonitor), LogType.Server));
-
-            DatabaseInfoCache = new DatabaseInfoCache(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(Documents.DatabaseInfoCache), LogType.Server));
-            
-            Secrets = new SecretProtection(configuration.Security, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(SecretProtection), LogType.Server));
+            StorageSpaceMonitor = new StorageSpaceMonitor(NotificationCenter, storageSpaceMonitorLogger);
+            DatabaseInfoCache = new DatabaseInfoCache(databaseInfoCacheLogger);
+            Secrets = new SecretProtection(configuration.Security, secretProtectionLogger);
 
             InitializationCompleted = new AsyncManualResetEvent(_shutdownNotification.Token);
 
@@ -2215,7 +2223,7 @@ namespace Raven.Server.ServerWide
                         ByteStringMemoryCache.Cleaner,
                         InitializationCompleted
                     };
-
+                    toDispose.AddRange(_genericLoggersDisposables);
                     foreach (var disposable in toDispose)
                         exceptionAggregator.Execute(() =>
                         {
@@ -2236,7 +2244,10 @@ namespace Raven.Server.ServerWide
 
                     exceptionAggregator.Execute(() => _timer?.Dispose());
 
-                    exceptionAggregator.ThrowIfNeeded();
+                    using (Logger)
+                    {
+                        exceptionAggregator.ThrowIfNeeded();
+                    }
                 }
                 finally
                 {
@@ -3186,14 +3197,14 @@ namespace Raven.Server.ServerWide
             return json;
         }
 
-        public static IEnumerable<Client.ServerWide.Operations.MountPointUsage> GetMountPointUsageDetailsFor(StorageEnvironmentWithType environment, bool includeTempBuffers, Logger logger)
+        public static IEnumerable<Client.ServerWide.Operations.MountPointUsage> GetMountPointUsageDetailsFor(StorageEnvironmentWithType environment, bool includeTempBuffers)
         {
             var fullPath = environment?.Environment.Options.BasePath.FullPath;
             if (fullPath == null)
                 yield break;
 
             var driveInfo = environment.Environment.Options.DriveInfoByPath?.Value;
-            var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(fullPath, logger, driveInfo?.BasePath);
+            var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(fullPath, driveInfo?.BasePath);
             if (diskSpaceResult == null)
                 yield break;
 
@@ -3213,7 +3224,7 @@ namespace Raven.Server.ServerWide
                 UsedSpaceByTempBuffers = 0
             };
 
-            var journalPathUsage = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.JournalPath?.FullPath, logger, driveInfo?.JournalPath);
+            var journalPathUsage = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.JournalPath?.FullPath, driveInfo?.JournalPath);
             if (journalPathUsage != null)
             {
                 if (diskSpaceResult.DriveName == journalPathUsage.DriveName)
@@ -3241,7 +3252,7 @@ namespace Raven.Server.ServerWide
 
             if (includeTempBuffers)
             {
-                var tempBuffersDiskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.TempPath.FullPath, logger, driveInfo?.TempPath);
+                var tempBuffersDiskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(environment.Environment.Options.TempPath.FullPath, driveInfo?.TempPath);
                 if (tempBuffersDiskSpaceResult != null)
                 {
                     if (diskSpaceResult.DriveName == tempBuffersDiskSpaceResult.DriveName)

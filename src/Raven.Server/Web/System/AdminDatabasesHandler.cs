@@ -739,11 +739,13 @@ namespace Raven.Server.Web.System
                                     databasesToDelete.Add(databaseName);
                                     break;
                                 case DatabaseLockMode.PreventDeletesIgnore:
-                                    if (Logger.IsOperationsEnabled)
+                                    var logger = ServerStore.Logger.GetLoggerFor(nameof(AdminDatabasesHandler), LogType.Server);
+
+                                    if (logger.IsOperationsEnabled)
                                     {
                                         clientCertificate ??= GetCurrentCertificate();
 
-                                        Logger.Operations($"Attempt to delete '{databaseName}' database was prevented due to lock mode set to '{rawRecord.LockMode}'. IP: '{HttpContext.Connection.RemoteIpAddress}'. Certificate: {clientCertificate?.Subject} ({clientCertificate?.Thumbprint})");
+                                        logger.Operations($"Attempt to delete '{databaseName}' database was prevented due to lock mode set to '{rawRecord.LockMode}'. IP: '{HttpContext.Connection.RemoteIpAddress}'. Certificate: {clientCertificate?.Subject} ({clientCertificate?.Thumbprint})");
                                     }
 
                                     continue;

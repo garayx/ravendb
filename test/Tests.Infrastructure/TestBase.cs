@@ -83,7 +83,7 @@ namespace FastTests
         {
             LicenseManager.IgnoreProcessorAffinityChanges = ignore;
         }
-
+        private Logger _logger = LoggingSource.Instance.GetLogger<TestBase>(nameof(TestBase));
         static unsafe TestBase()
         {
             IgnoreProcessorAffinityChanges(ignore: true);
@@ -648,7 +648,7 @@ namespace FastTests
                 if (options.DeletePrevious)
                     IOExtensions.DeleteDirectory(configuration.Core.DataDirectory.FullPath);
 
-                var server = new RavenServer(configuration, LoggingSource.Instance.GetLogger<TestBase>(nameof(TestBase)))
+                var server = new RavenServer(configuration, _logger)
                 {
                     ThrowOnLicenseActivationFailure = true,
                     DebugTag = caller
@@ -732,7 +732,7 @@ namespace FastTests
             if (_concurrentTestsSemaphoreTaken.Lower())
                 ConcurrentTestsSemaphore.Release();
 
-            var exceptionAggregator = new ExceptionAggregator("Could not dispose test");
+            var exceptionAggregator = new ExceptionAggregator(_logger, "Could not dispose test");
 
             var testOutcomeAnalyzer = new TestOutcomeAnalyzer(Context);
             var shouldSaveDebugPackage = testOutcomeAnalyzer.ShouldSaveDebugPackage();
@@ -765,8 +765,10 @@ namespace FastTests
             ServersForDisposal = null;
 
             RavenTestHelper.DeletePaths(_localPathsToDelete, exceptionAggregator);
-
-            exceptionAggregator.ThrowIfNeeded();
+            using (_logger)
+            {
+                exceptionAggregator.ThrowIfNeeded();
+            }
         }
 
         private static void DownloadAndSaveDebugPackage(bool shouldSaveDebugPackage, RavenServer server, ExceptionAggregator exceptionAggregator, Context context)

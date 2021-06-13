@@ -9,7 +9,7 @@ namespace Raven.Server.Documents.Indexes.Static.NuGet
 {
     public class ProjectContext : INuGetProjectContext
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(ProjectContext), LogType.Server);
+        private static readonly Logger Logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(ProjectContext), LogType.Server);
 
         public PackageExtractionContext PackageExtractionContext { get; set; }
 

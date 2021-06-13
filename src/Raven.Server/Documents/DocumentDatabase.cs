@@ -161,7 +161,7 @@ namespace Raven.Server.Documents
                 MetricCacher = new DatabaseMetricCacher(this);
                 TxMerger = new TransactionOperationsMerger(this, DatabaseShutdown);
                 ConfigurationStorage = new ConfigurationStorage(this);
-                NotificationCenter = new NotificationCenter.NotificationCenter(ConfigurationStorage.NotificationsStorage, Name, DatabaseShutdown, configuration, LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(Server.NotificationCenter.NotificationCenter), Name), LogType.Database));
+                NotificationCenter = new NotificationCenter.NotificationCenter(ConfigurationStorage.NotificationsStorage, Name, DatabaseShutdown, configuration, LoggingSource.Instance.GetGenericLogger().GetLoggerFor(Logger.GetNameFor(nameof(Server.NotificationCenter.NotificationCenter), Name), LogType.Database));
                 HugeDocuments = new HugeDocuments(NotificationCenter, ConfigurationStorage.NotificationsStorage, Name, configuration.PerformanceHints.HugeDocumentsCollectionSize,
                     configuration.PerformanceHints.HugeDocumentSize.GetValue(SizeUnit.Bytes));
 
@@ -1469,7 +1469,7 @@ namespace Raven.Server.Documents
 
             foreach (var environment in storageEnvironments)
             {
-                foreach (var mountPoint in ServerStore.GetMountPointUsageDetailsFor(environment, includeTempBuffers: includeTempBuffers, _logger))
+                foreach (var mountPoint in ServerStore.GetMountPointUsageDetailsFor(environment, includeTempBuffers: includeTempBuffers))
                 {
                     yield return mountPoint;
                 }

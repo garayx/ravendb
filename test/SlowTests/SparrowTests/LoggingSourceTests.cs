@@ -65,7 +65,7 @@ namespace SlowTests.SparrowTests
             //This is just to make sure the MaxFileSizeInBytes is get action for the first file
             loggingSource.SetupLogMode(LogMode.Operations, path, retentionTimeConfiguration, retentionSize, compressing);
 
-            var logger = new Logger(loggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
 
             for (var j = 0; j < 50; j++)
             {
@@ -145,7 +145,7 @@ namespace SlowTests.SparrowTests
                 retentionTimeConfiguration,
                 retentionSize);
 
-            var logger = new Logger(loggingSource, "Source" + testName, "Logger" + testName, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + testName, "Logger" + testName, LogType.Instance);
             await logger.OperationsWithWait("Some message");
 
             var todayLog = string.Empty;
@@ -193,7 +193,7 @@ namespace SlowTests.SparrowTests
             //This is just to make sure the MaxFileSizeInBytes is get action for the first file
             loggingSource.SetupLogMode(LogMode.Operations, path, retentionTimeConfiguration, retentionSize, false);
 
-            var logger = new Logger(loggingSource, "Source" + testName, "Logger" + testName, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + testName, "Logger" + testName, LogType.Instance);
             await logger.OperationsWithWait("Some message");
 
             var result = WaitForValue(() =>
@@ -248,7 +248,7 @@ namespace SlowTests.SparrowTests
             //This is just to make sure the MaxFileSizeInBytes is get action for the first file
             loggingSource.SetupLogMode(LogMode.Operations, path, retentionTime, retentionSize, compressing);
 
-            var logger = new Logger(loggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
 
             for (var j = 0; j < 50; j++)
             {
@@ -320,7 +320,7 @@ namespace SlowTests.SparrowTests
             //This is just to make sure the MaxFileSizeInBytes is get action for the first file
             loggingSource.SetupLogMode(LogMode.Operations, path, retentionTime, retentionSize, compressing);
 
-            var logger = new Logger(loggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
 
             for (var i = 0; i < 100; i++)
             {
@@ -433,7 +433,7 @@ namespace SlowTests.SparrowTests
             //This is just to make sure the MaxFileSizeInBytes is get action for the first file
             loggingSource.SetupLogMode(LogMode.Operations, path, retentionTime, retentionSize, compressing);
 
-            var logger = new Logger(loggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
 
             for (var i = 0; i < 1000; i++)
             {
@@ -475,7 +475,7 @@ namespace SlowTests.SparrowTests
 
             try
             {
-                var logger = new Logger(firstLoggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+                var logger = new Logger(firstLoggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
 
                 for (var i = 0; i < 100; i++)
                 {
@@ -508,7 +508,7 @@ namespace SlowTests.SparrowTests
                 try
                 {
                     secondLoggingSource.MaxFileSizeInBytes = 1024;
-                    var secondLogger = new Logger(secondLoggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+                    var secondLogger = new Logger(secondLoggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
 
                     for (var i = 0; i < 100; i++)
                     {
@@ -566,7 +566,7 @@ namespace SlowTests.SparrowTests
                 long.MaxValue,
                 false);
 
-            var logger = new Logger(loggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
             var tcs = new TaskCompletionSource<WebSocketReceiveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
             var socket = new DummyWebSocket();
             socket.ReceiveAsyncFunc = () => tcs.Task;
@@ -630,7 +630,7 @@ namespace SlowTests.SparrowTests
                 long.MaxValue,
                 false);
 
-            var logger = new Logger(loggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
             var tcs = new TaskCompletionSource<WebSocketReceiveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using var stream = new MemoryStream();
@@ -710,7 +710,7 @@ namespace SlowTests.SparrowTests
                 long.MaxValue,
                 false);
 
-            var logger = new Logger(loggingSource, "Source" + name, "Logger" + name, LogType.Instance);
+            var logger = new Logger(loggingSource, parent: null, "Source" + name, "Logger" + name, LogType.Instance);
             var tcs = new TaskCompletionSource<WebSocketReceiveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
             var socket = new DummyWebSocket();
             socket.ReceiveAsyncFunc = () => tcs.Task;

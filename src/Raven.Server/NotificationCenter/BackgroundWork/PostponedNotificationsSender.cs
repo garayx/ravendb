@@ -17,7 +17,7 @@ namespace Raven.Server.NotificationCenter.BackgroundWork
         private readonly ConcurrentSet<ConnectedWatcher> _watchers;
         private AsyncManualResetEvent _event;
 
-        public PostponedNotificationsSender(string resourceName, NotificationsStorage notificationsStorage,
+        public PostponedNotificationsSender(NotificationsStorage notificationsStorage,
             ConcurrentSet<ConnectedWatcher> watchers, CancellationToken shutdown, Logger logger)
             : base(shutdown, logger)
         {

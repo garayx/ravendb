@@ -37,7 +37,7 @@ namespace Raven.Server.ServerWide.Maintenance
         private readonly string _nodeTag;
         private readonly RachisConsensus<ClusterStateMachine> _engine;
         private readonly TransactionContextPool _contextPool;
-        private readonly Logger _logger;
+        internal readonly Logger _logger;
 
         private readonly TimeSpan _supervisorSamplePeriod;
         private readonly ServerStore _server;

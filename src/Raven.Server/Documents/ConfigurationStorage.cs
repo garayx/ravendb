@@ -62,7 +62,7 @@ namespace Raven.Server.Documents
 
             DirectoryExecUtils.SubscribeToOnDirectoryInitializeExec(options, db.Configuration.Storage, db.Name, DirectoryExecUtils.EnvironmentType.Configuration, _logger);
 
-            NotificationsStorage = new NotificationsStorage(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor($"{nameof(NotificationsStorage)}: '{db.Name}'", LogType.Database));
+            NotificationsStorage = new NotificationsStorage(LoggingSource.Instance.GetGenericLogger().GetLoggerFor($"{nameof(NotificationsStorage)}: '{db.Name}'", LogType.Database));
 
             OperationsStorage = new OperationsStorage();
 

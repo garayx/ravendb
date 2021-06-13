@@ -27,7 +27,7 @@ namespace Voron.Platform.Posix
 
             if (result == (int)Errno.ENOSPC)
             {
-                var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file, options._log.GetLoggerFor(nameof(DiskSpaceChecker), LogType.Database));
+                var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file);
 
                 // Use Pal's detailed error string (until PosixHelper will be entirely removed)
                 var nativeMsg = PalHelper.GetNativeErrorString(result, "Failed to AllocateFileSpace (PosixHelper)", out _);

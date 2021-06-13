@@ -16,7 +16,7 @@ namespace Raven.Client.Http
     {
         internal const string NotFoundResponse = "404 Response";
 
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(HttpCache), LogType.Client);
+        private static readonly Logger Logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(HttpCache), LogType.Client);
 
         private readonly long _maxSize;
         private readonly ConcurrentDictionary<string, HttpCacheItem> _items = new ConcurrentDictionary<string, HttpCacheItem>();

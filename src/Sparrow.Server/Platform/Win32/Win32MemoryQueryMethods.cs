@@ -87,7 +87,7 @@ namespace Sparrow.Server.Platform.Win32
             Encoding.ASCII.GetBytes(".buffers")
         };
 
-        private static readonly UnmanagedBuffersPool BuffersPool = new UnmanagedBuffersPool(LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(UnmanagedBuffersPool), "AddressWillCauseHardPageFault"), LogType.Server));
+        private static readonly UnmanagedBuffersPool BuffersPool = new UnmanagedBuffersPool(LoggingSource.Instance.GetGenericLogger().GetLoggerFor(Logger.GetNameFor(nameof(UnmanagedBuffersPool), "AddressWillCauseHardPageFault"), LogType.Server));
 
         private static uint? _pageSize;
 

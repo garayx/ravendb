@@ -594,24 +594,30 @@ namespace Sparrow.Logging
             writer.Flush();
         }
 
+        public Logger GetGenericLogger()
+        {
+            return GetLogger(Generic, Generic);
+        }
+
         public Logger GetLogger<T>(string source)
         {
             return GetLogger(source, typeof(T).FullName);
         }
 
+        private static int count = 0;
         public Logger GetLogger(string source, string logger)
         {
             //TODO: remove
             if (source == null)
             {
-
+                source = $"{logger} NULL_{Interlocked.Increment(ref count)}";
             }
 
             var holder = Loggers.GetOrAdd(source, _ => new LoggingSourceHolder
             {
-                Source = source, 
-                Type = logger, 
-                Logger = new Logger(loggingSource: this, source, logger, LogType.Instance), 
+                Source = "N/A", 
+                Type = LogType.Instance, 
+                Logger = new Logger(loggingSource: this, parent: null, "N/A", logger, LogType.Instance), //Top level logger=> parent = null
                 Mode = LogMode
             });
 

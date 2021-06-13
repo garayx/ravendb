@@ -12,20 +12,20 @@ namespace Sparrow.Logging
         public LogType Type { get; }
 
         private readonly LoggingSource _loggingSource;
-        private readonly string _source;
+        internal readonly string _source;
         internal readonly string _logger;
         internal readonly Logger _parent;
 
         [ThreadStatic]
         private static LogEntry _logEntry;
 
-        public Logger(LoggingSource loggingSource, string source, string logger, LogType type)
-        {
-            _loggingSource = loggingSource;
-            _source = source;
-            _logger = logger;
-            Type = type;
-        }
+        //public Logger(LoggingSource loggingSource, string source, string logger, LogType type)
+        //{
+        //    _loggingSource = loggingSource;
+        //    _source = source;
+        //    _logger = logger;
+        //    Type = type;
+        //}
 
         public Logger(LoggingSource loggingSource, Logger parent, string source, string logger, LogType type)
         {
@@ -241,7 +241,7 @@ namespace Sparrow.Logging
             return mode;
         }
 
-        public void SetLoggerMode(LogMode mode)
+        public void SetLoggerMode(LogMode mode, LogType? type = null)
         {
             switch (mode)
             {
@@ -263,7 +263,10 @@ namespace Sparrow.Logging
 
             foreach (var kvp in Loggers)
             {
-                kvp.Value.Logger.SetLoggerMode(mode);
+                if (type.HasValue && kvp.Value.Type != type)
+                    continue;
+
+                kvp.Value.Logger.SetLoggerMode(mode, type);
                 Loggers.UpdateMode(kvp.Key, mode);
 
                 //Loggers[kvp.Key] = new LoggingSourceHolder()
@@ -276,12 +279,13 @@ namespace Sparrow.Logging
                 //};
             }
         }
+
         public bool CanReset()
         {
             return _isOperationsEnabled != null || _isInfoEnabled != null;
         }
 
-        public void ResetLogger()
+        public void TryResetLogger()
         {
             if (_isOperationsEnabled == null && _isInfoEnabled == null)
                 return;
@@ -291,7 +295,7 @@ namespace Sparrow.Logging
 
             foreach (var kvp in Loggers)
             {
-                kvp.Value.Logger.ResetLogger();
+                kvp.Value.Logger.TryResetLogger();
                 Loggers.UpdateMode(kvp.Key, LogMode.None);
 
                 //Loggers[kvp.Key] = new LoggingSourceHolder()
@@ -304,6 +308,11 @@ namespace Sparrow.Logging
             }
         }
 
+        public static string GetNameFor<T>(string path)
+        {
+            return $"{typeof(T).Name}: '{path}'";
+        }
+
         public static string GetNameFor(string type, string path)
         {
             return $"{type}: '{path}'";
@@ -313,7 +322,7 @@ namespace Sparrow.Logging
         {
             // try remove from parent list
          //   _parent.Loggers.TryRemove(_logger, out _);
-            _parent.TryRemoveLogger(this._logger);
+            _parent?.TryRemoveLogger(_logger);
 
             // remove childs
             //foreach (var logger in Loggers)

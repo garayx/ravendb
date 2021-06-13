@@ -117,7 +117,6 @@ namespace Raven.Server.Storage
             {
                 var database = current.Value;
                 var storageConfig = database.Configuration.Storage;
-                var logger = database._logger.GetLoggerFor(nameof(DiskSpaceChecker), LogType.Database);
                 try
                 {
                     foreach (var item in database.GetAllStoragesEnvironment())
@@ -126,13 +125,13 @@ namespace Raven.Server.Storage
 
                         var options = (StorageEnvironmentOptions.DirectoryStorageEnvironmentOptions)item.Environment.Options;
 
-                        var dataDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.BasePath.FullPath, logger, driveInfo?.BasePath);
+                        var dataDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.BasePath.FullPath, driveInfo?.BasePath);
 
                         AddEnvironmentIfLowSpace(dataDisk);
 
                         if (options.JournalPath != null)
                         {
-                            var journalDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.JournalPath.FullPath, logger, driveInfo?.JournalPath);
+                            var journalDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.JournalPath.FullPath, driveInfo?.JournalPath);
 
                             if (dataDisk?.DriveName != journalDisk?.DriveName)
                                 AddEnvironmentIfLowSpace(journalDisk);
@@ -140,7 +139,7 @@ namespace Raven.Server.Storage
 
                         if (options.TempPath != null)
                         {
-                            var tempDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.TempPath.FullPath, logger, driveInfo?.TempPath);
+                            var tempDisk = DiskSpaceChecker.GetDiskSpaceInfo(options.TempPath.FullPath, driveInfo?.TempPath);
 
                             if (dataDisk?.DriveName != tempDisk?.DriveName)
                                 AddEnvironmentIfLowSpace(tempDisk);
@@ -207,6 +206,7 @@ namespace Raven.Server.Storage
         {
             _timer?.Dispose();
             _timer = null;
+            _logger.Dispose();
         }
 
         private class LowDiskSpace

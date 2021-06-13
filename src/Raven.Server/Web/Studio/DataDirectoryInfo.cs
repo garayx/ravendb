@@ -49,7 +49,7 @@ namespace Raven.Server.Web.Studio
         {
             var drivesInfo = PlatformDetails.RunningOnPosix ? DriveInfo.GetDrives() : null;
             var driveInfo = DiskSpaceChecker.GetDriveInfo(_path, drivesInfo, _logger, out var realPath);
-            var diskSpaceInfo = DiskSpaceChecker.GetDiskSpaceInfo(driveInfo.DriveName, _logger);
+            var diskSpaceInfo = DiskSpaceChecker.GetDiskSpaceInfo(driveInfo.DriveName);
 
             if (CanAccessPath(_path, out var pathAccessError) == false)
                 error = pathAccessError;

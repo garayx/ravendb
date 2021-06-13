@@ -43,7 +43,7 @@ namespace Raven.Server.NotificationCenter
 
         public void Initialize(DocumentDatabase database = null)
         {
-            _postponedNotificationSender = new PostponedNotificationsSender(_database, _notificationsStorage, Watchers, _shutdown, _logger.GetLoggerFor(nameof(PostponedNotificationsSender), _logger.Type));
+            _postponedNotificationSender = new PostponedNotificationsSender(_notificationsStorage, Watchers, _shutdown, _logger.GetLoggerFor(nameof(PostponedNotificationsSender), _logger.Type));
             BackgroundWorkers.Add(_postponedNotificationSender);
 
             if (database != null)

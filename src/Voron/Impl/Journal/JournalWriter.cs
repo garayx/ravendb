@@ -149,6 +149,7 @@ namespace Voron.Impl.Journal
             if (!_disposed.Raise())
                 return;
 
+            _log.Dispose();
             GC.SuppressFinalize(this);
             _options.IoMetrics.FileClosed(FileName.FullPath);
 

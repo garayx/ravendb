@@ -3,7 +3,7 @@ namespace Sparrow.Logging
     public class LoggingSourceHolder
     {
         public string Source { get; set; }
-        public string Type { get; set; }
+        public LogType Type { get; set; }
         public Logger Logger { get; set; }
         public LogMode Mode { get; set; }
     }

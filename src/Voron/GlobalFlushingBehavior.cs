@@ -45,7 +45,7 @@ namespace Voron
 
         private readonly ConcurrentDictionary<uint, MountPointInfo> _mountPoints = new ConcurrentDictionary<uint, MountPointInfo>();
 
-        private static readonly Logger _log = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(GlobalFlushingBehavior), LogType.Server);
+        private static readonly Logger _log = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(GlobalFlushingBehavior), LogType.Server);
 
         private class MountPointInfo
         {

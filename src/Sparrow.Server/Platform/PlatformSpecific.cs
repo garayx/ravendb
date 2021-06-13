@@ -16,7 +16,7 @@ namespace Sparrow.Server.Platform
         {
             public static string IsSwappingOnHddInsteadOfSsd()
             {
-                using (var logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(CheckPageFileOnHdd), LogType.Server))
+                using (var logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(CheckPageFileOnHdd), LogType.Server))
                 {
                     if (PlatformDetails.RunningOnPosix)
                         return CheckPageFileOnHdd.PosixIsSwappingOnHddInsteadOfSsd(logger);

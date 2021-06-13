@@ -22,6 +22,7 @@ using Raven.Server.Utils.Monitoring;
 using Sparrow;
 using Sparrow.Binary;
 using Sparrow.Json;
+using Sparrow.Logging;
 using Sparrow.LowMemory;
 using Sparrow.Server.Extensions;
 using Sparrow.Server.LowMemory;
@@ -151,8 +152,8 @@ namespace Raven.Server.Web.System
             result.InstalledMemoryInMb = memoryInfoResult.InstalledMemory.GetValue(SizeUnit.Megabytes);
             result.PhysicalMemoryInMb = memoryInfoResult.TotalPhysicalMemory.GetValue(SizeUnit.Megabytes);
             result.AllocatedMemoryInMb = memoryInfoResult.WorkingSet.GetValue(SizeUnit.Megabytes);
-            result.LowMemorySeverity = LowMemoryNotification.Instance.IsLowMemory(memoryInfoResult,
-                new LowMemoryMonitor(), out _);
+            using var lowMemoryMonitor = new LowMemoryMonitor(ServerStore.Logger.GetLoggerFor<LowMemoryMonitor>(LogType.Server));
+            result.LowMemorySeverity = LowMemoryNotification.Instance.IsLowMemory(memoryInfoResult, lowMemoryMonitor, out _);
 
             result.TotalSwapSizeInMb = memoryInfoResult.TotalSwapSize.GetValue(SizeUnit.Megabytes);
             result.TotalSwapUsageInMb = memoryInfoResult.TotalSwapUsage.GetValue(SizeUnit.Megabytes);

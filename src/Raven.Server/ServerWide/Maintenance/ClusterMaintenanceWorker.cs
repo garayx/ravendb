@@ -43,7 +43,7 @@ namespace Raven.Server.ServerWide.Maintenance
             _cts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
             _token = _cts.Token;
             _server = serverStore;
-            _logger = serverStore.Logger.GetLoggerFor(nameof(ClusterMaintenanceWorker), LogType.Cluster);
+            _logger = serverStore.Observer._logger.GetLoggerFor<ClusterMaintenanceWorker>(LogType.Cluster);
             _name = $"Heartbeats worker connection to leader {leader} in term {term}";
             _temporaryDirtyMemoryAllowedPercentage = _server.Server.ServerStore.Configuration.Memory.TemporaryDirtyMemoryAllowedPercentage;
 

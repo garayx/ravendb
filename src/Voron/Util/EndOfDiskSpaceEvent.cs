@@ -28,7 +28,7 @@ namespace Voron.Util
 
         public void AssertCanContinueWriting()
         {
-            var diskInfoResult = DiskSpaceChecker.GetDiskSpaceInfo(_path, _logger);
+            var diskInfoResult = DiskSpaceChecker.GetDiskSpaceInfo(_path);
             if (diskInfoResult == null)
                 return;
 

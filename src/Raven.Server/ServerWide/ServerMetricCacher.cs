@@ -12,12 +12,10 @@ namespace Raven.Server.ServerWide
     {
         private readonly SmapsReader _smapsReader;
         private readonly RavenServer _server;
-        private Logger _logger;
 
         public ServerMetricCacher(RavenServer server)
         {
             _server = server;
-            _logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(ServerMetricCacher), LogType.Server);
 
             if (PlatformDetails.RunningOnLinux)
                 _smapsReader = new SmapsReader(new[] { new byte[SmapsReader.BufferSize], new byte[SmapsReader.BufferSize] });
@@ -47,7 +45,7 @@ namespace Raven.Server.ServerWide
 
         private DiskSpaceResult CalculateDiskSpaceInfo()
         {
-            return DiskSpaceChecker.GetDiskSpaceInfo(_server.ServerStore.Configuration.Core.DataDirectory.FullPath, _logger);
+            return DiskSpaceChecker.GetDiskSpaceInfo(_server.ServerStore.Configuration.Core.DataDirectory.FullPath);
         }
 
         private GCMemoryInfo CalculateGcMemoryInfo(GCKind gcKind)

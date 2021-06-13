@@ -2588,7 +2588,7 @@ namespace Raven.Server
                     return;
 
                 Disposed = true;
-                var ea = new ExceptionAggregator("Failed to properly close RavenServer");
+                var ea = new ExceptionAggregator(RavenServerLogger, "Failed to properly close RavenServer");
 
                 ea.Execute(() => _refreshClusterCertificate?.Dispose());
                 ea.Execute(() => AdminConsolePipe?.Dispose());
@@ -2622,8 +2622,10 @@ namespace Raven.Server
 
                 // this should be last
                 ea.Execute(() => AfterDisposal?.Invoke());
-
-                ea.ThrowIfNeeded();
+                using (RavenServerLogger)
+                {
+                    ea.ThrowIfNeeded();
+                }
             }
         }
 

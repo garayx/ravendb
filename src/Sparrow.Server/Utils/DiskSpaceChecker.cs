@@ -12,12 +12,14 @@ namespace Sparrow.Server.Utils
 {
     public static class DiskSpaceChecker
     {
+        private static readonly Logger Logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(DiskSpaceChecker), LogType.Server);
+
         // from https://github.com/dotnet/corefx/blob/9c06da6a34fcefa6fb37776ac57b80730e37387c/src/Common/src/System/IO/PathInternal.Windows.cs#L52
         public const short WindowsMaxPath = short.MaxValue;
 
         public const int LinuxMaxPath = 4096;
 
-        public static DiskSpaceResult GetDiskSpaceInfo(string pathToCheck, Logger logger, DriveInfoBase driveInfoBase = null)
+        public static DiskSpaceResult GetDiskSpaceInfo(string pathToCheck, DriveInfoBase driveInfoBase = null)
         {
             if (string.IsNullOrEmpty(pathToCheck))
                 return null;
@@ -25,8 +27,8 @@ namespace Sparrow.Server.Utils
             var result = Pal.rvn_get_path_disk_space(pathToCheck, out var totalFreeBytes, out var totalDiskBytes, out int error);
             if (result != PalFlags.FailCodes.Success)
             {
-                if (logger.IsInfoEnabled)
-                    logger.Info($"Failed to get file system statistics for path: {pathToCheck}, error: {error}");
+                if (Logger.IsInfoEnabled)
+                    Logger.Info($"Failed to get file system statistics for path: {pathToCheck}, error: {error}");
 
                 return null;
             }

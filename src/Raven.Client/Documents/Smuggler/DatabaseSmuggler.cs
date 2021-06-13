@@ -19,7 +19,7 @@ namespace Raven.Client.Documents.Smuggler
 {
     public class DatabaseSmuggler
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(DatabaseSmuggler), LogType.Client);
+        private static readonly Logger Logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(DatabaseSmuggler), LogType.Client);
 
         private readonly IDocumentStore _store;
         private readonly string _databaseName;

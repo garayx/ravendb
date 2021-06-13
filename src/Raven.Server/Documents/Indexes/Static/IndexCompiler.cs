@@ -34,7 +34,7 @@ namespace Raven.Server.Documents.Indexes.Static
     [SuppressMessage("ReSharper", "ConditionIsAlwaysTrueOrFalse")]
     public static class IndexCompiler
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(IndexCompiler), LogType.Server);
+        private static readonly Logger Logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(IndexCompiler), LogType.Server);
 
         internal static readonly bool EnableDebugging = false; // for debugging purposes (mind https://issues.hibernatingrhinos.com/issue/RavenDB-6960)
 

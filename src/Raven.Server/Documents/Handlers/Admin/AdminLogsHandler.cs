@@ -14,6 +14,7 @@ using Sparrow;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
 using Sparrow.Logging;
+using Sparrow.Server.Json.Sync;
 
 namespace Raven.Server.Documents.Handlers.Admin
 {
@@ -100,7 +101,6 @@ namespace Raven.Server.Documents.Handlers.Admin
         //{
         //    djv["DatabaseLoggers"] = NewMethod(dbLoggers.Logger.Loggers);
         //}
-
         [RavenAction("/admin/loggers", "GET", AuthorizationStatus.Operator)]
         public Task GetAllLoggers()
         {
@@ -112,26 +112,25 @@ namespace Raven.Server.Documents.Handlers.Admin
                 DynamicJsonValue djv = null;
                 if (string.IsNullOrEmpty(typeString) == false)
                 {
-                    var type = (LogType)Enum.Parse(typeof(LogType), typeString);
+                    var type = (LogType)Enum.Parse(typeof(LogType), typeString, ignoreCase: true);
 
                     switch (type)
                     { 
                         case LogType.Server:
                             djv = new DynamicJsonValue
                             {
-                                //TODO: call all Loggers
-                                ["ServerLoggers"] = GetAllSubLoggers(Server.RavenServerLogger.Loggers)
+                                ["Loggers"] = GetAllSubLoggers(Server.RavenServerLogger.Loggers)
                             };
                             break;
                         case LogType.Cluster:
                             var count = 0;
-                            var dja = new DynamicJsonArray();
+                         //   var dja = new DynamicJsonArray();
                             var dic = new Dictionary<string, LoggingSourceHolder>();
                             foreach (var holder in ServerStore.Logger.Loggers)
                             {
-                                if ((LogType)Enum.Parse(typeof(LogType), holder.Value.Type) == LogType.Cluster)
+                                if (holder.Value.Type == LogType.Cluster)
                                 {
-                                    dic.Add(holder.Value.Source, holder.Value);
+                                    dic.Add(holder.Key, holder.Value);
                                 }
                             }
                             if (dic.Count > 0)
@@ -139,7 +138,7 @@ namespace Raven.Server.Documents.Handlers.Admin
                                 djv = new DynamicJsonValue
                                 {
                              //       ["Count"] = count,
-                                    ["ClusterLoggers"] = GetAllSubLoggers(dic),
+                                    ["Loggers"] = GetAllSubLoggers(dic),
                                 };
                             }
 
@@ -148,26 +147,26 @@ namespace Raven.Server.Documents.Handlers.Admin
                             //TODO
                             break;
                         case LogType.Database:
-                            if (ServerStore.Logger.Loggers.TryGetSubLogger<DocumentDatabase>(out var logger))
+                            if (ServerStore.Logger.Loggers.TryGetSubLogger<DocumentDatabase>(out var documentDatabaseLogger))
                             {
                                 djv = new DynamicJsonValue
                                 {
-                                    ["DatabaseLoggers"] = GetAllSubLoggers(logger.Loggers)
+                                    ["DatabaseLoggers"] = GetAllSubLoggers(documentDatabaseLogger.Loggers)
                                 };
                             }
                             break;
                         case LogType.Index:
-                            if (ServerStore.Logger.Loggers.TryGetSubLogger<DocumentDatabase>(out logger))
+                            if (ServerStore.Logger.Loggers.TryGetSubLogger<DocumentDatabase>(out documentDatabaseLogger))
                             {
                                 count = 0;
-                                dja = new DynamicJsonArray();
+                               var dja = new DynamicJsonArray();
                                 // TODO: this foreach can be prevented by using "indexstorage" (or similar) to hold all indexes of document db (like I do with documentStore logger of serverStore 
-                                foreach (var dbLogger in logger.GetLoggers())
+                                foreach (var dbLogger in documentDatabaseLogger.GetLoggers())
                                 {
                                     dic = new Dictionary<string, LoggingSourceHolder>();
                                     foreach (var holder in dbLogger.Value.Logger.GetLoggers())
                                     {
-                                        if ((LogType)Enum.Parse(typeof(LogType), holder.Value.Type) == LogType.Index)
+                                        if (holder.Value.Type == LogType.Index)
                                         {
                                             dic.Add(holder.Value.Source, holder.Value);
                                         }
@@ -204,7 +203,7 @@ namespace Raven.Server.Documents.Handlers.Admin
                 {
                     djv = new DynamicJsonValue
                     {
-                        ["AllLoggers"] = GetAllSubLoggers(LoggingSource.Instance.Loggers)
+                        ["Loggers"] = GetAllSubLoggers(LoggingSource.Instance.Loggers)
                     };
                 }
 
@@ -245,7 +244,7 @@ namespace Raven.Server.Documents.Handlers.Admin
                 djv[nameof(LoggingSourceHolder.Source)] = kvp.Value.Source;
                 djv[nameof(LoggingSourceHolder.Type)] = kvp.Value.Type;
                 djv[nameof(LoggingSourceHolder.Mode)] = kvp.Value.Mode;
-                if (kvp.Value.Logger.HasLoggers() == false)
+                if (kvp.Value.Logger.HasLoggers())
                 {
                    // djv[nameof(Logger.Loggers)] = GetAllSubLoggers(kvp.Value.Logger.Loggers);
                     djv["Loggers"] = GetAllSubLoggers(kvp.Value.Logger.Loggers);
@@ -257,105 +256,57 @@ namespace Raven.Server.Documents.Handlers.Admin
             return dja;
         }
 
-        private static bool SetLoggerModeByName(IEnumerable<KeyValuePair<string, LoggingSourceHolder>> loggers, string name, LogMode mode)
-        {
-            foreach (var kvp in loggers)
-            {
-                if (kvp.Key == name)
-                {
-                    // TODO: set the logger mode
-                    kvp.Value.Logger.SetLoggerMode(mode);
-                    //var logger = kvp.Value.Logger;
-                    //logger.SetLoggerMode(mode);
-                    //kvp.Value.Logger = logger;
-
-
-                    //TODO:
-                 //   var k =loggers[kvp.Key];
-                    //    = new LoggingSourceHolder()
-                    //{
-                    //    Source = kvp.Value.Source, Type = kvp.Value.Type, Logger = kvp.Value.Logger, Mode = kvp.Value.Logger.GetLogMode()
-                    //};
-              //      k.Mode = mode;
-                    return true;
-                }
-
-                if (kvp.Value.Logger.HasLoggers() == false)
-                    continue;
-
-                if (SetLoggerModeByName(kvp.Value.Logger.Loggers, name, mode))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static bool ResetLoggerModeByName(IEnumerable<KeyValuePair<string, LoggingSourceHolder>> loggers, string name)
-        {
-            foreach (var kvp in loggers)
-            {
-                if (kvp.Key == name)
-                {
-                    if (kvp.Value.Logger.CanReset() == false)
-                        return false;
-
-                    kvp.Value.Logger.ResetLogger();
-                    //TODO:
-                    //loggers[kvp.Key] = new LoggingSourceHolder()
-                    //{
-                    //    Source = kvp.Value.Source,
-                    //    Type = kvp.Value.Type,
-                    //    Logger = kvp.Value.Logger,
-                    //    Mode = kvp.Value.Logger.GetLogMode()
-                    //};
-
-                    return true;
-                }
-
-                if (kvp.Value.Logger.HasLoggers() == false)
-                    continue;
-
-                if (ResetLoggerModeByName(kvp.Value.Logger.Loggers, name))
-                    return true;
-            }
-
-            return false;
-        }
-
-        //TODO: add type? 
-        // /admin/loggers/reset/all?type=Index
-        // /admin/loggers/reset/all?type=Cluster
         [RavenAction("/admin/loggers/reset/all", "GET", AuthorizationStatus.Operator)]
         public Task ResetAllLoggers()
         {
-            foreach (var kvp in LoggingSource.Instance.Loggers)
-            {
-                kvp.Value.Logger.ResetLogger();
-                LoggingSource.Instance.Loggers[kvp.Key] = new LoggingSourceHolder()
-                {
-                    Source = kvp.Value.Source,
-                    Type = kvp.Value.Type,
-                    Logger = kvp.Value.Logger,
-                    Mode = kvp.Value.Logger.GetLogMode()
-                };
-            }
-
+            ResetAllLoggersInternal(LoggingSource.Instance.Loggers);
             return Task.CompletedTask;
         }
 
-        [RavenAction("/admin/loggers/reset", "GET", AuthorizationStatus.Operator)]
-        public Task ResetLoggers()
+        // /admin/loggers/reset?mode=type
+        // /admin/loggers/reset?mode=name
+        [RavenAction("/admin/loggers/reset", "POST", AuthorizationStatus.Operator)]
+        public async Task ResetLoggerMode()
         {
-            StringValues loggers = GetStringValuesQueryString("logger", required: true);
-            if (loggers.Count == 0) 
-                return Task.CompletedTask;
-            var test = loggers.First().ToString();
-            foreach (var logger in loggers)
+            var modeString = GetStringQueryString("mode", required: true);
+            var mode = (SetMode)Enum.Parse(typeof(SetMode), modeString, ignoreCase: true);
+            using (ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
             {
-                var success = ResetLoggerModeByName(LoggingSource.Instance.Loggers, logger);
-            }
+                var input = await ctx.ReadForMemoryAsync(RequestBodyStream(), "Loggers");
+                if (input.TryGet("Loggers", out BlittableJsonReaderArray loggers) == false)
+                    ThrowRequiredPropertyNameInRequest("Loggers");
 
-            return Task.CompletedTask;
+                using (loggers)
+                {
+                    switch (mode)
+                    {
+                        case SetMode.Name:
+                            var changedNames = new HashSet<string>();
+                            foreach (BlittableJsonReaderObject bjro in loggers)
+                            {
+                                var holder = JsonDeserializationServer.LoggerHolder(bjro);
+                                if (changedNames.Add(holder.Name) == false)
+                                    continue;
+
+                                SetLoggerModeByName(LoggingSource.Instance.Loggers, holder.Name, holder.Mode, reset: true);
+                            }
+                            break;
+                        case SetMode.Type:
+                            var changedTypes = new HashSet<LogType>();
+                            foreach (BlittableJsonReaderObject bjro in loggers)
+                            {
+                                var holder = JsonDeserializationServer.LoggerHolder(bjro);
+                                if (changedTypes.Add(holder.Type) == false)
+                                    continue;
+
+                                SetLoggerModeByType(LoggingSource.Instance.Loggers, holder.Type, holder.Mode, reset: true);
+                            }
+                            break;
+                        default:
+                            throw new InvalidOperationException($"not supported mode: '{mode}'.");
+                    }
+                }
+            }
         }
 
         // /admin/loggers/set?mode=type
@@ -363,44 +314,145 @@ namespace Raven.Server.Documents.Handlers.Admin
         [RavenAction("/admin/loggers/set", "POST", AuthorizationStatus.Operator)]
         public async Task SetLoggerMode()
         {
-            var mode = GetStringQueryString("mode", required: true);
-
-            switch (mode)
+            var modeString = GetStringQueryString("mode", required: true);
+            var mode = (SetMode)Enum.Parse(typeof(SetMode), modeString, ignoreCase: true);
+            using (ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
             {
-                case "name":
-                    using (ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
+                var input = await ctx.ReadForMemoryAsync(RequestBodyStream(), "Loggers");
+                if (input.TryGet("Loggers", out BlittableJsonReaderArray loggers) == false)
+                    ThrowRequiredPropertyNameInRequest("Loggers");
+
+                using (loggers)
+                {
+                    switch (mode)
                     {
-                        //TODO: put better names
-                        var input = await ctx.ReadForMemoryAsync(RequestBodyStream(), "Loggers");
-                        if (input.TryGet("Loggers", out BlittableJsonReaderArray loggers) == false)
-                            ThrowRequiredPropertyNameInRequest("Loggers");
-                        // TODO: MB pass the loggers type as well
-                        foreach (BlittableJsonReaderObject bjro in loggers)
-                        {
-                            LoggerHolder holder = JsonDeserializationServer.LoggerHolder(bjro);
-                            var success = SetLoggerModeByName(LoggingSource.Instance.Loggers, holder.Name, holder.Mode);
-                        }
+                        case SetMode.Name:
+                            var changedNames = new HashSet<string>();
+                            foreach (BlittableJsonReaderObject bjro in loggers)
+                            {
+                                var holder = JsonDeserializationServer.LoggerHolder(bjro);
+                                if (changedNames.Add(holder.Name) == false)
+                                    continue;
+
+                                SetLoggerModeByName(LoggingSource.Instance.Loggers, holder.Name, holder.Mode);
+                            }
+                            break;
+                        case SetMode.Type:
+                            var changedTypes = new HashSet<LogType>();
+                            foreach (BlittableJsonReaderObject bjro in loggers)
+                            {
+                                var holder = JsonDeserializationServer.LoggerHolder(bjro);
+                                if (changedTypes.Add(holder.Type) == false)
+                                    continue;
+
+                                SetLoggerModeByType(LoggingSource.Instance.Loggers, holder.Type, holder.Mode);
+                            }
+                            break;
+                        default:
+                            throw new InvalidOperationException($"not supported mode: '{mode}'.");
                     }
-                    break;
-                case "type":
-                    break;
-                default:
-                    throw new InvalidOperationException($"not supported mode: '{mode}'.");
+                }
             }
-
-
-
-            //var names = GetStringValuesQueryString("names", required: false);
-            //if (names.Count == 0) // TODO: throw exception?
-            //    return;
-
-            //var mode = (LogMode)Enum.Parse(typeof(LogMode), GetStringQueryString("mode", required: true));
-
-            //foreach (var logger in LoggingSource.Instance.Loggers)
-            //{
-            //    logger.Value.Logger.ResetLogger();
-            //}
         }
+
+        private static void SetLoggerModeByName(IEnumerable<KeyValuePair<string, LoggingSourceHolder>> loggers, string name, LogMode mode, bool reset = false)
+        {
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("Logger name cannot be null or empty.");
+
+            foreach (var kvp in loggers)
+            {
+                if (kvp.Key == name)
+                    SetLoggerInternal(kvp, mode, reset);
+
+                if (kvp.Value.Logger.HasLoggers() == false)
+                    continue;
+
+                SetLoggerModeByName(kvp.Value.Logger.Loggers, name, mode, reset);
+            }
+        }
+
+        private static void SetLoggerModeByType(IEnumerable<KeyValuePair<string, LoggingSourceHolder>> loggers, LogType type, LogMode mode, bool reset = false)
+        {
+            foreach (var kvp in loggers)
+            {
+                if (kvp.Value.Type == type)
+                    SetLoggerInternal(kvp, mode, reset, type);
+
+                if (kvp.Value.Logger.HasLoggers() == false)
+                    continue;
+
+                SetLoggerModeByType(kvp.Value.Logger.Loggers, type, mode, reset);
+            }
+        }
+
+        private static void ResetAllLoggersInternal(IEnumerable<KeyValuePair<string, LoggingSourceHolder>> loggers)
+        {
+            foreach (var kvp in loggers)
+            {
+                SetLoggerInternal(kvp, LogMode.None, reset: true);
+
+                if (kvp.Value.Logger.HasLoggers() == false)
+                    continue;
+
+                ResetAllLoggersInternal(kvp.Value.Logger.Loggers);
+            }
+        }
+
+        private static void SetLoggerInternal(KeyValuePair<string, LoggingSourceHolder> kvp, LogMode mode, bool reset, LogType? type = null)
+        {
+            (_, LoggingSourceHolder holder) = kvp;
+
+            if (reset)
+            {
+                holder.Logger.TryResetLogger();
+                holder.Mode = holder.Logger.GetLogMode();
+            }
+            else
+            {
+                holder.Logger.SetLoggerMode(mode, type);
+                holder.Mode = mode;
+            }
+        }
+
+        //private static bool ResetLoggerModeByName(IEnumerable<KeyValuePair<string, LoggingSourceHolder>> loggers, string name)
+        //{
+        //    foreach (var kvp in loggers)
+        //    {
+        //        if (kvp.Key == name)
+        //        {
+        //            if (kvp.Value.Logger.CanReset() == false)
+        //                return false;
+
+        //            kvp.Value.Logger.ResetLogger();
+        //            //TODO:
+        //            //loggers[kvp.Key] = new LoggingSourceHolder()
+        //            //{
+        //            //    Source = kvp.Value.Source,
+        //            //    Type = kvp.Value.Type,
+        //            //    Logger = kvp.Value.Logger,
+        //            //    Mode = kvp.Value.Logger.GetLogMode()
+        //            //};
+
+        //            return true;
+        //        }
+
+        //        if (kvp.Value.Logger.HasLoggers() == false)
+        //            continue;
+
+        //        if (ResetLoggerModeByName(kvp.Value.Logger.Loggers, name))
+        //            return true;
+        //    }
+
+        //    return false;
+        //}
+
+    }
+
+    internal enum SetMode
+    {
+        Name = 0,
+        Type = 1
     }
 
     internal class LoggerHolderParent1

@@ -66,7 +66,7 @@ namespace Raven.Server.Utils
             if (pipe == null)
                 return;
 
-            var logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(Pipes), LogType.Server);
+            var logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(Pipes), LogType.Server);
             try
             {
                 while (true)
@@ -118,7 +118,7 @@ namespace Raven.Server.Utils
 
         private static void DeleteOldPipeFiles(string pipeDir)
         {
-            var logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(Pipes), LogType.Server);
+            var logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(Pipes), LogType.Server);
             try
             {
                 if (Directory.Exists(pipeDir) == false)
@@ -166,7 +166,7 @@ namespace Raven.Server.Utils
             if (pipe == null)
                 return;
 
-            var logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(Pipes), LogType.Server);
+            var logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(Pipes), LogType.Server);
             try
             {
                 while (true)

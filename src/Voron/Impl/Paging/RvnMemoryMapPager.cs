@@ -65,7 +65,7 @@ namespace Voron.Impl.Paging
                 }
                 catch (DiskFullException dfEx)
                 {
-                    var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file.FullPath, _logger);
+                    var diskSpaceResult = DiskSpaceChecker.GetDiskSpaceInfo(file.FullPath);
                     throw new DiskFullException(file.FullPath, initialFileSize.Value, diskSpaceResult?.TotalFreeSpace.GetValue(SizeUnit.Bytes), dfEx.Message);
                 }
             }

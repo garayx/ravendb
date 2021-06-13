@@ -335,7 +335,7 @@ namespace Voron
             var journalPathSetting = journalPath != null ? new VoronPathSetting(journalPath) : pathSetting.Combine("Journals");
 
             return new DirectoryStorageEnvironmentOptions(pathSetting, tempPathSetting, journalPathSetting, ioChangesNotifications, catastrophicFailureNotification, logger == null 
-                ? LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(Logger.GetNameFor(nameof(StorageEnvironmentOptions), tempPathSetting.FullPath), LogType.Server) 
+                ? LoggingSource.Instance.GetGenericLogger().GetLoggerFor(Logger.GetNameFor(nameof(StorageEnvironmentOptions), tempPathSetting.FullPath), LogType.Server) 
                 : logger.GetLoggerFor(Logger.GetNameFor(nameof(StorageEnvironmentOptions), tempPathSetting.FullPath), logger.Type));
         }
 
@@ -1154,6 +1154,8 @@ namespace Voron
             ScratchSpaceUsage?.Dispose();
 
             Disposing();
+
+            _log.Dispose();
         }
 
         public void NullifyHandlers()

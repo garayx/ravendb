@@ -9,7 +9,7 @@ namespace Sparrow.Utils
 {
     public class NativeMemoryCleaner<TStack, TPooledItem> : IDisposable where TPooledItem : PooledItem where TStack : StackHeader<TPooledItem>
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(NativeMemoryCleaner<TStack, TPooledItem>), LogType.Server);
+        private static readonly Logger Logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(NativeMemoryCleaner<TStack, TPooledItem>), LogType.Server);
         private readonly object _lock = new object();
         private readonly Func<object, ICollection<TStack>> _getContextsFromCleanupTarget;
         private readonly SharedMultipleUseFlag _lowMemoryFlag;

@@ -126,7 +126,7 @@ namespace Voron.Platform.Win32
                 {
                     var directoryPath = Path.GetDirectoryName(filePath);
                     // disk space info is expecting the directory path and not the file path
-                    var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(directoryPath, logger);
+                    var driveInfo = DiskSpaceChecker.GetDiskSpaceInfo(directoryPath);
                     throw new DiskFullException(filePath, length, driveInfo?.TotalFreeSpace.GetValue(SizeUnit.Bytes), new Win32Exception(lastError).Message);
                 }
 

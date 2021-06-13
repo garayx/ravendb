@@ -24,7 +24,7 @@ namespace Raven.Client.Documents.Indexes
     /// </summary>
     public static class IndexCreation
     {
-        private static readonly Logger Logger = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(IndexCreation), LogType.Client);
+        private static readonly Logger Logger = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(IndexCreation), LogType.Client);
 
         /// <summary>
         /// Creates the indexes found in the specified assembly.

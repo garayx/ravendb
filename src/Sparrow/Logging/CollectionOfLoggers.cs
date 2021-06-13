@@ -21,15 +21,27 @@ namespace Sparrow.Logging
         }
 
         // todo: Split source & type
-        public Logger Add(LoggingSource source, Logger parent, string name, LogType type)
+        public Logger Add(LoggingSource loggingSource, Logger parent, string name, LogType type)
         {
             var holder = _loggers.GetOrAdd(name, _ =>
-                 new LoggingSourceHolder
-                 {
-                     Source = name,
-                     Type = type.ToString(),
-                     Logger = new Logger(source, parent: parent, type.ToString(), name, type)
-                 });
+                {
+                    string source;
+                    LogMode mode; 
+                    if (parent == null)
+                    {
+                        source = "N/A";
+                        mode = loggingSource.LogMode;
+                    }
+                    else
+                    {
+                        source = parent._logger;
+                        mode = parent.GetLogMode();
+                    }
+
+                    var logger = new Logger(loggingSource, parent: parent, source, name, type);
+                    return new LoggingSourceHolder { Source = source, Type = type, Logger = logger, Mode = mode};
+                }
+               );
 
             return holder.Logger;
         }

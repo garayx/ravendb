@@ -410,7 +410,7 @@ namespace Raven.Server.Rachis.Remote
                 _destTag = rachisHello.DebugDestinationIdentifier ?? _destTag;
 
                 _log._parent.TryRemoveLogger(_log._logger);
-                _log = _log._parent.GetLoggerFor($"{_src} > {_destTag}", LogType.Server);
+                _log = _log._parent.GetLoggerFor(Logger.GetNameFor<RemoteConnection>($"{_src} > {_destTag}"), LogType.Server);
                 _info.Destination = _destTag;
 
                 return rachisHello;

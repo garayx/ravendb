@@ -424,7 +424,7 @@ namespace Raven.Server.Rachis
                 DebuggerAttachedTimeout.LongTimespanIfDebugging(ref _operationTimeout);
                 DebuggerAttachedTimeout.LongTimespanIfDebugging(ref _electionTimeout);
 
-                ContextPool = new ClusterContextPool(changes, _persistentState, Log.GetLoggerFor(nameof(ClusterContextPool), LogType.Cluster), configuration.Memory.MaxContextSizeToKeep);
+                ContextPool = new ClusterContextPool(changes, _persistentState, Log.GetLoggerFor<ClusterContextPool>(LogType.Cluster), configuration.Memory.MaxContextSizeToKeep);
 
                 ClusterTopology topology;
                 using (ContextPool.AllocateOperationContext(out ClusterOperationContext context))
@@ -1116,8 +1116,8 @@ namespace Raven.Server.Rachis
             RemoteConnection remoteConnection = null;
             try
             {
-
-                remoteConnection = new RemoteConnection(_tag, CurrentTerm, stream, disconnect, Log.GetLoggerFor($"{_tag} > ?", LogType.Cluster));
+                
+                remoteConnection = new RemoteConnection(_tag, CurrentTerm, stream, disconnect, Log.GetLoggerFor(Logger.GetNameFor<RemoteConnection>($"{_tag} > ?"), LogType.Cluster));
                 try
                 {
                     RachisHello initialMessage;

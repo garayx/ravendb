@@ -29,7 +29,7 @@ namespace Voron.Impl
             return prefetcher;
         });
 
-        private static readonly Logger _log = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(GlobalPrefetchingBehavior), LogType.Server);
+        private readonly Logger _log = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(GlobalPrefetchingBehavior), LogType.Server);
 
         public readonly BlockingCollection<PrefetchRanges> CommandQueue = new BlockingCollection<PrefetchRanges>(128);
 

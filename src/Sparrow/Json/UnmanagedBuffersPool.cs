@@ -12,7 +12,7 @@ namespace Sparrow.Json
 {
     public unsafe class UnmanagedBuffersPool : IDisposable
     {
-        private readonly Logger _log;/* = LoggingSource.Instance.GetLogger<dynamic>(LoggingSource.Generic).GetLoggerFor(nameof(UnmanagedBuffersPool), LogType.Client);*/
+        private readonly Logger _log;/* = LoggingSource.Instance.GetGenericLogger().GetLoggerFor(nameof(UnmanagedBuffersPool), LogType.Client);*/
 
         private readonly ConcurrentStack<AllocatedMemoryData>[] _freeSegments;
 
