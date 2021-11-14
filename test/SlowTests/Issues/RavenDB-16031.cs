@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using FastTests;
+using Tests.Infrastructure;
 using Raven.Client;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
@@ -12,9 +13,9 @@ namespace SlowTests.Issues
 {
     public class RavenDB_16031 : RavenTestBase
     {
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, Skip = "RavenDB-19402")]
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, Skip = "RavenDB-19402")]
         public void ShouldWork(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -142,7 +143,7 @@ namespace SlowTests.Issues
         ac: g.key.ac,
         a: {
             b: g.key.ab,
-            c: g.key.ac
+            c: g.key.ac,
             f: g.values.reduce((res, val) => res + val.a.f, 0)
         },
         d: g.values.reduce((res, val) => res + val.d, 0)

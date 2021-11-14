@@ -1,4 +1,5 @@
-﻿// -----------------------------------------------------------------------
+﻿using Tests.Infrastructure;
+// -----------------------------------------------------------------------
 //  <copyright file="SqlEtlTests.cs" company="Hibernating Rhinos LTD">
 //      Copyright (c) Hibernating Rhinos LTD. All rights reserved.
 //  </copyright>
@@ -66,10 +67,11 @@ for (var i = 0; i < this.OrderLines.length; i++) {
 loadToOrders(orderData);
 ";
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task ReplicateMultipleBatches()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task ReplicateMultipleBatches(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -157,10 +159,11 @@ DROP DATABASE [SqlReplication-{dbName}]";
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task SimpleTransformation()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task SimpleTransformation(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -201,10 +204,11 @@ DROP DATABASE [SqlReplication-{dbName}]";
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task ShouldHandleCaseMismatchBetweenTableDefinitionAndLoadTo()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task ShouldHandleCaseMismatchBetweenTableDefinitionAndLoadTo(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -255,10 +259,11 @@ loadToOrDerS(orderData); // note 'OrDerS' here vs 'Orders' defined in the config
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task CanLoadToTableWithSchemaName()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanLoadToTableWithSchemaName(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -319,10 +324,11 @@ loadToOrDerS(orderData); // note 'OrDerS' here vs 'Orders' defined in the config
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task NullPropagation()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task NullPropagation(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -342,11 +348,13 @@ loadToOrDerS(orderData); // note 'OrDerS' here vs 'Orders' defined in the config
 
                     var etlDone = WaitForEtl(store, (n, statistics) => statistics.LoadSuccesses != 0);
 
-                    SetupSqlEtl(store, connectionString, @"var orderData = {
+                    var optChaining = options.JavascriptEngineMode.ToString() == "Jint" ? "" : "?";
+                    var zeroIfNull = options.JavascriptEngineMode.ToString() == "Jint" ? "" : " ?? 0";
+                    SetupSqlEtl(store, connectionString, @$"var orderData = {{
     Id: id(this),
-    OrderLinesCount: this.OrderLines_Missing.length,
+    OrderLinesCount: this.OrderLines_Missing{optChaining}.length{zeroIfNull},
     TotalCost: 0
-};
+}};
 loadToOrders(orderData);");
 
                     etlDone.Wait(TimeSpan.FromMinutes(5));
@@ -368,10 +376,11 @@ loadToOrders(orderData);");
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task NullPropagation_WithExplicitNull()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task NullPropagation_WithExplicitNull(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -392,11 +401,12 @@ loadToOrders(orderData);");
 
                     var etlDone = WaitForEtl(store, (n, statistics) => statistics.LoadSuccesses != 0);
 
-                    SetupSqlEtl(store, connectionString, @"var orderData = {
+                    var optChaining = options.JavascriptEngineMode.ToString() == "Jint" ? "" : "?";
+                    SetupSqlEtl(store, connectionString, @$"var orderData = {{
     Id: id(this),
-    City: this.Address.City,
+    City: this.Address{optChaining}.City,
     TotalCost: 0
-};
+}};
 loadToOrders(orderData);");
 
                     etlDone.Wait(TimeSpan.FromMinutes(5));
@@ -418,10 +428,11 @@ loadToOrders(orderData);");
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task RavenDB_3341()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task RavenDB_3341(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -470,10 +481,11 @@ loadToOrders(orderData);");
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task CanUpdateToBeNoItemsInChildTable()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUpdateToBeNoItemsInChildTable(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -515,10 +527,11 @@ loadToOrders(orderData);");
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task CanDelete()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanDelete(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -556,10 +569,11 @@ loadToOrders(orderData);");
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task RavenDB_3172()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task RavenDB_3172(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -671,12 +685,12 @@ var nameArr = this.StepName.split('.'); loadToOrders({});");
             }
         }
 
-        [RequiresMsSqlRetryTheory(delayBetweenRetriesMs: 1000)]
-        [InlineData(true)]
-        [InlineData(false)]
-        public async Task CanTestScript(bool performRolledBackTransaction)
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(true, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(false, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanTestScript(Options options, bool performRolledBackTransaction)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -899,10 +913,11 @@ loadToOrders(orderData);
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task Should_error_if_attachment_doesnt_exist()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task Should_error_if_attachment_doesnt_exist(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -972,10 +987,11 @@ loadToOrders(orderData);
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task LoadingMultipleAttachments()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task LoadingMultipleAttachments(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -1047,10 +1063,11 @@ for (var i = 0; i < attachments.length; i++)
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public async Task CanSkipSettingFieldIfAttachmentDoesntExist()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanSkipSettingFieldIfAttachmentDoesntExist(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -1161,11 +1178,11 @@ loadToOrders(orderData);
                     CreateRdbmsSchema(connectionString, @"
 CREATE TABLE [dbo].[Users]
 (
-    [Id] [nvarchar](50) NOT NULL,
-    [FirstName] [varchar](30) NOT NULL,
-    [LastName] [nvarchar](30) NULL,
-    [FirstName2] [varchar](30) NOT NULL,
-    [LastName2] [nvarchar](30) NULL
+[Id] [nvarchar](50) NOT NULL,
+[FirstName] [varchar](30) NOT NULL,
+[LastName] [nvarchar](30) NULL,
+[FirstName2] [varchar](30) NOT NULL,
+[LastName2] [nvarchar](30) NULL
 )
 ");
                     using (var session = store.OpenAsyncSession())
@@ -1194,10 +1211,10 @@ var names = this.Name.split(' ');
 
 loadToUsers(
 {
-    FirstName: varchar(names[0], 30),
-    LastName: nvarchar(names[1], 30),
-    FirstName2: varchar(names[0]),
-    LastName2:  nvarchar(names[1]),
+FirstName: varchar(names[0], 30),
+LastName: nvarchar(names[1], 30),
+FirstName2: varchar(names[0]),
+LastName2:  nvarchar(names[1]),
 });
 "
                                 }
@@ -1221,18 +1238,20 @@ loadToUsers(
             }
         }
 
-        [RequiresMsSqlRetryFact(delayBetweenRetriesMs: 1000)]
-        public void Should_stop_batch_if_size_limit_exceeded_RavenDB_12800()
+        [RequiresMsSqlRetryTheoryAttribute(delayBetweenRetriesMs: 1000)]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void Should_stop_batch_if_size_limit_exceeded_RavenDB_12800(Options options)
         {
-            using (var store = GetDocumentStore(new Options { ModifyDatabaseRecord = x => x.Settings[RavenConfiguration.GetKey(c => c.Etl.MaxBatchSize)] = "5" }))
+            options.ModifyDatabaseRecord = x => x.Settings[RavenConfiguration.GetKey(c => c.Etl.MaxBatchSize)] = "5";
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
                     CreateRdbmsSchema(connectionString, @"
 CREATE TABLE [dbo].[Orders]
 (
-    [Id] [nvarchar](50) NOT NULL,
-    [Pic] [varbinary](max) NULL
+[Id] [nvarchar](50) NOT NULL,
+[Pic] [varbinary](max) NULL
 )
 ");
                     using (var session = store.OpenSession())
@@ -1255,13 +1274,13 @@ CREATE TABLE [dbo].[Orders]
                         session.SaveChanges();
                     }
 
-                    var etlDone = WaitForEtl(store, (n, statistics) => statistics.LoadSuccesses >= 5);
+            var etlDone = WaitForEtl(store, (n, statistics) => statistics.LoadSuccesses >= 5);
 
                     SetupSqlEtl(store, connectionString, @"
 
 var orderData = {
-    Id: id(this),
-    Pic: loadAttachment('my-attachment') 
+Id: id(this),
+Pic: loadAttachment('my-attachment') 
 };
 
 loadToOrders(orderData);
@@ -1277,7 +1296,7 @@ loadToOrders(orderData);
 
                     Assert.Contains("Stopping the batch because maximum batch size limit was reached (5 MBytes)", stats.Select(x => x.BatchTransformationCompleteReason).ToList());
 
-                    etlDone = WaitForEtl(store, (n, s) => s.LoadSuccesses >= 6);
+            etlDone = WaitForEtl(store, (n, s) => s.LoadSuccesses >= 6);
 
                     etlDone.Wait(TimeSpan.FromMinutes(1));
                 }

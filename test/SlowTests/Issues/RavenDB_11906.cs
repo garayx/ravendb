@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using FastTests;
+using Tests.Infrastructure;
 using Raven.Client;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Operations.Indexes;
@@ -91,8 +92,8 @@ namespace SlowTests.Issues
             public string OtherField { get; set; }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void SupportForCreateFieldWithOptions(Options options)
         {
             using (var store = GetDocumentStore(options))
