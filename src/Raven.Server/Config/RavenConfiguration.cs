@@ -97,6 +97,8 @@ namespace Raven.Server.Config
 
         public IntegrationsConfiguration Integrations { get;  }
 
+        public JavaScriptConfiguration JavaScript { get; }
+
         internal IConfigurationRoot ServerWideSettings { get; set; }
 
         internal IConfigurationRoot Settings { get; set; }
@@ -153,6 +155,7 @@ namespace Raven.Server.Config
             Migration = new MigrationConfiguration();
             TrafficWatch = new TrafficWatchConfiguration();
             Integrations = new IntegrationsConfiguration();
+            JavaScript = new JavaScriptConfiguration();
         }
 
         private void AddJsonConfigurationVariables(string customConfigPath = null)
@@ -214,6 +217,7 @@ namespace Raven.Server.Config
             Migration.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
             TrafficWatch.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
             Integrations.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
+            JavaScript.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
 
             PostInit();
 

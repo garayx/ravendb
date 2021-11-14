@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FastTests;
+using Tests.Infrastructure;
 using FastTests.Utils;
 using Raven.Client;
 using Raven.Client.Documents;
@@ -20,11 +21,11 @@ namespace SlowTests.Tests.Linq
         {
         }
 
-        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.TimeSeries | RavenTestCategory.Revisions)]
-        [RavenData(false, false, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
-        [RavenData(false, true, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
-        [RavenData(true, false, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
-        [RavenData(true, true, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.TimeSeries | RavenTestCategory.Revisions | RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(false, false, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(false, true, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(true, false, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(true, true, SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public async Task Query_IncludeAllQueryFunctionality(Options options, bool includeCounters, bool includeTimeSeries)
         {
             using (var store = GetDocumentStore(options))
@@ -152,11 +153,11 @@ namespace SlowTests.Tests.Linq
         }
 
 
-        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.TimeSeries | RavenTestCategory.Revisions)]
-        [RavenData(false, false, DatabaseMode = RavenDatabaseMode.All)]
-        [RavenData(false, true, DatabaseMode = RavenDatabaseMode.All)]
-        [RavenData(true, false, DatabaseMode = RavenDatabaseMode.All)]
-        [RavenData(true, true, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.TimeSeries | RavenTestCategory.Revisions | RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(false, false, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(false, true, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(true, false, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(true, true, DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public async Task Query_IncludeAllQueryFunctionality_NestedField(Options options, bool includeCounters, bool includeTimeSeries)
         {
             using (var store = GetDocumentStore(options))
@@ -261,8 +262,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_IncludeAllQueryFunctionalityAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -353,8 +354,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionByChangeVector(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -389,8 +390,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionByChangeVectorAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -426,8 +427,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionByChangeVectors(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -512,8 +513,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionByChangeVectorsAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -596,8 +597,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionsByProperty_ChangeVectorAndChangeVectors(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -705,8 +706,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionsByProperty_ChangeVectorAndChangeVectorsAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -808,8 +809,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionByDateTime_VerifyUtc(Options options)
         {
             string changeVector;
@@ -863,8 +864,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Load_IncludeBuilder_IncludeRevisionByDateTime_VerifyUtcAsync(Options options)
         {
             string changeVector;
@@ -1000,8 +1001,8 @@ namespace SlowTests.Tests.Linq
         }
 
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQueryChangeVectorInsidePropertyWithIndex(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1049,8 +1050,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQueryChangeVectorInsidePropertyWithIndexAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1182,8 +1183,8 @@ namespace SlowTests.Tests.Linq
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisions_Jint_StaticIndexQuery(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1242,8 +1243,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisions_Jint_StaticIndexQueryAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1301,8 +1302,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisions_Jint_IndexQuery(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1357,8 +1358,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisions_beforeDateTime_Jint(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1410,8 +1411,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisions_beforeDateTime_JintAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1463,8 +1464,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisions_Jint(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1519,8 +1520,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisions_JintAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1576,8 +1577,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisionsArray_Jint(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1682,8 +1683,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisionsArray_JintAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1776,8 +1777,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisionsWithoutAlias(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1825,8 +1826,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQuery_IncludeRevisionsWithoutAliasAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1874,8 +1875,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQueryWithParameters_IncludeRevisions_Array(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -1963,8 +1964,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQueryWithParameters_IncludeRevisions_Array_SecondOption(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -2049,8 +2050,8 @@ select Foo(u)"
             }
         }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.JavaScript | RavenTestCategory.Patching)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, DatabaseMode = RavenDatabaseMode.All)]
         public async Task Query_RawQueryWithParameters_IncludeRevisions_Array_SecondOptionAsync(Options options)
         {
             using (var store = GetDocumentStore(options))
