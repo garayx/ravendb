@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using FastTests;
@@ -129,11 +130,11 @@ namespace SlowTests.Bugs.Indexing
                     Assert.NotEmpty(products);
                 }
             }
-        }        
+        }
 
-        [Theory]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, Skip = "Lucene API for create field")]
+        [RavenTheory(RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, Skip = "Lucene API for create field")]
         public void CanCreateCompletelyDynamicFieldsWithProjection(Options options)
         {
             using (var store = GetDocumentStore(options))

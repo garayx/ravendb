@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using FastTests;
+using Tests.Infrastructure;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Operations.Indexes;
 using Raven.Tests.Core.Utils.Entities;
@@ -22,8 +23,8 @@ namespace SlowTests.Issues
         {
         }
 
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.All)]   
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]   
         public void SupportAttachmentsForInIndex_JavaScript(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -143,8 +144,8 @@ namespace SlowTests.Issues
             }
         }
 
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.All)]   
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void CanUseTryConvertInIndex_JavaScript(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -216,8 +217,8 @@ namespace SlowTests.Issues
             }
         }
 
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.All)]
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void CanUseRecurse_JavaScript(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -245,8 +246,8 @@ namespace SlowTests.Issues
             }
         }
 
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.All)]
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void SupportForCreateFieldWithOptions_JavaScript(Options options)
         {
             using (var store = GetDocumentStore(options))

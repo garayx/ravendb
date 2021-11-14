@@ -103,9 +103,9 @@ if (typeof Object.assign !== 'function') {
             }
         }
 
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, Skip = "complex")]
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, Skip = "complex")]
         public void CanUseComplexObjectInJavascriptMapReduce(Options options)
         {
             using var store = GetDocumentStore(options);

@@ -640,11 +640,7 @@ namespace Raven.Server.Documents
                             mergedCommands.LastDocumentEtag, mergedCommands.LastTombstoneEtag, mergedCommands.ModifiedCollections);
                 }
 
-                var result = new ClusterTransactionCompletionResult
-                {
-                    Array = mergedCommands.Replies[index],
-                    IndexTask = indexTask,
-                };
+                var result = new ClusterTransactionCompletionResult { Array = mergedCommands.Replies[index], IndexTask = indexTask, };
                 RachisLogIndexNotifications.NotifyListenersAbout(index, null);
                 ServerStore.Cluster.ClusterTransactionWaiter.TrySetResult(options.TaskId, result);
                 _nextClusterCommand = command.PreviousCount + command.Commands.Length;
@@ -910,7 +906,7 @@ namespace Raven.Server.Documents
                 DocumentsStorage?.Dispose();
             });
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposed DocumentsStorage");
-
+            
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposing _databaseShutdown");
             exceptionAggregator.Execute(() =>
             {
