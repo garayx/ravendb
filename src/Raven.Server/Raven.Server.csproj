@@ -166,6 +166,9 @@
     </PackageReference>
     <PackageReference Include="Jint" Version="3.0.0-beta-2044" />
     <PackageReference Include="Google.Api.Gax.Rest" Version="4.2.0" />
+    <PackageReference Include="Jint" Version="3.0.36-ravendb" />
+    <PackageReference Include="v8.net" Version="1.1.41" />
+    <PackageReference Include="Google.Api.Gax.Rest" Version="4.1.1" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="4.1.0" />
     <PackageReference Include="Lextm.SharpSnmpLib.Engine" Version="11.3.102" />
     <PackageReference Include="librdkafka.redist" Version="1.9.2" />

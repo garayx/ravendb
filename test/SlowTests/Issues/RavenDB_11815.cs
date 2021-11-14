@@ -199,18 +199,19 @@ groupBy(x => x.Total.Currency)
             public string Currency { get; set; }
         }
 
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene)]     
-        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, Skip = "complex object")]
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Lucene, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]     
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.Corax, JavascriptEngineMode = RavenJavascriptEngineMode.Jint, Skip = "complex object")]
         public void CanUseNestedFieldValueInGroupBy(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
-                new MapReduceIndexWithNestedField().Execute(store);
-                new MapReduceIndexWithNestedField2().Execute(store);
-                new MapReduceIndexWithNestedFieldJs().Execute(store);
-                new MapReduceIndexWithNestedFieldJs2().Execute(store);
-                new MultiMapReduceIndexWithNestedField().Execute(store);
+       
+                    new MapReduceIndexWithNestedField().Execute(store);
+                    new MapReduceIndexWithNestedField2().Execute(store);
+                    new MapReduceIndexWithNestedFieldJs().Execute(store);
+                    new MapReduceIndexWithNestedFieldJs2().Execute(store);
+                    new MultiMapReduceIndexWithNestedField().Execute(store);
 
                 using (var session = store.OpenSession())
                 {
@@ -267,26 +268,26 @@ groupBy(x => x.Total.Currency)
                     session.SaveChanges();
                 }
 
-                Indexes.WaitForIndexing(store);
+                    Indexes.WaitForIndexing(store);
 
-                using (var session = store.OpenSession())
-                {
-                    AssertResults<MapReduceIndexWithNestedField>(session);
+                    using (var session = store.OpenSession())
+                    {
+                        AssertResults<MapReduceIndexWithNestedField>(session);
 
-                    AssertResults<MapReduceIndexWithNestedField2>(session);
+                         AssertResults<MapReduceIndexWithNestedField2>(session);
 
-                    AssertResults<MapReduceIndexWithNestedFieldJs>(session);
+                        AssertResults<MapReduceIndexWithNestedFieldJs>(session);
 
-                    AssertResults<MapReduceIndexWithNestedFieldJs2>(session);
+                        AssertResults<MapReduceIndexWithNestedFieldJs2>(session);
 
-                    AssertResults<MultiMapReduceIndexWithNestedField>(session);
+                        AssertResults<MultiMapReduceIndexWithNestedField>(session);
+                    }
                 }
-            }
 
-            void AssertResults<TIndex>(IDocumentSession session) where TIndex : AbstractIndexCreationTask, new()
-            {
-                var results1 = session.Query<Result, TIndex>()
-                    .ToList();
+                void AssertResults<TIndex>(IDocumentSession session) where TIndex : AbstractIndexCreationTask, new()
+                {
+                    var results1 = session.Query<Result, TIndex>()
+                        .ToList();
 
                 Assert.Equal(2, results1.Count);
                 Assert.True(results1.Any(x => x.Total.Currency == "PLN"));

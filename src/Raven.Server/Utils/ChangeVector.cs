@@ -259,7 +259,7 @@ public class ChangeVector
     {
         if (_order == null && _version == null)
         {
-            /*if (_changeVector == null)
+            /*if (ChangeVector == null)
                     ThrowEmptyChangeVector();*/
 
             return;

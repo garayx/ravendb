@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -234,8 +235,8 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [RavenTheory(RavenTestCategory.Counters)]
-        [RavenData(DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.JavaScript)]
+        [RavenData(DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void RawQueryJsProjectionWithCounter(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -273,11 +274,11 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [RavenTheory(RavenTestCategory.Counters)]
-        [RavenData(DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.JavaScript)]
+        [RavenData(DatabaseMode = RavenDatabaseMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void RawQueryJsProjectionWithCounterRawValues(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -320,8 +321,8 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [RavenTheory(RavenTestCategory.Counters)]
-        [RavenData(DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.JavaScript)]
+        [RavenData(DatabaseMode = RavenDatabaseMode.All | JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void RawQuerySimpleProjectionWithParameters(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -364,8 +365,8 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [RavenTheory(RavenTestCategory.Counters)]
-        [RavenData(DatabaseMode = RavenDatabaseMode.All)]
+        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.JavaScript)]
+        [RavenData(DatabaseMode = RavenDatabaseMode.All | JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void RawQueryJsProjectionWithParameters(Options options)
         {
             using (var store = GetDocumentStore(options))
@@ -527,9 +528,9 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [RavenTheory(RavenTestCategory.Counters)]
-        [RavenData(DatabaseMode = RavenDatabaseMode.Single)]
-        public void RawQuerySelectCounterFromLoadedDocJsProjection(Options options)
+        [RavenTheory(RavenTestCategory.Counters | RavenTestCategory.JavaScript)]
+        [RavenData(DatabaseMode = RavenDatabaseMode.Single | JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void RawQuerySelectCounterFromLoadedDocJsProjection()
         {
             using (var store = GetDocumentStore(options))
             {
@@ -578,10 +579,11 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [Fact]
-        public void RawQueryGetCounterValueFromMetadata()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void RawQueryGetCounterValueFromMetadata(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -612,10 +614,11 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [Fact]
-        public void RawQueryGetAllCountersValuesFromMetadata()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void RawQueryGetAllCountersValuesFromMetadata(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -844,7 +847,7 @@ namespace SlowTests.Client.Counters
                                 let f = RavenQuery.Load<User>(u.FriendId)
                                 select RavenQuery.Counter(f, "Downloads");
 
-                    Assert.Equal("from 'Users' as u load u.FriendId as f " +
+                    Assert.Equal("from 'Users' as u load u?.FriendId as f " +
                                  "select counter(f, Downloads) as Downloads", query.ToString());
 
                     var queryResult = query.ToList();
@@ -1045,7 +1048,7 @@ namespace SlowTests.Client.Counters
                                 let f = RavenQuery.Load<User>(u.FriendId)
                                 select session.CountersFor(f).Get("Downloads");
 
-                    Assert.Equal("from 'Users' as u load u.FriendId as f " +
+                    Assert.Equal("from 'Users' as u load u?.FriendId as f " +
                                  "select counter(f, Downloads) as Downloads", query.ToString());
 
                     var queryResult = query.ToList();
@@ -1112,10 +1115,11 @@ namespace SlowTests.Client.Counters
         }
 
 
-        [Fact]
-        public void SessionQuerySelectSingleCounterJsProjection_UsingRavenQueryCounter()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void SessionQuerySelectSingleCounterJsProjection_UsingRavenQueryCounter(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1139,7 +1143,7 @@ namespace SlowTests.Client.Counters
                                     Downloads = RavenQuery.Counter(user, "Downloads")
                                 };
 
-                    Assert.Equal("from 'Users' as user select { Name : user.Name+user.Age, Downloads : counter(user, \"Downloads\") }"
+                    Assert.Equal("from 'Users' as user select { Name : user?.Name+user?.Age, Downloads : counter(user, \"Downloads\") }"
                                 , query.ToString());
 
                     var queryResult = query.ToList();
@@ -1158,10 +1162,11 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [Fact]
-        public void SessionQuerySelectSingleCounterJsProjection_UsingSessionCountersFor()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void SessionQuerySelectSingleCounterJsProjection_UsingSessionCountersFor(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1185,7 +1190,7 @@ namespace SlowTests.Client.Counters
                                     Downloads = session.CountersFor(user).Get("Downloads")
                                 };
 
-                    Assert.Equal("from 'Users' as user select { Name : user.Name+user.Age, Downloads : counter(user, \"Downloads\") }"
+                    Assert.Equal("from 'Users' as user select { Name : user?.Name+user?.Age, Downloads : counter(user, \"Downloads\") }"
                                 , query.ToString());
 
                     var queryResult = query.ToList();
@@ -1251,10 +1256,11 @@ namespace SlowTests.Client.Counters
             }
         }
 
-        [Fact]
-        public void SessionQuerySelectCounterViaLet()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void SessionQuerySelectCounterViaLet(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1281,8 +1287,8 @@ namespace SlowTests.Client.Counters
 
                     RavenTestHelper.AssertEqualRespectingNewLines(
 @"declare function output(user) {
-	var c = counter(user, ""Downloads"");
-	return { Name : user.Name, Downloads : c };
+    var c = counter(user, ""Downloads"");
+    return { Name : user?.Name, Downloads : c };
 }
 from 'Users' as user select output(user)", query.ToString());
 
@@ -1302,10 +1308,11 @@ from 'Users' as user select output(user)", query.ToString());
             }
         }
 
-        [Fact]
-        public void SessionQuerySelectCounterViaLet_UsingSessionCountersFor()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void SessionQuerySelectCounterViaLet_UsingSessionCountersFor(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1332,8 +1339,8 @@ from 'Users' as user select output(user)", query.ToString());
 
                     RavenTestHelper.AssertEqualRespectingNewLines(
 @"declare function output(user) {
-	var c = counter(user, ""Downloads"");
-	return { Name : user.Name, Downloads : c };
+    var c = counter(user, ""Downloads"");
+    return { Name : user?.Name, Downloads : c };
 }
 from 'Users' as user select output(user)", query.ToString());
 
@@ -1353,10 +1360,11 @@ from 'Users' as user select output(user)", query.ToString());
             }
         }
 
-        [Fact]
-        public void SessionQuerySelectCounterFromLoadedDocJsProjection()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void SessionQuerySelectCounterFromLoadedDocJsProjection(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1383,8 +1391,8 @@ from 'Users' as user select output(user)", query.ToString());
                                 };
 
                     Assert.Equal("from 'Users' as user " +
-                                 "load user.FriendId as f " +
-                                 "select { Name : user.Name, " +
+                                 "load user?.FriendId as f " +
+                                 "select { Name : user?.Name, " +
                                           "Downloads : counter(user, \"Downloads\"), " +
                                           "FriendsDownloads : counter(f, \"Downloads\") }"
                                 , query.ToString());
@@ -3055,8 +3063,8 @@ from 'Users' as user select output(user)", query.ToString());
 
                     Assert.Equal("from 'Orders' as o " +
                                  "where o.OrderedAt.Year < $p0 " +
-                                 "select { Id : id(o), OrderedAt : o.OrderedAt, " +
-                                    "Employee : o.Employee, Foo : o.Employee+o.Company } " +
+                                 "select { Id : id(o), OrderedAt : o?.OrderedAt, " +
+                                    "Employee : o?.Employee, Foo : o?.Employee+o?.Company } " +
                                  "include Employee,counters(o, 'Likes'),counters(o.Employee, 'Downloads')"
                         , query.ToString());
 
@@ -3096,10 +3104,11 @@ from 'Users' as user select output(user)", query.ToString());
             }
         }
 
-        [Fact]
-        public async Task AsyncSessionQueryIncludeCountersUsingFromAliasWithSelectAndWhere()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task AsyncSessionQueryIncludeCountersUsingFromAliasWithSelectAndWhere(Options options)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -3162,8 +3171,8 @@ from 'Users' as user select output(user)", query.ToString());
 
                     Assert.Equal("from 'Orders' as o " +
                                  "where o.OrderedAt.Year < $p0 " +
-                                 "select { Id : id(o), OrderedAt : o.OrderedAt, " +
-                                    "Employee : o.Employee, Foo : o.Employee+o.Company } " +
+                                 "select { Id : id(o), OrderedAt : o?.OrderedAt, " +
+                                    "Employee : o?.Employee, Foo : o?.Employee+o?.Company } " +
                                  "include Employee,counters(o, 'Likes'),counters(o.Employee, 'Downloads')"
                         , query.ToString());
 

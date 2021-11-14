@@ -1,12 +1,16 @@
-﻿using System.Collections.Generic;
+﻿using Tests.Infrastructure;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using FastTests;
 using Jint.Constraints;
-using Orders;
 using Raven.Client.Documents.Indexes;
 using Raven.Server.Config;
+using Raven.Server.Config.Settings;
 using Raven.Server.Documents.Indexes.Static;
 using Tests.Infrastructure;
+using Raven.Server.Documents.Patch.Jint;
+using Raven.Tests.Core.Utils.Entities;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -18,43 +22,54 @@ namespace SlowTests.Issues
         {
         }
 
-        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying)]
-        [RavenExplicitData(SearchEngineMode = RavenSearchEngineMode.All)]   
-        public async Task IndexSpecificSettingShouldBeRespected(RavenTestParameters parameters)
+        [RavenTheory(RavenTestCategory.Indexes | RavenTestCategory.Querying | RavenTestCategory.JavaScript)]
+        [RavenData(SearchEngineMode = RavenSearchEngineMode.All, JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task IndexSpecificSettingShouldBeRespected(Options options)
         {
+            var initialStrictModeForScript = false;
             var initialMaxStepsForScript = 10;
-
-            using (var store = GetDocumentStore(new Options { ModifyDatabaseRecord = record =>
-                       {
-                           record.Settings[RavenConfiguration.GetKey(x => x.Indexing.MaxStepsForScript)] = initialMaxStepsForScript.ToString();
-                           record.Settings[RavenConfiguration.GetKey(x => x.Indexing.StaticIndexingEngineType)] = parameters.SearchEngine.ToString();
-                       }
-                   }))
+            var initialMaxDurationForScript = new TimeSetting(20, TimeUnit.Milliseconds);
+            options.ModifyDatabaseRecord +=record =>
             {
-                var index = new MyJSIndex(maxStepsForScript: null);
+                //TODO: egor make this work & add test that create 2 indexes 1 jint & 1 v8 on same db
+                //record.Settings[RavenConfiguration.GetKey(x => x.Indexing.JsStrictMode)] = initialStrictModeForScript.ToString();
+                //record.Settings[RavenConfiguration.GetKey(x => x.Indexing.JsMaxSteps)] = initialMaxStepsForScript.ToString();
+                //record.Settings[RavenConfiguration.GetKey(x => x.Indexing.JsMaxDuration)] = initialMaxDurationForScript.GetValue(TimeUnit.Milliseconds).ToString();
+            }
+            ;
+            using (var store = GetDocumentStore(options))
+            {
+                var index = new MyJSIndex(options, null, null, null);
                 index.Execute(store);
 
                 var database = await Databases.GetDocumentDatabaseInstanceFor(store);
-
+                //TODO: egor
                 var indexInstance1 = (MapIndex)database.IndexStore.GetIndex(index.IndexName);
-                var compiled1 = (JavaScriptIndex)indexInstance1._compiled;
+                var compiled1 = (AbstractJavaScriptIndex<JsHandleJint>)indexInstance1._compiled;
 
-                Assert.Equal(initialMaxStepsForScript, compiled1._engine.FindConstraint<MaxStatementsConstraint>()!.MaxStatements);
+                Assert.Equal(initialStrictModeForScript, compiled1.EngineHandle.JsOptions.StrictMode);
+                Assert.Equal(initialMaxStepsForScript, compiled1.EngineHandle.JsOptions.MaxSteps);
+                // TODO: egor    Assert.Equal(initialMaxStepsForScript, compiled1.EngineHandle.FindConstraint<MaxStatementsConstraint>()!.MaxStatements);
+                Assert.Equal(initialMaxDurationForScript.GetValue(TimeUnit.Milliseconds), compiled1.EngineHandle.JsOptions.MaxDuration.GetValue(TimeUnit.Milliseconds));
 
-                const int maxStepsForScript = 1000;
-                index = new MyJSIndex(maxStepsForScript);
+                const bool strictModeForScript = true;
+                const int maxStepsForScript = 1001;
+                var maxDurationForScript = new TimeSetting(101, TimeUnit.Milliseconds);
+                index = new MyJSIndex(options, strictModeForScript, maxStepsForScript, maxDurationForScript);
                 index.Execute(store);
 
                 Indexes.WaitForIndexing(store);
 
                 var indexInstance2 = (MapIndex)database.IndexStore.GetIndex(index.IndexName);
-                var compiled2 = (JavaScriptIndex)indexInstance2._compiled;
+                var compiled2 = (AbstractJavaScriptIndex<JsHandleJint>)indexInstance2._compiled;
 
                 Assert.NotEqual(indexInstance1, indexInstance2);
                 Assert.NotEqual(compiled1, compiled2);
 
-                Assert.Equal(maxStepsForScript, compiled2._engine.FindConstraint<MaxStatementsConstraint>()!.MaxStatements);
-
+                Assert.Equal(strictModeForScript, compiled2.EngineHandle.JsOptions.StrictMode);
+                Assert.Equal(maxStepsForScript, compiled2.EngineHandle.JsOptions.MaxSteps);
+                Assert.Equal(maxDurationForScript.GetValue(TimeUnit.Milliseconds), compiled2.EngineHandle.JsOptions.MaxDuration.GetValue(TimeUnit.Milliseconds));
+             // TODO: egor   Assert.Equal(maxStepsForScript, compiled2.EngineHandle.FindConstraint<MaxStatementsConstraint>()!.MaxStatements);
                 using (var session = store.OpenSession())
                 {
                     session.Store(new Company());
@@ -70,33 +85,46 @@ namespace SlowTests.Issues
 
         private class MyJSIndex : AbstractJavaScriptIndexCreationTask
         {
-            public MyJSIndex(int? maxStepsForScript)
+            public MyJSIndex(Options options, bool? strictModeForScript, int? maxStepsForScript, TimeSetting? maxDurationForScript)
             {
-                Maps = new HashSet<string>()
+                var optionalChaining = options.JavascriptEngineMode.ToString() switch
                 {
-                    @"
+                    "Jint" => "",
+                    "V8" => "?",
+                    _ => throw new NotSupportedException($"Not supported jsEngineType '{options.JavascriptEngineMode.ToString()}'.")
+                };
+
+                var mapCode = @"
 map('Companies', (company) => {
+/*JINT_START*/
+//})
+/*JINT_END*/
     var x = [];
     for (var i = 0; i < 50; i++) {
         x.push(i);
     }
-    if (company.Address.Country === 'USA') {
+    if (company.Address{optionalChaining}.Country === 'USA') {
         return {
             Name: company.Name,
             Phone: company.Phone,
             City: company.Address.City
         };
     }
-})"
-                };
+})";
 
-                if (maxStepsForScript.HasValue)
+                mapCode = mapCode.Replace("{optionalChaining}", optionalChaining);
+                
+                Maps = new HashSet<string>()
                 {
-                    Configuration = new IndexConfiguration
-                    {
-                        { RavenConfiguration.GetKey(x => x.Indexing.MaxStepsForScript), maxStepsForScript.ToString() }
-                    };
-                }
+                    mapCode
+                };
+                //TODO: egor
+                //if (strictModeForScript.HasValue)
+                //    Configuration[RavenConfiguration.GetKey(x => x.Indexing.JsStrictMode)] = strictModeForScript.ToString();
+                if (maxStepsForScript.HasValue)
+                    Configuration[RavenConfiguration.GetKey(x => x.Indexing.MaxStepsForScript)] = maxStepsForScript.ToString();
+                //if (maxDurationForScript.HasValue)
+                //    Configuration[RavenConfiguration.GetKey(x => x.Indexing.JsMaxDuration)] = maxDurationForScript?.GetValue(TimeUnit.Milliseconds).ToString();
             }
         }
     }
