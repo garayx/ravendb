@@ -33,7 +33,7 @@ namespace Raven.Client.Documents.Subscriptions
         public bool PinToMentorNode { get; set; }
 
 
-        public SubscriptionCreationOptions ToSubscriptionCreationOptions(DocumentConventions conventions)
+        public SubscriptionCreationOptions ToSubscriptionCreationOptions(DocumentSubscriptions subscriptions, DocumentConventions conventions)
         {
             SubscriptionCreationOptions subscriptionCreationOptions = new SubscriptionCreationOptions
             {
@@ -43,7 +43,7 @@ namespace Raven.Client.Documents.Subscriptions
                 PinToMentorNode = PinToMentorNode,
                 Disabled = Disabled
             };
-            return DocumentSubscriptions.CreateSubscriptionOptionsFromGeneric(conventions, 
+            return subscriptions.CreateSubscriptionOptionsFromGeneric(conventions, 
                 subscriptionCreationOptions, Filter, Projection, Includes);
         }
     }

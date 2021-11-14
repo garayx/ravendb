@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Raven.Client;
 using Raven.Client.Documents.Changes;
 using Raven.Client.Documents.Indexes;
@@ -19,20 +20,16 @@ namespace Raven.Server.Documents.Indexes.Static
 {
     public class MapIndex : MapIndexBase<MapIndexDefinition, IndexField>
     {
-        private readonly HashSet<string> _referencedCollections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _suggestionsActive = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        protected internal readonly AbstractStaticIndexBase _compiled;
         private bool? _isSideBySide;
 
         private HandleDocumentReferences _handleReferences;
         private HandleCompareExchangeReferences _handleCompareExchangeReferences;
 
         protected MapIndex(MapIndexDefinition definition, AbstractStaticIndexBase compiled)
-            : base(definition.IndexDefinition.Type, definition.IndexDefinition.SourceType, definition)
+            : base(definition.IndexDefinition.Type, definition.IndexDefinition.SourceType, definition, compiled)
         {
-            _compiled = compiled;
-
             foreach (var field in definition.IndexDefinition.Fields)
             {
                 var suggestionOption = field.Value.Suggestions;
@@ -40,15 +37,6 @@ namespace Raven.Server.Documents.Indexes.Static
                 {
                     _suggestionsActive.Add(field.Key);
                 }
-            }
-
-            if (_compiled.ReferencedCollections == null)
-                return;
-
-            foreach (var collection in _compiled.ReferencedCollections)
-            {
-                foreach (var referencedCollection in collection.Value)
-                    _referencedCollections.Add(referencedCollection.Name);
             }
         }
 
@@ -181,11 +169,11 @@ namespace Raven.Server.Documents.Indexes.Static
 
         public static Index CreateNew(IndexDefinition definition, DocumentDatabase documentDatabase)
         {
-            var instance = CreateIndexInstance(definition, documentDatabase.Configuration, IndexDefinitionBaseServerSide.IndexVersion.CurrentVersion);
-            
+            var instance = CreateIndexInstance(definition, documentDatabase.Configuration, IndexDefinitionBaseServerSide.IndexVersion.CurrentVersion, documentDatabase.DatabaseShutdown);
+
             var staticIndex = instance._compiled;
             staticIndex.CheckDepthOfStackInOutputMap(definition, documentDatabase);
-            
+
             instance.Initialize(documentDatabase,
                 new SingleIndexConfiguration(definition.Configuration, documentDatabase.Configuration),
                 documentDatabase.Configuration.PerformanceHints);
@@ -198,7 +186,8 @@ namespace Raven.Server.Documents.Indexes.Static
         public static Index Open(StorageEnvironment environment, DocumentDatabase documentDatabase)
         {
             var definition = MapIndexDefinition.Load(environment, out var version);
-            var instance = CreateIndexInstance(definition, documentDatabase.Configuration, version);
+            var instance = CreateIndexInstance(definition, documentDatabase.Configuration, version, documentDatabase.DatabaseShutdown);
+
             instance.Initialize(environment, documentDatabase,
                 new SingleIndexConfiguration(definition.Configuration, documentDatabase.Configuration),
                 documentDatabase.Configuration.PerformanceHints);
@@ -215,17 +204,18 @@ namespace Raven.Server.Documents.Indexes.Static
             staticMapIndex.Update(staticMapIndexDefinition, new SingleIndexConfiguration(definition.Configuration, documentDatabase.Configuration));
         }
 
-        private static MapIndex CreateIndexInstance(IndexDefinition definition, RavenConfiguration configuration, long indexVersion)
+        private static MapIndex CreateIndexInstance(IndexDefinition definition, RavenConfiguration configuration, long indexVersion,
+            CancellationToken token)
         {
-            var context = CreateIndexInformationHolder(definition, configuration, indexVersion, out var staticIndex);
+            var context = CreateIndexInformationHolder(definition, configuration, indexVersion, out var staticIndex, token);
 
             var instance = new MapIndex((MapIndexDefinition)context.Definition, staticIndex);
             return instance;
         }
 
-        public static IndexInformationHolder CreateIndexInformationHolder(IndexDefinition definition, RavenConfiguration configuration, long indexVersion, out AbstractStaticIndexBase staticIndex)
+        public static IndexInformationHolder CreateIndexInformationHolder(IndexDefinition definition, RavenConfiguration configuration, long indexVersion, out AbstractStaticIndexBase staticIndex, CancellationToken token)
         {
-            staticIndex = IndexCompilationCache.GetIndexInstance(definition, configuration, indexVersion);
+            staticIndex = IndexCompilationCache.GetIndexInstance(definition, configuration, indexVersion, token);
 
             var staticMapIndexDefinition = new MapIndexDefinition(definition, staticIndex.Maps.Keys, staticIndex.OutputFields, staticIndex.HasDynamicFields, staticIndex.CollectionsWithCompareExchangeReferences.Count > 0, indexVersion);
             var indexConfiguration = new SingleIndexConfiguration(definition.Configuration, configuration);
