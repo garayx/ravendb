@@ -923,7 +923,7 @@ namespace FastTests
                 return _descriptionBuilder == null
                     ? base.ToString()
                     : _descriptionBuilder.ToString();
-            }
+        }
 
             public Options Clone()
             {
@@ -946,8 +946,8 @@ namespace FastTests
                     DatabaseMode = DatabaseMode,
                     _descriptionBuilder = new StringBuilder(_descriptionBuilder.ToString())
                 };
-            }
-        }
+    }
+}
 
         public static async Task WaitForPolicyRunner(DocumentDatabase database)
         {

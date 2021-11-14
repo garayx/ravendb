@@ -1,5 +1,23 @@
-﻿namespace Raven.Client.Documents.Smuggler
+﻿using Raven.Client.ServerWide.JavaScript;
+namespace Raven.Client.Documents.Smuggler
 {
+    public class JavaScriptOptionsForSmuggler
+
+    {
+
+        public JavaScriptEngineType EngineType { get; set; } = JavaScriptEngineType.Jint;
+
+        public bool StrictMode { get; set; } = true;
+
+        public int MaxSteps { get; set; }  = 10 * 1000;
+
+        public int MaxDuration { get; set; } = 1000; // TODO [shlomo] may be decreased when tests get stable
+
+        private int TargetContextCountPerEngine { get; set; } = 10;
+
+        private int MaxEngineCount { get; set; } = 50;
+    }
+
     public class DatabaseSmugglerOptions : IDatabaseSmugglerOptions
     {
         public const DatabaseItemType DefaultOperateOnTypes = DatabaseItemType.Indexes |
@@ -45,13 +63,12 @@
                                                               DatabaseItemType.Identities |
                                                               DatabaseItemType.Subscriptions;
 
-        private const int DefaultMaxStepsForTransformScript = 10 * 1000;
 
         public DatabaseSmugglerOptions()
         {
             OperateOnTypes = DefaultOperateOnTypes;
             OperateOnDatabaseRecordTypes = DefaultOperateOnDatabaseRecordTypes;
-            MaxStepsForTransformScript = DefaultMaxStepsForTransformScript;
+            OptionsForTransformScript = new JavaScriptOptionsForSmuggler();
             IncludeExpired = true;
             IncludeArtificial = false;
         }
@@ -67,8 +84,8 @@
         public bool RemoveAnalyzers { get; set; }
 
         public string TransformScript { get; set; }
-
-        public int MaxStepsForTransformScript { get; set; }
+        
+        public JavaScriptOptionsForSmuggler OptionsForTransformScript { get; set; }
 
         public string EncryptionKey { get; set; }
     }
@@ -81,6 +98,6 @@
         bool IncludeArtificial { get; set; }
         bool RemoveAnalyzers { get; set; }
         string TransformScript { get; set; }
-        int MaxStepsForTransformScript { get; set; }
+        JavaScriptOptionsForSmuggler OptionsForTransformScript { get; set; }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FastTests;
+using FastTests.Server.JavaScript;
 using Raven.Client;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Operations;
@@ -49,10 +50,11 @@ namespace SlowTests.Server.Documents.Patching
         return (comment == ""one"") ? comment + "" test"" : comment;
     });";
 
-        [Fact]
-        public async Task CanApplyBasicScriptAsPatch()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanApplyBasicScriptAsPatch(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -80,10 +82,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task ComplexVariableTest()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task ComplexVariableTest(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -107,10 +110,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanUseTrim()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanUseTrim(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -129,10 +133,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanUseMathFloor()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanUseMathFloor(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -151,10 +156,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanUseSplit()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanUseSplit(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -174,10 +180,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task ComplexVariableTest2()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task ComplexVariableTest2(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -202,10 +209,11 @@ namespace SlowTests.Server.Documents.Patching
         }
 
       
-        [Fact]
-        public async Task CanPatchUsingRavenJObjectVars()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanPatchUsingRavenJObjectVars(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -228,10 +236,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanRemoveFromCollectionByValue()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanRemoveFromCollectionByValue(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -249,10 +258,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanRemoveFromCollectionByCondition()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanRemoveFromCollectionByCondition(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -270,10 +280,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanPatchUsingVars()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanPatchUsingVars(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -295,10 +306,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanHandleNonsensePatching()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanHandleNonsensePatching(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -317,10 +329,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanThrowIfValueIsWrong()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanThrowIfValueIsWrong(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -339,10 +352,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanOutputDebugInformation()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanOutputDebugInformation(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -373,10 +387,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanOutputNestedDebugInformation()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanOutputNestedDebugInformation(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 CustomType customType;
                 using (var session = store.OpenSession())
@@ -441,10 +456,11 @@ namespace SlowTests.Server.Documents.Patching
             }
         }
 
-        [Fact]
-        public async Task CanUseToISOString()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanUseToISOString(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -476,10 +492,11 @@ this.DateOffsetOutput = new Date(this.DateOffset).toISOString();
             }
         }
 
-        [Fact]
-        public async Task CanUpdateBasedOnAnotherDocumentProperty()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanUpdateBasedOnAnotherDocumentProperty(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -510,10 +527,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanPatchMetadata()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanPatchMetadata(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -545,10 +563,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanUpdateOnMissingProperty()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanUpdateOnMissingProperty(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -573,7 +592,6 @@ this.Value = another.Value;
             }
         }
 
-
         [Fact]
         public async Task WillNotErrorOnMissingDocument()
         {
@@ -586,10 +604,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanCreateDocument()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanCreateDocument(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -617,10 +636,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanUpdateDocument()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanUpdateDocument(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -652,10 +672,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanCreateMultipleDocuments()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanCreateMultipleDocuments(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -683,10 +704,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanSkipBeyondCountForLargeIterator()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanSkipBeyondCountForLargeIterator(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -709,10 +731,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CreateDocumentWillNotThrowIfEmptyKeyProvided()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CreateDocumentWillNotThrowIfEmptyKeyProvided(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -736,10 +759,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CreateDocumentShouldThrowInvalidEtagException()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CreateDocumentShouldThrowInvalidEtagException(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -758,10 +782,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task ShouldThrowConcurrencyExceptionIfNonCurrentEtagWasSpecified()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task ShouldThrowConcurrencyExceptionIfNonCurrentEtagWasSpecified(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -784,10 +809,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanCreateEmptyDocument()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanCreateEmptyDocument(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -808,10 +834,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CreateDocumentShouldThrowIfSpecifiedJsonIsNullOrEmptyString()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CreateDocumentShouldThrowIfSpecifiedJsonIsNullOrEmptyString(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -829,10 +856,11 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task CanCreateDocumentsIfPatchingAppliedByIndex()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanCreateDocumentsIfPatchingAppliedByIndex(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -879,10 +907,14 @@ this.Value = another.Value;
             }
         }
 
-        [Fact]
-        public async Task PreventRecursion()
+        [Theory]
+        [InlineData(true, "Jint")]
+        [InlineData(false, "Jint")]
+        [InlineData(true, "V8")]
+        [InlineData(false, "V8")]
+        public async Task PreventRecursion(bool isNative, string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -894,36 +926,61 @@ this.Value = another.Value;
                     await session.SaveChangesAsync();
                 }
 
-                await store.Operations.SendAsync(new PatchOperation("Item/1", null, new PatchRequest
+                var op = new PatchOperation("Item/1", null, new PatchRequest
                 {
-                    Script = @"
+                    Script = isNative ? 
+                        @"
 var a = {};
 var b = {};
 b.a = a;
 a.b = b;
-this.Test = this;
 this.Else = a;
+" : @"
+this.Test = this;
 ",
-                }));
+                });
+                
+                if (jsEngineType == "Jint")
+                {
+                    try
+                    {
+                        await store.Operations.SendAsync(op);
+                    }
+                    catch (Exception e)
+                    {
+                        var eType = ((object) e).GetType();
+                        Assert.Equal(nameof (JavaScriptException), eType.Name);
+                        Assert.Contains("Cyclic reference detected", e.Message);
+                        return;
+                    }
+                }
+                else
+                {
+                    await store.Operations.SendAsync(op);
+                }
 
                 using (var commands = store.Commands())
                 {
                     dynamic resultDoc = await commands.GetAsync("Item/1");
                     Assert.Equal("1", resultDoc.Value<string>("Value"));
 
-                    var patchedField = resultDoc.Test;
-                    Assert.Equal("1", patchedField.Value.ToString());
+                    if (!isNative)
+                    {
+                        var patchedField = resultDoc.Test;
+                        Assert.Equal("1", patchedField.Value.ToString());
 
-                    patchedField = patchedField.Test;
-                    Assert.True(patchedField == null);
+                        patchedField = patchedField.Test;
+                        Assert.True(patchedField == null);
+                    }
                 }
             }
         }
 
-        [Fact]
-        public async Task CanPerformAdvancedPatching()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanPerformAdvancedPatching(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -952,10 +1009,11 @@ this.Else = a;
             }
         }
 
-        [Fact]
-        public async Task CanPerformAdvancedWithSetBasedUpdates()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanPerformAdvancedWithSetBasedUpdates(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 var item1 = new CustomType
                 {
@@ -1017,10 +1075,11 @@ this.Else = a;
             }
         }
 
-        [Fact]
-        public async Task CanDeserializeModifiedDocument()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public async Task CanDeserializeModifiedDocument(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 using (var commands = store.Commands())
                 {
@@ -1045,10 +1104,11 @@ this.Else = a;
             }
         }
 
-        [Fact]
-        public void CanDoPatchIfMissing()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public void CanDoPatchIfMissing(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 store.Operations.Send(new PatchOperation("CustomTypes/123", null,
                     new PatchRequest

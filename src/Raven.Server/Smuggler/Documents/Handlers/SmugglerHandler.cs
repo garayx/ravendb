@@ -51,8 +51,8 @@ namespace Raven.Server.Smuggler.Documents.Handlers
             using (var processor = new SmugglerHandlerProcessorForValidateOptions<DocumentsOperationContext>(this, ContextPool))
             {
                 await processor.ExecuteAsync();
-            }
-        }
+                }
+                }
 
         [RavenAction("/databases/*/smuggler/export", "POST", AuthorizationStatus.ValidUser, EndpointType.Read, DisableOnCpuCreditsExhaustion = true)]
         public async Task PostExport()
@@ -64,9 +64,9 @@ namespace Raven.Server.Smuggler.Documents.Handlers
                 try
                 {
                     await Export(context, Database.Name, ExportDatabaseInternalAsync, Database.Operations, operationId, Database);
-                }
+                    }
                 catch (Exception e)
-                {
+                    {
                     if (Logger.IsOperationsEnabled)
                         Logger.Operations("Export failed .", e);
 
@@ -490,8 +490,8 @@ namespace Raven.Server.Smuggler.Documents.Handlers
             {
                 var operationId = GetLongQueryString("operationId", false) ?? Database.Operations.GetNextOperationId();
                 await Import(context, Database.Name, DoImportInternalAsync, Database.Operations, operationId, Database);
-            }
-        }
+                                            }
+                                        }
 
         [RavenAction("/databases/*/smuggler/import/csv", "POST", AuthorizationStatus.ValidUser, EndpointType.Write, DisableOnCpuCreditsExhaustion = true)]
         public async Task ImportFromCsv()
@@ -681,5 +681,5 @@ namespace Raven.Server.Smuggler.Documents.Handlers
 
             return HttpContext.Request.Body;
         }
-    }
-}
+            }
+        }

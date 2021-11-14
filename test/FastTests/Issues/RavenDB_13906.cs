@@ -11,10 +11,11 @@ namespace FastTests.Issues
         {
         }
 
-        [Fact]
-        public void OnAfterSaveChangesOnPatchShouldWork()
+        [Theory]
+        [JavaScriptEngineClassData]
+        public void OnAfterSaveChangesOnPatchShouldWork(string jsEngineType)
         {
-            using (var store = GetDocumentStore())
+            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
             {
                 var condition = false;
                 string id;

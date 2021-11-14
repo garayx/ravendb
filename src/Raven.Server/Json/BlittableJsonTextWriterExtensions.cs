@@ -41,6 +41,8 @@ namespace Raven.Server.Json
 {
     internal static class BlittableJsonTextWriterExtensions
     {
+        public static JavaScriptEngineType EngineType = JavaScriptEngineType.Jint;
+        
         public static void WritePerformanceStats(this AbstractBlittableJsonTextWriter writer, JsonOperationContext context, IEnumerable<IndexPerformanceStats> stats)
         {
             writer.WriteStartObject();
@@ -58,7 +60,7 @@ namespace Raven.Server.Json
             });
             writer.WriteEndObject();
         }
-
+        
         public static void WriteSubscriptionTaskPerformanceStats(this AbstractBlittableJsonTextWriter writer, JsonOperationContext context, IEnumerable<SubscriptionTaskPerformanceStats> stats)
         {
             writer.WriteStartObject();
@@ -89,7 +91,7 @@ namespace Raven.Server.Json
 
                 w.WriteEndObject();
             });
-
+            
             writer.WriteEndObject();
         }
 
@@ -585,7 +587,7 @@ namespace Raven.Server.Json
                 writer.WriteComma();
                 writer.WritePropertyName(nameof(result.RevisionIncludes));
                 writer.WriteStartArray();
-                await writer.WriteRevisionIncludes(context: context, revisionsByChangeVector: revisionByCv, revisionsByDateTime: revisionByDateTime, token: token);
+                await writer.WriteRevisionIncludes(context:context, revisionsByChangeVector: revisionByCv, revisionsByDateTime: revisionByDateTime, token: token); 
                 writer.WriteEndArray();
             }
 
@@ -836,13 +838,13 @@ namespace Raven.Server.Json
             var djv = (DynamicJsonValue)TypeConverter.ToBlittableSupportedType(stats);
             writer.WriteObject(context.ReadObject(djv, "etl/performance"));
         }
-
+        
         public static void WriteSubscriptionBatchPerformanceStats(this AbstractBlittableJsonTextWriter writer, JsonOperationContext context, SubscriptionBatchPerformanceStats batchStats)
         {
             var djv = (DynamicJsonValue)TypeConverter.ToBlittableSupportedType(batchStats);
             writer.WriteObject(context.ReadObject(djv, "subscriptionBatch/performance"));
         }
-
+        
         public static void WriteSubscriptionConnectionPerformanceStats(this AbstractBlittableJsonTextWriter writer, JsonOperationContext context, SubscriptionConnectionPerformanceStats connectionStats)
         {
             var djv = (DynamicJsonValue)TypeConverter.ToBlittableSupportedType(connectionStats);
@@ -1139,11 +1141,11 @@ namespace Raven.Server.Json
             writer.WritePropertyName(nameof(indexDefinition.OutputReduceToCollection));
             writer.WriteString(indexDefinition.OutputReduceToCollection);
             writer.WriteComma();
-
+            
             writer.WritePropertyName(nameof(indexDefinition.DeploymentMode));
             if (indexDefinition.DeploymentMode.HasValue)
                 writer.WriteString(indexDefinition.DeploymentMode.Value.ToString());
-            else
+            else 
                 writer.WriteNull();
             writer.WriteComma();
 
@@ -1338,8 +1340,8 @@ namespace Raven.Server.Json
 
             writer.WriteArray(context, "Results", indexesStats, (w, c, stats) =>
             {
-                var djv = (DynamicJsonValue)TypeConverter.ToBlittableSupportedType(stats);
-                writer.WriteObject(context.ReadObject(djv, "index/stats"));
+            var djv = (DynamicJsonValue)TypeConverter.ToBlittableSupportedType(stats);
+            writer.WriteObject(context.ReadObject(djv, "index/stats"));
             });
 
             writer.WriteEndObject();
@@ -1620,7 +1622,7 @@ namespace Raven.Server.Json
             return (count, sizeInBytes);
         }
 
-        internal static async Task WriteRevisionIncludes(this AsyncBlittableJsonTextWriter writer, JsonOperationContext context, Dictionary<string, Document> revisionsByChangeVector, Dictionary<string, Dictionary<DateTime, Document>> revisionsByDateTime, CancellationToken token = default)
+        internal static async Task WriteRevisionIncludes(this AsyncBlittableJsonTextWriter writer, JsonOperationContext context, Dictionary<string,Document> revisionsByChangeVector, Dictionary<string, Dictionary<DateTime, Document>> revisionsByDateTime, CancellationToken token = default)
         {
             var first = true;
             if (revisionsByDateTime != null)
@@ -1630,24 +1632,24 @@ namespace Raven.Server.Json
                     if (first == false)
                         writer.WriteComma();
                     first = false;
-
+                
                     foreach ((DateTime dateTime, Document doc) in dateTimeToDictionary)
                     {
 
                         writer.WriteStartObject();
-
+                    
                         writer.WritePropertyName(nameof(RevisionIncludeResult.Id));
                         writer.WriteString(id);
                         writer.WriteComma();
-
+                    
                         writer.WritePropertyName(nameof(RevisionIncludeResult.ChangeVector));
                         writer.WriteString(doc.ChangeVector);
                         writer.WriteComma();
-
+                    
                         writer.WritePropertyName(nameof(RevisionIncludeResult.Before));
-                        writer.WriteDateTime(dateTime, true);
+                        writer.WriteDateTime(dateTime,true);
                         writer.WriteComma();
-
+                    
                         writer.WritePropertyName(nameof(RevisionIncludeResult.Revision));
                         WriteDocument(writer, context, metadataOnly: false, document: doc);
                         writer.WriteEndObject();
@@ -1663,27 +1665,27 @@ namespace Raven.Server.Json
                     if (first == false)
                         writer.WriteComma();
                     first = false;
-
+                
                     writer.WriteStartObject();
-
+                
                     writer.WritePropertyName("ChangeVector");
                     writer.WriteString(key);
                     writer.WriteComma();
-
+                
                     writer.WritePropertyName("Id");
                     writer.WriteString(document.Id.ToString());
                     writer.WriteComma();
-
+                
                     writer.WritePropertyName("Revision");
                     WriteDocument(writer, context, metadataOnly: false, document: document);
                     await writer.MaybeFlushAsync(token);
-
+                
                     writer.WriteEndObject();
                 }
             }
             await writer.MaybeFlushAsync(token);
         }
-
+        
         private static void WriteConflict(AbstractBlittableJsonTextWriter writer, IncludeDocumentsCommand.ConflictDocument conflict)
         {
             writer.WriteStartObject();
@@ -1762,7 +1764,7 @@ namespace Raven.Server.Json
 
             writer.WriteEndObject();
         }
-
+        
         public static async Task WriteCountersAsync(this AsyncBlittableJsonTextWriter writer, Dictionary<string, List<CounterDetail>> counters, CancellationToken token)
         {
             writer.WriteStartObject();
@@ -2039,8 +2041,8 @@ namespace Raven.Server.Json
                     writer.WriteString(orderByField.Value);
                 }
 
-                writer.WriteEndObject();
-            }
+            writer.WriteEndObject();
+        }
 
             writer.WriteEndObject();
         }
@@ -2301,6 +2303,6 @@ namespace Raven.Server.Json
             writer.WritePropertyName("NodeTag");
             writer.WriteString(nodeTag);
             writer.WriteEndObject();
-        }
     }
+}
 }

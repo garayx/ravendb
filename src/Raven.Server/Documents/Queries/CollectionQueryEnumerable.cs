@@ -62,7 +62,7 @@ namespace Raven.Server.Documents.Queries
         public IEnumerator<Document> GetEnumerator()
         {
             return new Enumerator(_database, _documents, _fieldsToFetch, _collection, _isAllDocsCollection, _query,
-                _queryTimings, _context, _includeDocumentsCommand, _includeRevisionsCommand, _includeCompareExchangeValuesCommand, _totalResults, _scannedResults,
+                _queryTimings, _context, _includeDocumentsCommand, _includeRevisionsCommand, _includeCompareExchangeValuesCommand, _totalResults, _scannedResults, 
                 StartAfterId, AlreadySeenIdsCount, Fields, _skippedResults, _token);
         }
 
@@ -139,7 +139,7 @@ namespace Raven.Server.Documents.Queries
 
             public Enumerator(DocumentDatabase database, DocumentsStorage documents, FieldsToFetch fieldsToFetch, string collection, bool isAllDocsCollection,
                 IndexQueryServerSide query, QueryTimingsScope queryTimings, DocumentsOperationContext context, IncludeDocumentsCommand includeDocumentsCommand,
-                IncludeRevisionsCommand includeRevisionsCommand, IncludeCompareExchangeValuesCommand includeCompareExchangeValuesCommand, Reference<int> totalResults,
+                IncludeRevisionsCommand includeRevisionsCommand,IncludeCompareExchangeValuesCommand includeCompareExchangeValuesCommand, Reference<int> totalResults, 
                 Reference<int> scannedResults, string startAfterId, Reference<long> alreadySeenIdsCount, DocumentFields fields, Reference<long> skippedResults, CancellationToken token)
             {
                 _documents = documents;
@@ -164,11 +164,11 @@ namespace Raven.Server.Documents.Queries
                 _resultsRetriever = new MapQueryResultRetriever(database, query, queryTimings, documents, context, fieldsToFetch, includeDocumentsCommand, includeCompareExchangeValuesCommand, includeRevisionsCommand);
 
                 (_ids, _startsWith) = query.ExtractIdsFromQuery(database.ServerStore, context.Allocator, database.Name);
-
+                
                 if (_query.Metadata.FilterScript != null)
                 {
                     var key = new FilterKey(_query.Metadata);
-                    _releaseFilterScriptRunner = database.Scripts.GetScriptRunner(key, readOnly: true, patchRun: out _filterScriptRun);
+                    _releaseFilterScriptRunner = database.Scripts.GetScriptRunner(database.JsOptions, key, readOnly: true, patchRun: out _filterScriptRun);
                 }
             }
 
@@ -217,7 +217,7 @@ namespace Raven.Server.Documents.Queries
                     _hasProjections = false;
                     _projections = default;
                 }
-
+                
                 if (_inner == null)
                 {
                     _inner = GetDocuments().GetEnumerator();
@@ -243,20 +243,20 @@ namespace Raven.Server.Documents.Queries
 
                 if (_filterScriptRun != null)
                 {
-                    if (_scannedResults.Value == _query.FilterLimit)
+                    if ( _scannedResults.Value == _query.FilterLimit)
                     {
                         return (false, null);
                     }
                     _scannedResults.Value++;
                     object self = _filterScriptRun.Translate(_context, _inner.Current);
-                    using (_queryTimings?.For(nameof(QueryTimingsScope.Names.Filter)))
-                    using (var result = _filterScriptRun.Run(_context, _context, "execute", _inner.Current!.Id, new[] { self, _query.QueryParameters }, _queryTimings))
+                    using(_queryTimings?.For(nameof(QueryTimingsScope.Names.Filter)))
+                    using (var result = _filterScriptRun.Run(_context, _context, "execute", _inner.Current!.Id, new[]{self, _query.QueryParameters}, _queryTimings))
                     {
                         if (result.BooleanValue != true)
                             return (true, null);
                     }
                 }
-
+                
                 if (_fieldsToFetch.IsProjection)
                 {
                     var result = _resultsRetriever.GetProjectionFromDocument(_inner.Current, null, QueryResultRetrieverBase.ZeroScore, _fieldsToFetch, _context, null, _token);
@@ -297,7 +297,7 @@ namespace Raven.Server.Documents.Queries
                     }
 
                     documents = _isAllDocsCollection
-                        ? _documents.GetDocumentsStartingWith(_context, _startsWith, null, null, _startAfterId, _start, _query.PageSize, fields: _fields)
+                        ? _documents.GetDocumentsStartingWith(_context, _startsWith, null, null, _startAfterId, _start, _query.PageSize, fields: _fields) 
                         : _documents.GetDocumentsStartingWith(_context, _startsWith, _startAfterId, _start, _query.PageSize, _collection, _skippedResults, _fields);
 
                     if (countQuery)
@@ -444,6 +444,6 @@ namespace Raven.Server.Documents.Queries
                 _releaseFilterScriptRunner.Dispose();
             }
 
-        }
-    }
-}
+                }
+                }
+                                }
