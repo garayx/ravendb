@@ -143,7 +143,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
             if (_returnRun != null)
                 return; // already init
 
-            _returnRun = Database.Scripts.GetScriptRunner(_jsOptions, Patch, true, out Run);
+            _returnRun = Database.Scripts.GetScriptRunner(Patch, readOnly: true, out Run);
         }
 
         protected HashSet<long> Active;
@@ -163,7 +163,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
             InitializeProcessor();
         }
 
-        private protected class ProjectionMetadataModifier : JsBlittableBridge.IResultModifier
+        private protected class ProjectionMetadataModifier : IResultModifier
         {
             public static readonly ProjectionMetadataModifier Instance = new ProjectionMetadataModifier();
 
@@ -171,11 +171,10 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
             {
             }
 
-            public void Modify(JsHandle json)
+            public void Modify<T>(T json, IJsEngineHandle<T> engine) where T : struct, IJsHandle<T>
             {
                 using (var jsMetadata = json.GetProperty(Constants.Documents.Metadata.Key))
                 {
-                    var engine = json.Engine;
                     if (!jsMetadata.IsObject)
                     {
                         using (var jsMetadataNew = engine.CreateObject())
