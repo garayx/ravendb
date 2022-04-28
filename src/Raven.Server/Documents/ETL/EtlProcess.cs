@@ -18,6 +18,7 @@ using Raven.Client.Json.Serialization;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.JavaScript;
 using Raven.Client.Util;
+using Raven.Server.Config.Categories;
 using Raven.Server.Documents.ETL.Metrics;
 using Raven.Server.Documents.ETL.Providers.ElasticSearch;
 using Raven.Server.Documents.ETL.Providers.OLAP;
@@ -28,6 +29,8 @@ using Raven.Server.Documents.ETL.Providers.SQL;
 using Raven.Server.Documents.ETL.Providers.SQL.RelationalWriters;
 using Raven.Server.Documents.ETL.Stats;
 using Raven.Server.Documents.ETL.Test;
+using Raven.Server.Documents.Patch.Jint;
+using Raven.Server.Documents.Patch.V8;
 using Raven.Server.Documents.Replication.ReplicationItems;
 using Raven.Server.Documents.TimeSeries;
 using Raven.Server.NotificationCenter.Notifications;
@@ -43,9 +46,6 @@ using Sparrow.LowMemory;
 using Sparrow.Threading;
 using Sparrow.Utils;
 using Size = Sparrow.Size;
-using Raven.Server.Config.Categories;
-using Raven.Server.Config.Settings;
-using Raven.Server.Documents.Indexes.Static;
 
 namespace Raven.Server.Documents.ETL
 {
@@ -142,13 +142,13 @@ namespace Raven.Server.Documents.ETL
         protected EtlProcessState LastProcessState;
 
         private readonly ServerStore _serverStore;
+        private readonly JavaScriptEngineType _engineType;
 
         public readonly TConfiguration Configuration;
 
         protected EtlProcess(Transformation transformation, TConfiguration configuration, DocumentDatabase database, ServerStore serverStore, string tag)
         {
-            _jsOptions = database?.JsOptions ?? serverStore?.Configuration.JavaScript ?? 
-                (IJavaScriptOptions)(new JavaScriptOptions());
+            _engineType=database.Configuration.JavaScript.EngineType;
             Transformation = transformation;
             Configuration = configuration;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(database.DatabaseShutdown);
@@ -300,11 +300,23 @@ namespace Raven.Server.Documents.ETL
             }
         }
 
-        protected abstract EtlTransformer<TExtracted, TTransformed, TStatsScope, TEtlPerformanceOperation> GetTransformer(DocumentsOperationContext context);
+        protected abstract EtlTransformer<TExtracted, TTransformed, TStatsScope, TEtlPerformanceOperation, JsHandleV8> GetTransformerV8(DocumentsOperationContext context);
+        protected abstract EtlTransformer<TExtracted, TTransformed, TStatsScope, TEtlPerformanceOperation, JsHandleJint> GetTransformerJint(DocumentsOperationContext context);
 
-        public EtlTransformer<TExtracted, TTransformed, TStatsScope, TEtlPerformanceOperation> Transform(IEnumerable<TExtracted> items, DocumentsOperationContext context, TStatsScope stats, EtlProcessState state)
+        public IEtlTransformer<TExtracted, TTransformed, TStatsScope> Transform(IEnumerable<TExtracted> items, DocumentsOperationContext context, TStatsScope stats, EtlProcessState state)
         {
-            var transformer = GetTransformer(context);
+            IEtlTransformer<TExtracted, TTransformed, TStatsScope> transformer;
+            switch (_engineType)
+            {
+                case JavaScriptEngineType.Jint:
+                    transformer = GetTransformerJint(context);
+                    break;
+                case JavaScriptEngineType.V8:
+                    transformer = GetTransformerV8(context);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(_engineType));
+            }
             transformer.Initialize(debugMode: _testMode != null);
 
             var batchSize = 0;

@@ -12,6 +12,8 @@ using Raven.Server.Documents.ETL.Metrics;
 using Raven.Server.Documents.ETL.Providers.Raven.Enumerators;
 using Raven.Server.Documents.ETL.Stats;
 using Raven.Server.Documents.Handlers;
+using Raven.Server.Documents.Patch.Jint;
+using Raven.Server.Documents.Patch.V8;
 using Raven.Server.Documents.Replication.ReplicationItems;
 using Raven.Server.Documents.TimeSeries;
 using Raven.Server.ServerWide;
@@ -139,9 +141,14 @@ namespace Raven.Server.Documents.ETL.Providers.Raven
             return Transformation.IsEmptyScript || Transformation.TimeSeries.CollectionToLoadBehaviorFunction != null;
         }
 
-        protected override EtlTransformer<RavenEtlItem, ICommandData, EtlStatsScope, EtlPerformanceOperation> GetTransformer(DocumentsOperationContext context)
+        protected override EtlTransformer<RavenEtlItem, ICommandData, EtlStatsScope, EtlPerformanceOperation, JsHandleV8> GetTransformerV8(DocumentsOperationContext context)
         {
-            return new RavenEtlDocumentTransformer(Transformation, Database, context, _script);
+            return new RavenEtlDocumentTransformerV8(Transformation, Database, context, _script);
+        }
+
+        protected override EtlTransformer<RavenEtlItem, ICommandData, EtlStatsScope, EtlPerformanceOperation, JsHandleJint> GetTransformerJint(DocumentsOperationContext context)
+        {
+            return new RavenEtlDocumentTransformerJint(Transformation, Database, context, _script);
         }
 
         protected override int LoadInternal(IEnumerable<ICommandData> items, DocumentsOperationContext context, EtlStatsScope scope)
