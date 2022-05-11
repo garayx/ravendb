@@ -121,7 +121,7 @@ namespace Raven.Server.Documents.Patch
         //    return new ReturnRun(run, holder);
         //}
         public abstract Holder<T> GetSingleRunHolder(bool executeScriptsSource = true);
-        public abstract ReturnRun GetRunnerTyped(out SingleRun<T> run, bool executeScriptsSource = true);
+        //public abstract ReturnRun GetRunnerTyped(out SingleRun<T> run, bool executeScriptsSource = true);
 
         public void ReturnRunner(Holder<T> holder)
         {
@@ -134,17 +134,6 @@ namespace Raven.Server.Documents.Patch
             _cache.Enqueue(holder);
         }
 
-        public static void TryCompileScript(string script)
-        {
-            //var jsEngineType = JsOptions.EngineType;
-            //IJsEngineHandle tryScriptEngineHandle = jsEngineType switch
-            //{
-            //    JavaScriptEngineType.Jint => new PatchJint.JintEngineEx(),
-            //    JavaScriptEngineType.V8 => GetSingleRunHolder().Value.ScriptEngineHandle,
-            //    _ => throw new NotSupportedException($"Not supported JS engine type '{JsOptions}'.")
-            //};
-         //   tryScriptEngineHandle.TryCompileScript(script);
-        }
 
         public static unsafe DateTime GetDateArg(T arg, string signature, string argName)
         {
@@ -249,13 +238,13 @@ namespace Raven.Server.Documents.Patch
             return holder;
         }
 
-        public override ReturnRun GetRunnerTyped(out SingleRun<JsHandleV8> run, bool executeScriptsSource = true)
+        public ReturnRun GetRunner(out SingleRunV8 run, bool executeScriptsSource = true)
         {
             _lastRun = DateTime.UtcNow;
             Interlocked.Increment(ref Runs);
 
             var holder = GetSingleRunHolder(executeScriptsSource);
-            run = holder.Value;
+            run = holder.Value as SingleRunV8;
             return new ReturnRun(run, holder);
         }
     }
@@ -293,9 +282,14 @@ namespace Raven.Server.Documents.Patch
             return holder;
         }
 
-        public override ReturnRun GetRunnerTyped(out SingleRun<JsHandleJint> run, bool executeScriptsSource = true)
+        public ReturnRun GetRunner(out SingleRunJint run, bool executeScriptsSource = true)
         {
-            throw new NotImplementedException();
+            _lastRun = DateTime.UtcNow;
+            Interlocked.Increment(ref Runs);
+
+            var holder = GetSingleRunHolder(executeScriptsSource);
+            run = holder.Value as SingleRunJint;
+            return new ReturnRun(run, holder);
         }
     }
 

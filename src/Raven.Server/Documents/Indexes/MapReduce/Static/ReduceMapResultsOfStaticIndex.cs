@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using Raven.Client.Documents.Indexes;
+using Raven.Client.ServerWide.JavaScript;
 using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents;
 using Raven.Server.Documents.Indexes.Static;
 using Raven.Server.ServerWide.Context;
@@ -17,6 +18,7 @@ namespace Raven.Server.Documents.Indexes.MapReduce.Static
         private readonly DynamicIterationOfAggregationBatchWrapper _blittableToDynamicWrapper = new DynamicIterationOfAggregationBatchWrapper();
         private readonly IndexingFunc _reducingFunc;
         private readonly IndexType _indexType;
+        private readonly JavaScriptEngineType _engineType;
         private IPropertyAccessor _propertyAccessor;
 
         public ReduceMapResultsOfStaticIndex(Index index, IndexingFunc reducingFunc, MapReduceIndexDefinition indexDefinition, IndexStorage indexStorage, MetricCounters metrics, MapReduceIndexingContext mapReduceContext)
@@ -24,8 +26,9 @@ namespace Raven.Server.Documents.Indexes.MapReduce.Static
         {
             _reducingFunc = reducingFunc;
             _indexType = index.Type;
+            _engineType = index.DocumentDatabase.Configuration.JavaScript.EngineType;
         }
-        
+
         protected override AggregationResult AggregateOn(List<BlittableJsonReaderObject> aggregationBatch, TransactionOperationContext indexContext, IndexingStatsScope stats, CancellationToken token)
         {
             _blittableToDynamicWrapper.InitializeForEnumeration(aggregationBatch);
@@ -39,14 +42,13 @@ namespace Raven.Server.Documents.Indexes.MapReduce.Static
             foreach (var output in new TimeCountingEnumerable(_reducingFunc(_blittableToDynamicWrapper), funcStats))
             {
                 token.ThrowIfCancellationRequested();
-
                 if (_propertyAccessor == null)
-                    _propertyAccessor = PropertyAccessor.Create(output.GetType(), output);
+                    _propertyAccessor = PropertyAccessor.Create(output.GetType(), output, _engineType);
 
                 resultObjects.Add(output);
             }
 
-            return new AggregatedAnonymousObjects(_jsOptions, resultObjects, _propertyAccessor, indexContext);
+            return new AggregatedAnonymousObjects(resultObjects, _propertyAccessor, indexContext);
         }
 
         public class DynamicIterationOfAggregationBatchWrapper : IEnumerable<DynamicBlittableJson>

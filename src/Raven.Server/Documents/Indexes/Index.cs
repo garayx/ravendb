@@ -68,7 +68,6 @@ using AsyncManualResetEvent = Sparrow.Server.AsyncManualResetEvent;
 using Constants = Raven.Client.Constants;
 using FacetQuery = Raven.Server.Documents.Queries.Facets.FacetQuery;
 using Size = Sparrow.Size;
-using Raven.Client.ServerWide.JavaScript;
 
 namespace Raven.Server.Documents.Indexes
 {
@@ -77,17 +76,15 @@ namespace Raven.Server.Documents.Indexes
     {
         public new TIndexDefinition Definition => (TIndexDefinition)base.Definition;
 
-        protected Index(IndexType type, IndexSourceType sourceType, TIndexDefinition definition)
-            : base(type, sourceType, definition)
+        protected Index(IndexType type, IndexSourceType sourceType, TIndexDefinition definition, AbstractStaticIndexBase compiled)
+            : base(type, sourceType, definition, compiled)
         {
         }
     }
 
     public abstract class Index : ITombstoneAware, IDisposable, ILowMemoryHandler
     {
-        protected IJavaScriptOptions _jsOptions;
-        
-        public IJavaScriptOptions JsOptions { get { return _jsOptions;  } }
+        protected internal AbstractStaticIndexBase _compiled;
 
         private int _writeErrors;
 
@@ -258,7 +255,7 @@ namespace Raven.Server.Documents.Indexes
 
         private readonly string _itemType;
 
-        protected Index(IndexType type, IndexSourceType sourceType, IndexDefinitionBaseServerSide definition)
+        protected Index(IndexType type, IndexSourceType sourceType, IndexDefinitionBaseServerSide definition, AbstractStaticIndexBase compiled)
         {
             Type = type;
             SourceType = sourceType;
@@ -268,6 +265,7 @@ namespace Raven.Server.Documents.Indexes
             if (Collections.Contains(Constants.Documents.Collections.AllDocumentsCollection))
                 HandleAllDocs = true;
 
+            _compiled = compiled;
             _queryBuilderFactories = new QueryBuilderFactories
             {
                 GetSpatialFieldFactory = GetOrAddSpatialField,
@@ -762,8 +760,6 @@ namespace Raven.Server.Documents.Indexes
                 var safeName = IndexDefinitionBaseServerSide.GetIndexNameSafeForFileSystem(Name);
                 _unmanagedBuffersPool = new UnmanagedBuffersPoolWithLowMemoryHandling($"Indexes//{safeName}");
 
-                _jsOptions = new JavaScriptOptions(configuration, documentDatabase.Configuration); // TODO [shlomo] check if this is correct: new SingleIndexConfiguration(definition.Configuration, configuration)?
-            
                 InitializeComponentsUsingEnvironment(documentDatabase, _environment);
 
                 LoadValues();

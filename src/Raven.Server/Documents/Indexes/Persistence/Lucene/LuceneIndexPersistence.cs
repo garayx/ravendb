@@ -10,11 +10,14 @@ using Lucene.Net.Store;
 using Raven.Client;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.ServerWide.JavaScript;
-using Raven.Server.Config.Categories;
 using Raven.Server.Documents.Indexes.MapReduce.OutputToCollection;
 using Raven.Server.Documents.Indexes.MapReduce.Static;
 using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents;
+using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.Jint;
 using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.TimeSeries;
+using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.TimeSeries.Jint;
+using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.TimeSeries.V8;
+using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.V8;
 using Raven.Server.Documents.Indexes.Static;
 using Raven.Server.Documents.Indexes.Static.Counters;
 using Raven.Server.Documents.Indexes.Static.TimeSeries;
@@ -29,17 +32,11 @@ using Voron;
 using Voron.Data.BTrees;
 using Voron.Impl;
 using Version = Lucene.Net.Util.Version;
-using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.Jint;
-using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.V8;
-using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.TimeSeries.Jint;
-using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents.TimeSeries.V8;
 
 namespace Raven.Server.Documents.Indexes.Persistence.Lucene
 {
     public class LuceneIndexPersistence : IDisposable
     {
-        protected readonly IJavaScriptOptions _jsOptions;
-        
         private readonly Index _index;
 
         private readonly Analyzer _dummyAnalyzer = new SimpleAnalyzer();
@@ -79,11 +76,12 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
         internal LuceneVoronDirectory LuceneDirectory => _directory;
 
         private readonly object _readersLock = new object();
+        private readonly JavaScriptEngineType _engineType;
 
         public LuceneIndexPersistence(Index index)
         {
-            _jsOptions = index.JsOptions;
             _index = index;
+            _engineType = index.DocumentDatabase.Configuration.JavaScript.EngineType;
             _logger = LoggingSource.Instance.GetLogger<LuceneIndexPersistence>(index.DocumentDatabase.Name);
             _suggestionsDirectories = new Dictionary<string, LuceneVoronDirectory>();
             _suggestionsIndexSearcherHolders = new Dictionary<string, IndexSearcherHolder>();
@@ -133,37 +131,43 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
                     switch (_index.SourceType)
                     {
                         case IndexSourceType.Documents:
-                            _converter = _jsOptions.EngineType switch
+                            switch (_engineType)
                             {
-                                JavaScriptEngineType.Jint => new JsLuceneDocumentConverterJint((MapIndex)index),
-                                JavaScriptEngineType.V8 => new JsLuceneDocumentConverterV8((MapIndex)index),
-                                _ => throw new NotSupportedException($"Not supported JS engine type '{_jsOptions}'.")
-                            };
+                                case JavaScriptEngineType.Jint:
+                                    _converter = new JsLuceneDocumentConverterJint((MapIndex)index);
+                                    break;
+                                case JavaScriptEngineType.V8:
+                                    _converter = new JsLuceneDocumentConverterV8((MapIndex)index);
+                                    break;
+                                default:
+                                    throw new NotSupportedException($"Not supported JS engine type '{_engineType}'.");
+                            }
+
                             break;
                         case IndexSourceType.TimeSeries:
-                            _converter = _jsOptions.EngineType switch
+                            _converter = _engineType switch
                             {
                                 JavaScriptEngineType.Jint => new CountersAndTimeSeriesJsLuceneDocumentConverterJint((MapTimeSeriesIndex)index),
                                 JavaScriptEngineType.V8 => new CountersAndTimeSeriesJsLuceneDocumentConverterV8((MapTimeSeriesIndex)index),
-                                _ => throw new NotSupportedException($"Not supported JS engine type '{_jsOptions}'.")
+                                _ => throw new NotSupportedException($"Not supported JS engine type '{_engineType}'.")
                             }; 
                             break;
                         case IndexSourceType.Counters:
-                            _converter = _jsOptions.EngineType switch
+                            _converter = _engineType switch
                             {
                                 JavaScriptEngineType.Jint => new CountersAndTimeSeriesJsLuceneDocumentConverterJint((MapCountersIndex)index),
                                 JavaScriptEngineType.V8 => new CountersAndTimeSeriesJsLuceneDocumentConverterV8((MapCountersIndex)index),
-                                _ => throw new NotSupportedException($"Not supported JS engine type '{_jsOptions}'.")
+                                _ => throw new NotSupportedException($"Not supported JS engine type '{_engineType}'.")
                             }; 
                             break;
                     }
                     break;
                 case IndexType.JavaScriptMapReduce:
-                    _converter = _jsOptions.EngineType switch
+                    _converter = _engineType switch
                     {
                         JavaScriptEngineType.Jint => new JsLuceneDocumentConverterJint((MapReduceIndex)index, storeValue: true),
                         JavaScriptEngineType.V8 => new JsLuceneDocumentConverterV8((MapReduceIndex)index, storeValue: true),
-                        _ => throw new NotSupportedException($"Not supported JS engine type '{_jsOptions}'.")
+                        _ => throw new NotSupportedException($"Not supported JS engine type '{_engineType}'.")
                     }; 
                     break;
                 case IndexType.Faulty:
