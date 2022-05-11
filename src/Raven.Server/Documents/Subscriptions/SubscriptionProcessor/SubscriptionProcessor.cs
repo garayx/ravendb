@@ -127,8 +127,8 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
         public abstract long GetLastItemEtag(DocumentsOperationContext context, string collection);
 
         protected SubscriptionPatchDocument Patch;
-        protected ScriptRunner.SingleRun Run;
-        private ScriptRunner.ReturnRun? _returnRun;
+        protected ISingleRun Run;
+        private ReturnRun? _returnRun;
 
         public void AddScript(SubscriptionPatchDocument patch)
         {
