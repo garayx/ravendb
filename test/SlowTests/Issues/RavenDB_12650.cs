@@ -15,10 +15,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void LoadingDocumentInProjectionUsingStoredIndexIdInMapReduceIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void LoadingDocumentInProjectionUsingStoredIndexIdInMapReduceIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new DocumentIndex().Execute(store);
 

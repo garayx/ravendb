@@ -168,10 +168,10 @@ limit 1")
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanProjectDistanceComputation(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanProjectDistanceComputation(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.Maintenance.Send(new CreateSampleDataOperation());
 

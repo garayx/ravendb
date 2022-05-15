@@ -18,10 +18,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanDoMapOnObject(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanDoMapOnObject(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new TestDocumentByName().Execute(store);
 
@@ -79,10 +79,10 @@ from index 'TestDocumentByName' as item select output(item)", query.ToString());
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanDoMapOnObject2(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanDoMapOnObject2(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var testDoc = Setup(store);
 
@@ -115,10 +115,10 @@ from index 'TestDocumentByName' as item select output(item)", query.ToString());
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanDoMapOnObject3(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanDoMapOnObject3(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var testDoc = Setup(store);
 
@@ -163,10 +163,10 @@ from index 'TestDocumentByName' as item select output(item)", query.ToString());
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanDoMapOnObject4(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanDoMapOnObject4(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var testDoc = Setup(store);
 

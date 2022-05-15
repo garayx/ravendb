@@ -134,10 +134,10 @@ namespace SlowTests.Client.Lazy.Async
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task LazyLoadById(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task LazyLoadById(Options options)
         {
-            var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType));
+            var store = GetDocumentStore(options);
             new Contact_ByName().Execute(store);
 
             using (var session = store.OpenSession())
@@ -239,10 +239,10 @@ select {
 
         
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task WithTransformer(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task WithTransformer(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
 
                 using (var session = store.OpenSession())

@@ -149,10 +149,10 @@ namespace SlowTests.Core.Commands
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanDeleteAndUpdateDocumentByIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanDeleteAndUpdateDocumentByIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.Maintenance.Send(new PutIndexesOperation(new[] {new IndexDefinition
                 {

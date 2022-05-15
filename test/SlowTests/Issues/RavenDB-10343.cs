@@ -80,10 +80,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanQueryWithLoadFromSelectAndProject(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanQueryWithLoadFromSelectAndProject(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
 
                 using (var session = store.OpenSession())
@@ -186,10 +186,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanQueryWithLoadFromSelectAndProjectWhere(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanQueryWithLoadFromSelectAndProjectWhere(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
 
                 using (var session = store.OpenSession())
@@ -308,10 +308,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanQueryWithLoadFromSelectAndProjectWhere_UsingSeassionLoad(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanQueryWithLoadFromSelectAndProjectWhere_UsingSeassionLoad(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
 
                 using (var session = store.OpenSession())
@@ -430,10 +430,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanQueryWithLoadFromSelectAndProjectWhereAsync(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanQueryWithLoadFromSelectAndProjectWhereAsync(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
 
                 using (var session = store.OpenSession())
@@ -552,10 +552,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanQueryFromStaticIndexWithLoadFromSelectAndProject(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanQueryFromStaticIndexWithLoadFromSelectAndProject(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new LatestBuildsIndex().Execute(store);
 

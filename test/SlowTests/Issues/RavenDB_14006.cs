@@ -413,10 +413,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseCompareExchangeValueIncludesInQueries_Dynamic_JavaScript(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseCompareExchangeValueIncludesInQueries_Dynamic_JavaScript(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession(new SessionOptions { TransactionMode = TransactionMode.ClusterWide }))
                 {
@@ -666,10 +666,10 @@ select incl(c)"
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseCompareExchangeValueIncludesInQueries_Static_JavaScript(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseCompareExchangeValueIncludesInQueries_Static_JavaScript(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new Companies_ByName().Execute(store);
 

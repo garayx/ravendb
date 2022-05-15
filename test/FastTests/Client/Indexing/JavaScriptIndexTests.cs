@@ -5,6 +5,7 @@ using FastTests.Server.JavaScript;
 using Raven.Client;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
+using Tests.Infrastructure;
 using Tests.Infrastructure.Entities;
 using Xunit;
 using Xunit.Abstractions;
@@ -18,10 +19,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJavaScriptIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJavaScriptIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersByName());
                 using (var session = store.OpenSession())
@@ -41,10 +42,10 @@ namespace FastTests.Client.Indexing
 
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanIndexTimeSpan(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanIndexTimeSpan(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new TeemoByDuration());
                 using (var session = store.OpenSession())
@@ -69,10 +70,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJavaScriptIndexWithAdditionalSources(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJavaScriptIndexWithAdditionalSources(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersByNameWithAdditionalSources());
                 using (var session = store.OpenSession())
@@ -91,10 +92,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanIndexArrayProperties(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanIndexArrayProperties(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersByPhones());
                 using (var session = store.OpenSession())
@@ -122,10 +123,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanIndexMapWithFanout(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanIndexMapWithFanout(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new FanoutByNumbers());
                 using (var session = store.OpenSession())
@@ -153,10 +154,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanIndexMapReduceWithFanoutWhenOutputingBlittableObjectInstance(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanIndexMapReduceWithFanoutWhenOutputingBlittableObjectInstance(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new FanoutByPaymentsWithReduce());
                 using (var session = store.OpenSession())
@@ -185,10 +186,10 @@ namespace FastTests.Client.Indexing
             }
         }
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanIndexMapReduceWithFanout(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanIndexMapReduceWithFanout(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new FanoutByNumbersWithReduce());
                 using (var session = store.OpenSession())
@@ -216,10 +217,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJavaScriptIndexWithDynamicFields(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJavaScriptIndexWithDynamicFields(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersByNameAndAnalyzedName());
                 using (var session = store.OpenSession())
@@ -240,10 +241,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJavaScriptMultiMapIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJavaScriptMultiMapIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersAndProductsByName());
                 using (var session = store.OpenSession())
@@ -267,22 +268,22 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJavaScriptIndexWithLoadDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJavaScriptIndexWithLoadDocument(Options options)
         {
             CanUseJavaScriptIndexWithLoadInternal<UsersWithProductsByName>(jsEngineType);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJavaScriptIndexWithExternalLoadDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJavaScriptIndexWithExternalLoadDocument(Options options)
         {
             CanUseJavaScriptIndexWithLoadInternal<UsersWithProductsByNameWithExternalLoad>(jsEngineType);
         }
 
-        private void CanUseJavaScriptIndexWithLoadInternal<T>(string jsEngineType) where T : AbstractJavaScriptIndexCreationTask, new()
+        private void CanUseJavaScriptIndexWithLoadInternal<T>(Options options) where T : AbstractJavaScriptIndexCreationTask, new()
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var index = new T();
                 store.ExecuteIndex(index);
@@ -308,10 +309,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanElivateSimpleFunctions(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanElivateSimpleFunctions(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersByNameAndIsActive());
                 using (var session = store.OpenSession())
@@ -330,10 +331,10 @@ namespace FastTests.Client.Indexing
             }
         }
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJavaScriptMapReduceIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJavaScriptMapReduceIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersAndProductsByNameAndCount());
                 using (var session = store.OpenSession())
@@ -356,11 +357,11 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseSpatialFields(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseSpatialFields(Options options)
         {
             var kalab = 10;
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new Spatial());
                 CanUseSpatialFieldsInternal(kalab, store, "Spatial");
@@ -368,11 +369,11 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseDynamicSpatialFields(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseDynamicSpatialFields(Options options)
         {
             var kalab = 10;
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new DynamicSpatial());
                 CanUseSpatialFieldsInternal(kalab, store, "DynamicSpatial");
@@ -405,11 +406,11 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanReduceNullValues(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanReduceNullValues(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
-            using (var store2 = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
+            using (var store2 = GetDocumentStore(options))
             {
                 ReduceNullValuesInternal(store);
             }
@@ -433,10 +434,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanReduceWithReturnSyntax(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanReduceWithReturnSyntax(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersReducedByNameReturnSyntax());
                 using (var session = store.OpenSession())
@@ -457,10 +458,10 @@ namespace FastTests.Client.Indexing
         }
         
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseJsIndexWithArrowObjectFunctionInMap(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseJsIndexWithArrowObjectFunctionInMap(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new UsersByNameMapArrowSyntax());
                 using (var session = store.OpenSession())
@@ -483,11 +484,11 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void IdenticalMapReduceIndexWillGenerateDiffrentIndexInstance(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void IdenticalMapReduceIndexWillGenerateDiffrentIndexInstance(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
-            using (var store2 = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
+            using (var store2 = GetDocumentStore(options))
             {
                 ReduceNullValuesInternal(store);
                 ReduceNullValuesInternal(store2);
@@ -495,10 +496,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void OutputReduceToCollection(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void OutputReduceToCollection(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new Products_ByCategory());
                 using (var session = store.OpenSession())
@@ -521,10 +522,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void DateCheckMapReduce(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void DateCheckMapReduce(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new Product_Sales_ByMonth());
                 using (var session = store.OpenSession())
@@ -571,8 +572,8 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanQueryBySubObjectAsString(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanQueryBySubObjectAsString(Options options)
         {
             var address = new Address
             {
@@ -580,7 +581,7 @@ namespace FastTests.Client.Indexing
                 Line2 = "sweet home"
             };
 
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new Users_ByAddress());
                 using (var session = store.OpenSession())
@@ -600,10 +601,10 @@ namespace FastTests.Client.Indexing
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanIndexSwitchCases(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanIndexSwitchCases(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.ExecuteIndex(new ProductsWarranty());
                 using (var session = store.OpenSession())

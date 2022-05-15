@@ -18,14 +18,14 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task TransformScriptShouldWorkWhenAttachmentsArePresentAndShouldBeAbleToSkipDocumentsUsingThrow(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task TransformScriptShouldWorkWhenAttachmentsArePresentAndShouldBeAbleToSkipDocumentsUsingThrow(Options options)
         {
             var exportPath = Path.Combine(NewDataPath(forceCreateDir: true), "export.ravendbdump");
 
             DatabaseStatistics initialStats;
 
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 await store.Maintenance.SendAsync(new CreateSampleDataOperation(Raven.Client.Documents.Smuggler.DatabaseItemType.Documents | DatabaseItemType.Attachments | Raven.Client.Documents.Smuggler.DatabaseItemType.Indexes));
 

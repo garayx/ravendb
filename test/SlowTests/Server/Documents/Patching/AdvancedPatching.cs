@@ -51,10 +51,10 @@ namespace SlowTests.Server.Documents.Patching
     });";
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanApplyBasicScriptAsPatch(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanApplyBasicScriptAsPatch(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -83,10 +83,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task ComplexVariableTest(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task ComplexVariableTest(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -111,10 +111,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUseTrim(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUseTrim(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -134,10 +134,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUseMathFloor(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUseMathFloor(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -157,10 +157,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUseSplit(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUseSplit(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -181,10 +181,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task ComplexVariableTest2(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task ComplexVariableTest2(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -210,10 +210,10 @@ namespace SlowTests.Server.Documents.Patching
 
       
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanPatchUsingRavenJObjectVars(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanPatchUsingRavenJObjectVars(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -237,10 +237,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanRemoveFromCollectionByValue(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanRemoveFromCollectionByValue(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -259,10 +259,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanRemoveFromCollectionByCondition(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanRemoveFromCollectionByCondition(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -281,10 +281,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanPatchUsingVars(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanPatchUsingVars(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -307,10 +307,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanHandleNonsensePatching(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanHandleNonsensePatching(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -330,10 +330,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanThrowIfValueIsWrong(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanThrowIfValueIsWrong(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -353,10 +353,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanOutputDebugInformation(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanOutputDebugInformation(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -388,10 +388,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanOutputNestedDebugInformation(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanOutputNestedDebugInformation(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 CustomType customType;
                 using (var session = store.OpenSession())
@@ -457,10 +457,10 @@ namespace SlowTests.Server.Documents.Patching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUseToISOString(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUseToISOString(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -493,10 +493,10 @@ this.DateOffsetOutput = new Date(this.DateOffset).toISOString();
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUpdateBasedOnAnotherDocumentProperty(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUpdateBasedOnAnotherDocumentProperty(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -528,10 +528,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanPatchMetadata(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanPatchMetadata(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -564,10 +564,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUpdateOnMissingProperty(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUpdateOnMissingProperty(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -605,10 +605,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanCreateDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanCreateDocument(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -637,10 +637,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUpdateDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUpdateDocument(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -673,10 +673,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanCreateMultipleDocuments(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanCreateMultipleDocuments(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -705,10 +705,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanSkipBeyondCountForLargeIterator(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanSkipBeyondCountForLargeIterator(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -732,10 +732,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CreateDocumentWillNotThrowIfEmptyKeyProvided(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CreateDocumentWillNotThrowIfEmptyKeyProvided(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -760,10 +760,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CreateDocumentShouldThrowInvalidEtagException(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CreateDocumentShouldThrowInvalidEtagException(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -783,10 +783,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task ShouldThrowConcurrencyExceptionIfNonCurrentEtagWasSpecified(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task ShouldThrowConcurrencyExceptionIfNonCurrentEtagWasSpecified(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -810,10 +810,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanCreateEmptyDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanCreateEmptyDocument(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -835,10 +835,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CreateDocumentShouldThrowIfSpecifiedJsonIsNullOrEmptyString(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CreateDocumentShouldThrowIfSpecifiedJsonIsNullOrEmptyString(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -857,10 +857,10 @@ this.Value = another.Value;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanCreateDocumentsIfPatchingAppliedByIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanCreateDocumentsIfPatchingAppliedByIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -914,7 +914,7 @@ this.Value = another.Value;
         [InlineData(false, "V8")]
         public async Task PreventRecursion(bool isNative, string jsEngineType)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -977,10 +977,10 @@ this.Test = this;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanPerformAdvancedPatching(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanPerformAdvancedPatching(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenAsyncSession())
                 {
@@ -1010,10 +1010,10 @@ this.Test = this;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanPerformAdvancedWithSetBasedUpdates(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanPerformAdvancedWithSetBasedUpdates(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var item1 = new CustomType
                 {
@@ -1076,10 +1076,10 @@ this.Test = this;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanDeserializeModifiedDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanDeserializeModifiedDocument(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -1105,10 +1105,10 @@ this.Test = this;
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanDoPatchIfMissing(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanDoPatchIfMissing(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.Operations.Send(new PatchOperation("CustomTypes/123", null,
                     new PatchRequest

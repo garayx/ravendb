@@ -67,10 +67,10 @@ loadToOrders(orderData);
 ";
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task ReplicateMultipleBatches(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task ReplicateMultipleBatches(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -159,10 +159,10 @@ DROP DATABASE [SqlReplication-{dbName}]";
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task SimpleTransformation(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task SimpleTransformation(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -206,10 +206,10 @@ DROP DATABASE [SqlReplication-{dbName}]";
 
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task ShouldHandleCaseMismatchBetweenTableDefinitionAndLoadTo(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task ShouldHandleCaseMismatchBetweenTableDefinitionAndLoadTo(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -261,10 +261,10 @@ loadToOrDerS(orderData); // note 'OrDerS' here vs 'Orders' defined in the config
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanLoadToTableWithSchemaName(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanLoadToTableWithSchemaName(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -326,10 +326,10 @@ loadToOrDerS(orderData); // note 'OrDerS' here vs 'Orders' defined in the config
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task NullPropagation(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task NullPropagation(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -378,10 +378,10 @@ loadToOrders(orderData);");
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task NullPropagation_WithExplicitNull(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task NullPropagation_WithExplicitNull(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -430,10 +430,10 @@ loadToOrders(orderData);");
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task RavenDB_3341(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task RavenDB_3341(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -483,10 +483,10 @@ loadToOrders(orderData);");
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUpdateToBeNoItemsInChildTable(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUpdateToBeNoItemsInChildTable(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -529,10 +529,10 @@ loadToOrders(orderData);");
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanDelete(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanDelete(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -571,10 +571,10 @@ loadToOrders(orderData);");
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task RavenDB_3172(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task RavenDB_3172(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -693,7 +693,7 @@ var nameArr = this.StepName.split('.'); loadToOrders({});");
         [InlineData(false, "V8")]
         public async Task CanTestScript(bool performRolledBackTransaction, string jsEngineType)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -917,10 +917,10 @@ loadToOrders(orderData);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task Should_error_if_attachment_doesnt_exist(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task Should_error_if_attachment_doesnt_exist(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -991,10 +991,10 @@ loadToOrders(orderData);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task LoadingMultipleAttachments(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task LoadingMultipleAttachments(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -1067,10 +1067,10 @@ for (var i = 0; i < attachments.length; i++)
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanSkipSettingFieldIfAttachmentDoesntExist(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanSkipSettingFieldIfAttachmentDoesntExist(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (SqlAwareTestBase.WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out string schemaName, dataSet: null, includeData: false))
                 {
@@ -1242,8 +1242,8 @@ LastName2:  nvarchar(names[1]),
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void Should_stop_batch_if_size_limit_exceeded_RavenDB_12800(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void Should_stop_batch_if_size_limit_exceeded_RavenDB_12800(Options options)
         {
             using (var store = GetDocumentStore(new Options { ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType, x => x.Settings[RavenConfiguration.GetKey(c => c.Etl.MaxBatchSize)] = "5") }))
             {

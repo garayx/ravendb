@@ -18,10 +18,10 @@ namespace SlowTests.Issues
         
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CirclesShouldIntersect(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CirclesShouldIntersect(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.Initialize();
                 store.ExecuteIndex(new GeoIndex());

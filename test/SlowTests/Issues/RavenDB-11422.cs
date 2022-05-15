@@ -298,8 +298,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void VerifyIndexScore_Map_JsProjection_CollectionQuery(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void VerifyIndexScore_Map_JsProjection_CollectionQuery(Options options)
         {
             using (var store = GetDocumentStore())
             {
@@ -342,8 +342,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void VerifyIndexScore_Map_JsProjection_AutoIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void VerifyIndexScore_Map_JsProjection_AutoIndex(Options options)
         {
             using (var store = GetDocumentStore())
             {
@@ -387,8 +387,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void VerifyIndexScore_Map_JsProjection_StaticIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void VerifyIndexScore_Map_JsProjection_StaticIndex(Options options)
         {
             using (var store = GetDocumentStore())
             {
@@ -433,10 +433,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void VerifyIndexScore_MapReduce_JsProjection_StaticIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void VerifyIndexScore_MapReduce_JsProjection_StaticIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new Users_ByAge().Execute(store);
 

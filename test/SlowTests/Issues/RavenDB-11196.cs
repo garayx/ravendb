@@ -16,11 +16,11 @@ namespace SlowTests.Issues
         }
         
         [Theory]
-        [JavaScriptEngineClassData]
-        public void Should_be_James(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void Should_be_James(Options options)
         {
-            using (var src = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
-            using (var dest = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var src = GetDocumentStore(options))
+            using (var dest = GetDocumentStore(options))
             {
                 AddEtl(src, dest, "Users", script:
                     @"
@@ -65,10 +65,10 @@ loadToPeople(person);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanDeleteEverything(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanDeleteEverything(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.Maintenance.Send(new CreateSampleDataOperation());
 

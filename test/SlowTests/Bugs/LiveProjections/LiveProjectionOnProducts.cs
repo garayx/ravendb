@@ -16,10 +16,10 @@ namespace SlowTests.Bugs.LiveProjections
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void ComplexLiveProjection(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void ComplexLiveProjection(Options options)
         {
-            using (var documentStore = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var documentStore = GetDocumentStore(options))
             {
                 new ProductDetailsReport_ByProductId().Execute((IDocumentStore)documentStore);
 

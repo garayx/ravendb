@@ -911,6 +911,7 @@ namespace FastTests
             public RavenDatabaseMode DatabaseMode { get; private set; }
 
             public RavenSearchEngineMode SearchEngineMode { get; internal set; }
+            public RavenJavascriptEngineMode JavascriptEngineMode { get; internal set; }
 
             private void AssertNotFrozen()
             {

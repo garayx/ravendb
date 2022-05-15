@@ -222,10 +222,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void BasicMapIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void BasicMapIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var now1 = RavenTestHelper.UtcToday;
                 var now2 = now1.AddSeconds(1);
@@ -380,10 +380,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task BasicMapIndexWithLoad(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task BasicMapIndexWithLoad(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var now1 = DateTime.Now;
                 var now2 = now1.AddSeconds(1);
@@ -541,10 +541,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void BasicMapReduceIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void BasicMapReduceIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var today = RavenTestHelper.UtcToday;
                 var tomorrow = today.AddDays(1);
@@ -721,11 +721,11 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task BasicMapReduceIndexWithLoad(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task BasicMapReduceIndexWithLoad(Options options)
         {
             {
-                using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+                using (var store = GetDocumentStore(options))
                 {
                     var today = RavenTestHelper.UtcToday;
 
@@ -869,10 +869,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanMapAllTimeSeriesFromCollection(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanMapAllTimeSeriesFromCollection(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var now1 = DateTime.Now;
                 var now2 = now1.AddSeconds(1);
@@ -1016,10 +1016,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanMapAllTimeSeries(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanMapAllTimeSeries(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var now1 = DateTime.Now;
                 var now2 = now1.AddSeconds(1);
@@ -1208,12 +1208,12 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task BasicMultiMapIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task BasicMultiMapIndex(Options options)
         {
             var now = DateTime.UtcNow.Date;
 
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var timeSeriesIndex = new MyMultiMapTsIndex();
                 await timeSeriesIndex.ExecuteAsync(store);
@@ -1270,12 +1270,12 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void TimeSeriesNamesFor(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void TimeSeriesNamesFor(Options options)
         {
             var now = DateTime.UtcNow.Date;
 
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var index = new Companies_ByTimeSeriesNames();
                 index.Execute(store);

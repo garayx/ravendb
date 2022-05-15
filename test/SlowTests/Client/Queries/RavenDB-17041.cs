@@ -44,10 +44,10 @@ namespace SlowTests.Client.Queries
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task Can_Include_Secondary_Level_With_Alias(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task Can_Include_Secondary_Level_With_Alias(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var userIndex = new UserIndex();
                 await userIndex.ExecuteAsync(store);

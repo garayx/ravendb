@@ -17,10 +17,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void ShouldNotCreatePropertyAfterAccessingIt(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void ShouldNotCreatePropertyAfterAccessingIt(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -68,10 +68,10 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void ShouldNotProjectPropertyValueIfOnlyViewedStoredIndexedValue(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void ShouldNotProjectPropertyValueIfOnlyViewedStoredIndexedValue(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new UsersIndex().Execute(store);
                 using (var session = store.OpenSession())
@@ -104,10 +104,10 @@ b:u.newField
 
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void ShouldProjectPropertyValueIfViewedAndUpdatedStoredIndexedValue(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void ShouldProjectPropertyValueIfViewedAndUpdatedStoredIndexedValue(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new UsersIndex().Execute(store);
                 using (var session = store.OpenSession())
@@ -143,10 +143,10 @@ b:u.newField
 
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void ShouldProjectPropertyValueIfViewedAndUpdatedStoredIndexedValueShouldRespectOperationsOrder(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void ShouldProjectPropertyValueIfViewedAndUpdatedStoredIndexedValueShouldRespectOperationsOrder(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new UsersIndex().Execute(store);
                 using (var session = store.OpenSession())

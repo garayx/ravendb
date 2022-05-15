@@ -16,10 +16,10 @@ namespace SlowTests.Core.Commands
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanDoScriptedPatching(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanDoScriptedPatching(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -182,10 +182,10 @@ this.Comments = this.Comments.filter(function (c) {
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanGenerateDynamicIdsOnPutDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanGenerateDynamicIdsOnPutDocument(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var commands = store.Commands())
                 {
@@ -263,10 +263,10 @@ this.Comments = this.Comments.filter(function (c) {
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanTestPatches(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanTestPatches(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {

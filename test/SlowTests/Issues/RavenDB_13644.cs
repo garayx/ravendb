@@ -33,8 +33,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanLoadCompareExchangeInIndexes_JavaScript(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanLoadCompareExchangeInIndexes_JavaScript(Options options)
         {
             switch (jsEngineType)
             {
@@ -52,7 +52,7 @@ namespace SlowTests.Issues
         private void CanLoadCompareExchangeInIndexes<TIndex>(string jsEngineType = null)
             where TIndex : AbstractIndexCreationTask, new()
         {
-            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(options))
             {
                 var termsCountNull = jsEngineType is null or "Jint" ? 0 : 1;
 
@@ -248,8 +248,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanLoadCompareExchangeInIndexes_Simple_JavaScript(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanLoadCompareExchangeInIndexes_Simple_JavaScript(Options options)
         {
             switch (jsEngineType)
             {
@@ -267,7 +267,7 @@ namespace SlowTests.Issues
         private void CanLoadCompareExchangeInIndexes_Simple<TIndex>(string jsEngineType = null)
             where TIndex : AbstractIndexCreationTask, new()
         {
-            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(options))
             {
                 var termsCountNull = jsEngineType is null or "Jint" ? 0 : 1;
 
@@ -463,8 +463,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void anLoadCompareExchangeInIndexes_Query_JavaScript(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void anLoadCompareExchangeInIndexes_Query_JavaScript(Options options)
         {
             switch (jsEngineType)
             {
@@ -482,7 +482,7 @@ namespace SlowTests.Issues
         private void CanLoadCompareExchangeInIndexes_Query<TIndex>(string jsEngineType = null)
             where TIndex : AbstractIndexCreationTask, new()
         {
-            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(options))
             {
                 var termsCountNull = jsEngineType is null or "Jint" ? 0 : 1;
 
@@ -2784,7 +2784,7 @@ namespace SlowTests.Issues
                 throw new NotSupportedException();
             }
                 
-            public Index_With_CompareExchange_Simple_JavaScript(string jsEngineType)
+            public Index_With_CompareExchange_Simple_JavaScript(Options options)
             {
                 Maps = new HashSet<string>
                 {
@@ -2816,7 +2816,7 @@ namespace SlowTests.Issues
                 throw new NotSupportedException();
             }
                 
-            public Index_With_CompareExchange_JavaScript(string jsEngineType)
+            public Index_With_CompareExchange_JavaScript(Options options)
             {
                 var optChaining = jsEngineType == "Jint" ? "" : "?";
                 Maps = new HashSet<string>

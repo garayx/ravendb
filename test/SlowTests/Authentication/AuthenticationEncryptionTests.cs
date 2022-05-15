@@ -176,8 +176,8 @@ namespace SlowTests.Authentication
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanCompactEncryptedDb(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanCompactEncryptedDb(Options options)
         {
             var certificates = Certificates.SetupServerAuthentication();
             var dbName = GetDatabaseName();

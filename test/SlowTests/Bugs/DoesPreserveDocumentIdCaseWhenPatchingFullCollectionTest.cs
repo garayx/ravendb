@@ -28,10 +28,10 @@ namespace SlowTests.Bugs
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void DoesPreserveDocumentIdCaseWhenPatchingFullCollection(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void DoesPreserveDocumentIdCaseWhenPatchingFullCollection(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 store.Maintenance.Send(new PutIndexesOperation(new IndexDefinition
                 {

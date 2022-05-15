@@ -146,10 +146,10 @@ namespace SlowTests.Verifications
         }
         
         [Theory]
-        [JavaScriptEngineClassData]
-        public void WillMapPropertiesOnMapIndexes(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void WillMapPropertiesOnMapIndexes(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 CreateData(store);
 
@@ -177,10 +177,10 @@ select {
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void WillMapPropertiesOnMapReduceIndexes(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void WillMapPropertiesOnMapReduceIndexes(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 CreateData(store);
 

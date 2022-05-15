@@ -21,10 +21,10 @@ namespace FastTests.Server.Documents.Indexing.Static
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUseIdMethodInJavascriptIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUseIdMethodInJavascriptIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new JavaScriptIndexWithIdMethod().Execute(store);
 
@@ -61,10 +61,10 @@ namespace FastTests.Server.Documents.Indexing.Static
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUseGetMetadataMethodInJavascriptIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUseGetMetadataMethodInJavascriptIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new JavaScriptIndexWithGetMetadataMethod().Execute(store);
 

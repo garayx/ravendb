@@ -78,10 +78,10 @@ namespace SlowTests.Client.Subscriptions
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task SubscriptionsBatchSizeShouldIgnoreSkippedItems(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task SubscriptionsBatchSizeShouldIgnoreSkippedItems(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var sub = store.Subscriptions.Create(new SubscriptionCreationOptions<User>
                 {
@@ -210,10 +210,10 @@ namespace SlowTests.Client.Subscriptions
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanUseNestedPropertiesInSubscriptionCriteria(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanUseNestedPropertiesInSubscriptionCriteria(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -432,10 +432,10 @@ namespace SlowTests.Client.Subscriptions
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUpdateSubscriptionToStartFromBeginningOfTime(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUpdateSubscriptionToStartFromBeginningOfTime(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var count = 10;
                 store.Subscriptions.Create(new SubscriptionCreationOptions<User>());
@@ -526,10 +526,10 @@ namespace SlowTests.Client.Subscriptions
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task CanUpdateSubscriptionToStartFromLastDocument(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task CanUpdateSubscriptionToStartFromLastDocument(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var count = 10;
                 store.Subscriptions.Create(new SubscriptionCreationOptions<User>());

@@ -39,10 +39,10 @@ namespace FastTests.Client
          */
         
         [Theory]
-        [JavaScriptEngineClassData]
-        public void RawQuery_with_transformation_function_should_work(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void RawQuery_with_transformation_function_should_work(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -122,10 +122,10 @@ namespace FastTests.Client
         }
         
         [Theory]
-        [JavaScriptEngineClassData]
-        public void LinqQuery_with_transformation_function_should_work(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void LinqQuery_with_transformation_function_should_work(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {

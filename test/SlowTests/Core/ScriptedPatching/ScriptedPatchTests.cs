@@ -21,10 +21,10 @@ namespace SlowTests.Core.ScriptedPatching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void PatchingWithParametersShouldWork(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void PatchingWithParametersShouldWork(Options options)
         {
-            using var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType));
+            using var store = GetDocumentStore(options);
 
             using (var session = store.OpenSession())
             {
@@ -56,11 +56,11 @@ namespace SlowTests.Core.ScriptedPatching
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void PatchingShouldThrowProperException(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void PatchingShouldThrowProperException(Options options)
         {
             var ttl = Debugger.IsAttached ? TimeSpan.FromMinutes(15) : TimeSpan.FromSeconds(15);
-            using var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType));
+            using var store = GetDocumentStore(options);
             using (var session = store.OpenSession())
             {
                 session.Store(new Supplier

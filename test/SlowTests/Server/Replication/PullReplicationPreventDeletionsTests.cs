@@ -30,8 +30,8 @@ namespace SlowTests.Server.Replication
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task PreventDeletionOnHubSinkCompromised(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task PreventDeletionOnHubSinkCompromised(Options options)
         {
             var certificates = Certificates.SetupServerAuthentication();
             var adminCert = Certificates.RegisterClientCertificate(certificates.ServerCertificate.Value, certificates
@@ -155,8 +155,8 @@ namespace SlowTests.Server.Replication
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task DeleteWhenAcceptSinkDeletionsFlagOff(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task DeleteWhenAcceptSinkDeletionsFlagOff(Options options)
         {
             var certificates = Certificates.SetupServerAuthentication();
             var adminCert = Certificates.RegisterClientCertificate(certificates.ServerCertificate.Value, certificates

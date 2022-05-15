@@ -130,10 +130,10 @@ namespace SlowTests.Bugs.Indexing
         }        
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanCreateCompletelyDynamicFieldsWithProjection(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanCreateCompletelyDynamicFieldsWithProjection(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 new Product_ByAttributeStored().Execute(store);
 

@@ -42,7 +42,7 @@ return {
 
         private class MyCounterIndex_Load : AbstractJavaScriptCountersIndexCreationTask
         {
-            public MyCounterIndex_Load(string jsEngineType)
+            public MyCounterIndex_Load(Options options)
             {
                 var optChaining = jsEngineType == "Jint" ? "" : "?";
                 Maps = new HashSet<string>
@@ -104,7 +104,7 @@ return {
                 public long Count { get; set; }
             }
 
-            public AverageHeartRate_WithLoad(string jsEngineType)
+            public AverageHeartRate_WithLoad(Options options)
             {
                 var optChaining = jsEngineType == "Jint" ? "" : "?";
 
@@ -220,10 +220,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void BasicMapIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void BasicMapIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -427,10 +427,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task BasicMapIndexWithLoad(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task BasicMapIndexWithLoad(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -590,10 +590,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void BasicMapReduceIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void BasicMapReduceIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -750,10 +750,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task BasicMapReduceIndexWithLoad(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task BasicMapReduceIndexWithLoad(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -897,10 +897,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanMapAllCountersFromCollection(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanMapAllCountersFromCollection(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1063,10 +1063,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanMapAllCounters(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanMapAllCounters(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1163,10 +1163,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public async Task BasicMultiMapIndex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public async Task BasicMultiMapIndex(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var timeSeriesIndex = new MyMultiMapCounterIndex();
                 await timeSeriesIndex.ExecuteAsync(store);
@@ -1223,10 +1223,10 @@ return ({
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CounterNamesFor(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CounterNamesFor(Options options)
         {
-            using (var store = GetDocumentStore(Options.ForJavaScriptEngine(jsEngineType)))
+            using (var store = GetDocumentStore(options))
             {
                 var index = new Companies_ByCounterNames();
                 index.Execute(store);

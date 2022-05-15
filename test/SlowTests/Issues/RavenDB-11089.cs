@@ -320,8 +320,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void Can_Project_Into_Class(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void Can_Project_Into_Class(Options options)
         {
             using (var store = GetDocumentStore(options: new Options
             {
@@ -367,8 +367,8 @@ namespace SlowTests.Issues
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void Can_Project_Into_Class_With_Let(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void Can_Project_Into_Class_With_Let(Options options)
         {
             using (var store = GetDocumentStore(options: new Options
             {
@@ -673,8 +673,8 @@ from 'Users' as user select output(user)", queryAsString);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void PatchOnEnumShouldWork(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void PatchOnEnumShouldWork(Options options)
         {
             using (var store = GetDocumentStore(options: new Options
             {
@@ -752,8 +752,8 @@ from 'Users' as user select output(user)", queryAsString);
         private string FirstCharToLower(string str) => $"{Char.ToLower(str[0])}{str.Substring(1)}";
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanPatch(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanPatch(Options options)
         {
             var stuff = new Stuff[3];
             stuff[0] = new Stuff { Key = 6 };
@@ -851,8 +851,8 @@ from 'Users' as user select output(user)", queryAsString);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanPatchComplex(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanPatchComplex(Options options)
         {
             var stuff = new Stuff[3];
             stuff[0] = new Stuff { Key = 6 };
@@ -1073,8 +1073,8 @@ from 'Users' as user select output(user)", queryAsString);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanAddToArray(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanAddToArray(Options options)
         {
             var stuff = new Stuff[1];
             stuff[0] = new Stuff { Key = 6 };
@@ -1147,8 +1147,8 @@ from 'Users' as user select output(user)", queryAsString);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanRemoveFromArray(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanRemoveFromArray(Options options)
         {
             var stuff = new Stuff[2];
             stuff[0] = new Stuff { Key = 6 };
@@ -1198,8 +1198,8 @@ from 'Users' as user select output(user)", queryAsString);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void CanIncrement(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanIncrement(Options options)
         {
             Stuff[] s = new Stuff[3];
             s[0] = new Stuff { Key = 6 };
@@ -1253,8 +1253,8 @@ from 'Users' as user select output(user)", queryAsString);
         }
 
         [Theory]
-        [JavaScriptEngineClassData]
-        public void ShouldMergePatchCalls(string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void ShouldMergePatchCalls(Options options)
         {
             var stuff = new Stuff[3];
             stuff[0] = new Stuff { Key = 6 };
