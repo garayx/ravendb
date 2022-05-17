@@ -1,15 +1,14 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FastTests;
-using FastTests.Server.JavaScript;
 using Orders;
 using Raven.Client;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Indexes.Counters;
 using Raven.Client.Documents.Indexes.TimeSeries;
-using Raven.Client.Documents.Operations.CompareExchange;
 using Raven.Client.Documents.Operations.Indexes;
 using Raven.Client.Documents.Session;
 using Raven.Server.ServerWide.Context;
@@ -26,35 +25,36 @@ namespace SlowTests.Issues
         {
         }
 
-        [Fact]
-        public void CanLoadCompareExchangeInIndexes()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanLoadCompareExchangeInIndexes(Options options)
         {
-            CanLoadCompareExchangeInIndexes<Index_With_CompareExchange>();
+            CanLoadCompareExchangeInIndexes<Index_With_CompareExchange>(options);
         }
 
         [Theory]
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void CanLoadCompareExchangeInIndexes_JavaScript(Options options)
         {
-            switch (jsEngineType)
+            switch (options.JavascriptEngineMode.ToString())
             {
                 case "Jint":
-                    CanLoadCompareExchangeInIndexes<Index_With_CompareExchange_JsJint>(jsEngineType);
+                    CanLoadCompareExchangeInIndexes<Index_With_CompareExchange_JsJint>(options);
                     break;
                 case "V8":
-                    CanLoadCompareExchangeInIndexes<Index_With_CompareExchange_JsV8>(jsEngineType);
+                    CanLoadCompareExchangeInIndexes<Index_With_CompareExchange_JsV8>(options);
                     break;
                 default:
-                    throw new NotSupportedException($"Not supported JS engine kind '{jsEngineType}'.");
+                    throw new NotSupportedException($"Not supported JS engine kind '{options.JavascriptEngineMode.ToString()}'.");
             }
         }
 
-        private void CanLoadCompareExchangeInIndexes<TIndex>(string jsEngineType = null)
+        private void CanLoadCompareExchangeInIndexes<TIndex>(Options options)
             where TIndex : AbstractIndexCreationTask, new()
         {
-            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(options))
+            using (var store =  GetDocumentStore(options))
             {
-                var termsCountNull = jsEngineType is null or "Jint" ? 0 : 1;
+                var termsCountNull = options.JavascriptEngineMode.ToString() is null or "Jint" ? 0 : 1;
 
                 var index = new TIndex();
                 var indexName = index.IndexName;
@@ -241,35 +241,36 @@ namespace SlowTests.Issues
             }
         }
 
-        [Fact]
-        public void CanLoadCompareExchangeInIndexes_Simple()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanLoadCompareExchangeInIndexes_Simple(Options options)
         {
-            CanLoadCompareExchangeInIndexes_Simple<Index_With_CompareExchange_Simple>();
+            CanLoadCompareExchangeInIndexes_Simple<Index_With_CompareExchange_Simple>(options);
         }
 
         [Theory]
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void CanLoadCompareExchangeInIndexes_Simple_JavaScript(Options options)
         {
-            switch (jsEngineType)
+            switch (options.JavascriptEngineMode.ToString())
             {
                 case "Jint":
-                    CanLoadCompareExchangeInIndexes_Simple<Index_With_CompareExchange_Simple_JsJint>(jsEngineType);
+                    CanLoadCompareExchangeInIndexes_Simple<Index_With_CompareExchange_Simple_JsJint>(options);
                     break;
                 case "V8":
-                    CanLoadCompareExchangeInIndexes_Simple<Index_With_CompareExchange_Simple_JsV8>(jsEngineType);
+                    CanLoadCompareExchangeInIndexes_Simple<Index_With_CompareExchange_Simple_JsV8>(options);
                     break;
                 default:
-                    throw new NotSupportedException($"Not supported JS engine kind '{jsEngineType}'.");
+                    throw new NotSupportedException($"Not supported JS engine kind '{options.JavascriptEngineMode.ToString()}'.");
             }
         }
 
-        private void CanLoadCompareExchangeInIndexes_Simple<TIndex>(string jsEngineType = null)
+        private void CanLoadCompareExchangeInIndexes_Simple<TIndex>(Options options)
             where TIndex : AbstractIndexCreationTask, new()
         {
-            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(options))
+            using (var store =  GetDocumentStore(options))
             {
-                var termsCountNull = jsEngineType is null or "Jint" ? 0 : 1;
+                var termsCountNull = options.JavascriptEngineMode.ToString() is null or "Jint" ? 0 : 1;
 
                 var index = new TIndex();
                 var indexName = index.IndexName;
@@ -456,35 +457,36 @@ namespace SlowTests.Issues
             }
         }
 
-        [Fact]
-        public void CanLoadCompareExchangeInIndexes_Query()
+        [Theory]
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        public void CanLoadCompareExchangeInIndexes_Query(Options options)
         {
-            CanLoadCompareExchangeInIndexes_Query<Index_With_CompareExchange>();
+            CanLoadCompareExchangeInIndexes_Query<Index_With_CompareExchange>(options);
         }
 
         [Theory]
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void anLoadCompareExchangeInIndexes_Query_JavaScript(Options options)
         {
-            switch (jsEngineType)
+            switch (options.JavascriptEngineMode.ToString())
             {
                 case "Jint":
-                    CanLoadCompareExchangeInIndexes_Query<Index_With_CompareExchange_JsJint>(jsEngineType);
+                    CanLoadCompareExchangeInIndexes_Query<Index_With_CompareExchange_JsJint>(options);
                     break;
                 case "V8":
-                    CanLoadCompareExchangeInIndexes_Query<Index_With_CompareExchange_JsV8>(jsEngineType);
+                    CanLoadCompareExchangeInIndexes_Query<Index_With_CompareExchange_JsV8>(options);
                     break;
                 default:
-                    throw new NotSupportedException($"Not supported JS engine kind '{jsEngineType}'.");
+                    throw new NotSupportedException($"Not supported JS engine kind '{options.JavascriptEngineMode.ToString()}'.");
             }
         }
 
-        private void CanLoadCompareExchangeInIndexes_Query<TIndex>(string jsEngineType = null)
+        private void CanLoadCompareExchangeInIndexes_Query<TIndex>(Options options)
             where TIndex : AbstractIndexCreationTask, new()
         {
-            using (var store = jsEngineType == null ? GetDocumentStore() : GetDocumentStore(options))
+            using (var store = GetDocumentStore(options))
             {
-                var termsCountNull = jsEngineType is null or "Jint" ? 0 : 1;
+                var termsCountNull = options.JavascriptEngineMode.ToString() is null or "Jint" ? 0 : 1;
 
                 var index = new TIndex();
                 var indexName = index.IndexName;
@@ -2781,10 +2783,13 @@ namespace SlowTests.Issues
         {
             public Index_With_CompareExchange_Simple_JavaScript()
             {
-                throw new NotSupportedException();
+
             }
-                
-            public Index_With_CompareExchange_Simple_JavaScript(Options options)
+        }
+
+        private class Index_With_CompareExchange_Simple_JsJint : Index_With_CompareExchange_Simple_JavaScript
+        {
+            public Index_With_CompareExchange_Simple_JsJint() 
             {
                 Maps = new HashSet<string>
                 {
@@ -2795,30 +2800,29 @@ namespace SlowTests.Issues
             }
         }
 
-        private class Index_With_CompareExchange_Simple_JsJint : Index_With_CompareExchange_Simple_JavaScript
-        {
-            public Index_With_CompareExchange_Simple_JsJint() : base("Jint")
-            {
-            }
-        }
-
         private class Index_With_CompareExchange_Simple_JsV8 : Index_With_CompareExchange_Simple_JavaScript
         {
-            public Index_With_CompareExchange_Simple_JsV8() : base("V8")
+            public Index_With_CompareExchange_Simple_JsV8()
             {
+                Maps = new HashSet<string>
+                {
+                    "map('Companies', function (c) { var city = cmpxchg(c.ExternalId); return { City: city };})",
+                };
+
+                Fields.Add(Constants.Documents.Indexing.Fields.AllFields, new IndexFieldOptions { Storage = FieldStorage.Yes });
             }
         }
 
         private class Index_With_CompareExchange_JavaScript : AbstractJavaScriptIndexCreationTask
         {
-            public Index_With_CompareExchange_JavaScript()
+
+        }
+
+        private class Index_With_CompareExchange_JsJint : Index_With_CompareExchange_JavaScript
+        {
+            public Index_With_CompareExchange_JsJint() 
             {
-                throw new NotSupportedException();
-            }
-                
-            public Index_With_CompareExchange_JavaScript(Options options)
-            {
-                var optChaining = jsEngineType == "Jint" ? "" : "?";
+                var optChaining =  "" ;
                 Maps = new HashSet<string>
                 {
                     $"map('Companies', function (c) {{ var address = cmpxchg(c.ExternalId); return {{ City: address{optChaining}.City }};}})",
@@ -2828,17 +2832,17 @@ namespace SlowTests.Issues
             }
         }
 
-        private class Index_With_CompareExchange_JsJint : Index_With_CompareExchange_JavaScript
-        {
-            public Index_With_CompareExchange_JsJint() : base("Jint")
-            {
-            }
-        }
-
         private class Index_With_CompareExchange_JsV8 : Index_With_CompareExchange_JavaScript
         {
-            public Index_With_CompareExchange_JsV8() : base("V8")
+            public Index_With_CompareExchange_JsV8() 
             {
+                var optChaining = "?";
+                Maps = new HashSet<string>
+                {
+                    $"map('Companies', function (c) {{ var address = cmpxchg(c.ExternalId); return {{ City: address{optChaining}.City }};}})",
+                };
+
+                Fields.Add(Constants.Documents.Indexing.Fields.AllFields, new IndexFieldOptions { Storage = FieldStorage.Yes });
             }
         }
 

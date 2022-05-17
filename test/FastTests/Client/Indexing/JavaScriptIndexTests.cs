@@ -1,11 +1,10 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using FastTests.Server.JavaScript;
 using Raven.Client;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
-using Tests.Infrastructure;
 using Tests.Infrastructure.Entities;
 using Xunit;
 using Xunit.Abstractions;
@@ -271,14 +270,14 @@ namespace FastTests.Client.Indexing
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void CanUseJavaScriptIndexWithLoadDocument(Options options)
         {
-            CanUseJavaScriptIndexWithLoadInternal<UsersWithProductsByName>(jsEngineType);
+            CanUseJavaScriptIndexWithLoadInternal<UsersWithProductsByName>(options);
         }
 
         [Theory]
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void CanUseJavaScriptIndexWithExternalLoadDocument(Options options)
         {
-            CanUseJavaScriptIndexWithLoadInternal<UsersWithProductsByNameWithExternalLoad>(jsEngineType);
+            CanUseJavaScriptIndexWithLoadInternal<UsersWithProductsByNameWithExternalLoad>(options);
         }
 
         private void CanUseJavaScriptIndexWithLoadInternal<T>(Options options) where T : AbstractJavaScriptIndexCreationTask, new()

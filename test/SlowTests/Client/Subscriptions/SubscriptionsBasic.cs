@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,7 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using FastTests;
 using FastTests.Client.Subscriptions;
-using FastTests.Server.JavaScript;
 using Newtonsoft.Json.Linq;
 using Raven.Client;
 using Raven.Client.Documents;

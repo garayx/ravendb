@@ -2,7 +2,6 @@
 using System.Threading;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
-using Raven.Server.Documents.Indexes.Static.Spatial;
 
 namespace Raven.Server.Documents.Queries.Results
 {

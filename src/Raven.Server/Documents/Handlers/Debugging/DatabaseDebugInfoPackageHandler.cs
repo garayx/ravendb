@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Raven.Server.Routing;
 using Raven.Server.ServerWide;
 using Sparrow.Json;
-using Sparrow.Server.Platform.Posix;
 
 namespace Raven.Server.Documents.Handlers.Debugging
 {

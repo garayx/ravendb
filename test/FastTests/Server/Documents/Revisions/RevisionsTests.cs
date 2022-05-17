@@ -1,4 +1,5 @@
-﻿//-----------------------------------------------------------------------
+﻿using Tests.Infrastructure;
+//-----------------------------------------------------------------------
 // <copyright file="RevisionsTests.cs" company="Hibernating Rhinos LTD">
 //     Copyright (c) Hibernating Rhinos LTD. All rights reserved.
 // </copyright>
@@ -10,9 +11,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using FastTests.Server.JavaScript;
 using FastTests.Utils;
-using NuGet.Packaging;
 using Raven.Client;
 using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Operations;
@@ -26,10 +25,8 @@ using Raven.Server.Documents.Handlers.Admin;
 using Raven.Server.Documents.Patch;
 using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Context;
-using Raven.Server.Utils;
 using Raven.Tests.Core.Utils.Entities;
 using Sparrow.Json;
-using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -1646,14 +1643,14 @@ namespace FastTests.Server.Documents.Revisions
             }
         }
 
+        //TODO: egor
         [Theory]
-        [InlineData(false, "Jint")]
-        [InlineData(false, "V8")]
-        [InlineData(true, "Jint")]
-        [InlineData(true, "V8")] // TODO [shlomo] to switch on after fix
-        public async Task DeleteRevisionsBeforeFromConsole(bool useConsole, string jsEngineType)
+        [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
+        [InlineData(false)]
+        [InlineData(true)] // TODO [shlomo] to switch on after fix
+        public async Task DeleteRevisionsBeforeFromConsole(bool useConsole)
         {
-            using (var store = GetDocumentStore(options))
+            using (var store = GetDocumentStore(/*options*/))
             {
                 await RevisionsHelper.SetupRevisionsAsync(store, modifyConfiguration: configuration => configuration.Collections["Users"].PurgeOnDelete = false);
 

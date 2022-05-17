@@ -1,12 +1,8 @@
-﻿using System;
-using System.IO;
-using System.Net;
+﻿using System.IO;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
-using Raven.Client.Documents.Indexes;
 using Raven.Client.Http;
 using Raven.Server.Documents.Commands.Indexes;
-using Raven.Server.Documents.Indexes;
 using Raven.Server.Web;
 using Sparrow.Json;
 

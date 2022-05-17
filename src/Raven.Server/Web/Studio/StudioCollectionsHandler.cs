@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Raven.Client;
 using Raven.Client.Documents.Operations;
 using Raven.Server.Documents;
 using Raven.Server.Json;
@@ -11,7 +9,6 @@ using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.Web.Studio.Processors;
 using Sparrow.Json;
-using Sparrow.Json.Parsing;
 
 namespace Raven.Server.Web.Studio
 {

@@ -1,6 +1,4 @@
-﻿using Xunit;
-
-#if TESTING
+﻿#if TESTING
 
 [assembly: TestCaseOrderer("Tests.Infrastructure.AlphabeticTestsOrderer", "Tests.Infrastructure")]
 [assembly: TestCollectionOrderer("Tests.Infrastructure.AlphabeticTestsOrderer", "Tests.Infrastructure")]

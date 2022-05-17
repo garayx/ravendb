@@ -8,7 +8,6 @@ using Raven.Client.Http;
 using Raven.Client.ServerWide;
 using Raven.Client.Util;
 using Raven.Server.Config;
-using Raven.Server.Documents.Indexes.Analysis;
 using Raven.Server.Documents.Queries;
 using Raven.Server.Documents.ShardedTcpHandlers;
 using Raven.Server.Documents.Sharding.Executors;

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
 using Raven.Server.Background;
@@ -10,7 +9,6 @@ using Sparrow;
 using Sparrow.Collections;
 using Sparrow.LowMemory;
 using Sparrow.Platform;
-using Sparrow.Platform.Posix;
 using Sparrow.Server.LowMemory;
 
 namespace Raven.Server.Dashboard

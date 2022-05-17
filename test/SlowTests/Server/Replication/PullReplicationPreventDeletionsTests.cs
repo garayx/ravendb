@@ -1,11 +1,11 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using FastTests;
-using FastTests.Server.JavaScript;
 using FastTests.Utils;
 using Raven.Client;
 using Raven.Client.Documents;
@@ -16,8 +16,6 @@ using Raven.Client.Documents.Operations.Expiration;
 using Raven.Client.Documents.Operations.Replication;
 using Raven.Client.Documents.Session;
 using Raven.Client.ServerWide.Operations.Certificates;
-using SlowTests.Issues;
-using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 

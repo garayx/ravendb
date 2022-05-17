@@ -20,7 +20,6 @@ using System.Threading.Tasks;
 using Raven.Client.Exceptions.Documents.Subscriptions;
 using Raven.Client.Extensions;
 using Raven.Client.Http;
-using Raven.Client.ServerWide.Tcp;
 using Sparrow.Json;
 
 namespace Raven.Client.Documents.Subscriptions

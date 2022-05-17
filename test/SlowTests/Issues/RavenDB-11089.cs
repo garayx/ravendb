@@ -1,9 +1,9 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using FastTests;
-using FastTests.Server.JavaScript;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Newtonsoft.Json.Serialization;
@@ -323,21 +323,18 @@ namespace SlowTests.Issues
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void Can_Project_Into_Class(Options options)
         {
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -370,21 +367,18 @@ namespace SlowTests.Issues
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void Can_Project_Into_Class_With_Let(Options options)
         {
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -676,21 +670,18 @@ from 'Users' as user select output(user)", queryAsString);
         [RavenData(JavascriptEngineMode = RavenJavascriptEngineMode.Jint)]
         public void PatchOnEnumShouldWork(Options options)
         {
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 string id;
                 using (var session = store.OpenSession())
@@ -758,22 +749,18 @@ from 'Users' as user select output(user)", queryAsString);
             var stuff = new Stuff[3];
             stuff[0] = new Stuff { Key = 6 };
             var user = new User { Numbers = new[] { 66 }, Stuff = stuff };
-
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -857,22 +844,18 @@ from 'Users' as user select output(user)", queryAsString);
             var stuff = new Stuff[3];
             stuff[0] = new Stuff { Key = 6 };
             var user = new User { Stuff = stuff };
-
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1079,22 +1062,18 @@ from 'Users' as user select output(user)", queryAsString);
             var stuff = new Stuff[1];
             stuff[0] = new Stuff { Key = 6 };
             var user = new User { Stuff = stuff, Numbers = new[] { 1, 2 } };
-
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1154,22 +1133,18 @@ from 'Users' as user select output(user)", queryAsString);
             stuff[0] = new Stuff { Key = 6 };
             stuff[1] = new Stuff { Phone = "123456" };
             var user = new User { Stuff = stuff, Numbers = new[] { 1, 2, 3 } };
-
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {
@@ -1204,22 +1179,18 @@ from 'Users' as user select output(user)", queryAsString);
             Stuff[] s = new Stuff[3];
             s[0] = new Stuff { Key = 6 };
             var user = new User { Numbers = new[] { 66 }, Stuff = s };
-
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore())
             {
                 using (var session = store.OpenSession())
                 {
@@ -1261,22 +1232,18 @@ from 'Users' as user select output(user)", queryAsString);
             var user = new User { Numbers = new[] { 66 }, Stuff = stuff };
             var user2 = new User { Numbers = new[] { 1, 2, 3 }, Stuff = stuff };
             var docId2 = "users/2-A";
-
-            using (var store = GetDocumentStore(options: new Options
+            options.ModifyDocumentStore = ss =>
             {
-                ModifyDocumentStore = ss =>
+                ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
                 {
-                    ss.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+                    CustomizeJsonSerializer = serializer =>
                     {
-                        CustomizeJsonSerializer = serializer =>
-                        {
-                            serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        }
-                    };
-                    ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
-                },
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType)
-            }))
+                        serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                    }
+                };
+                ss.Conventions.PropertyNameConverter = mi => FirstCharToLower(mi.Name);
+            };
+            using (var store = GetDocumentStore(options))
             {
                 using (var session = store.OpenSession())
                 {

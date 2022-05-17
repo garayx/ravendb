@@ -2,7 +2,6 @@
 using JetBrains.Annotations;
 using Raven.Server.Documents.Handlers.Processors;
 using Sparrow.Json;
-using NotImplementedException = System.NotImplementedException;
 
 namespace Raven.Server.Web.Studio.Processors;
 

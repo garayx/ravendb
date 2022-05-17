@@ -5,13 +5,9 @@
 // -----------------------------------------------------------------------
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
-using Raven.Client;
-using Raven.Client.Documents.Commands;
 using Raven.Client.Documents.Operations.Revisions;
 using Raven.Client.Documents.Session.Operations;
 using Raven.Client.Exceptions.Documents.Revisions;
@@ -20,7 +16,6 @@ using Raven.Server.Documents.Revisions;
 using Raven.Server.Json;
 using Raven.Server.NotificationCenter.Notifications.Details;
 using Raven.Server.Routing;
-using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;

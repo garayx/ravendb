@@ -5,7 +5,6 @@ using Raven.Client.Exceptions.Documents.Indexes;
 using Raven.Client.Http;
 using Raven.Server.Documents.Indexes;
 using Raven.Server.ServerWide.Context;
-using Sparrow.Json;
 
 namespace Raven.Server.Documents.Handlers.Processors.Indexes;
 

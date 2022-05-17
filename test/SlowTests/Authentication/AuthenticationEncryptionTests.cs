@@ -1,11 +1,11 @@
-﻿using System;
+﻿using Tests.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using FastTests;
-using FastTests.Server.JavaScript;
 using Raven.Client.Documents.Commands;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Operations.Indexes;
@@ -15,7 +15,6 @@ using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using Raven.Client.ServerWide.Operations.Certificates;
 using SlowTests.Voron.Compaction;
-using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -204,16 +203,14 @@ namespace SlowTests.Authentication
             }
 
             Server.ServerStore.PutSecretKey(base64Key, dbName, true);
-
+            options.AdminCertificate = adminCert;
+            options.ClientCertificate = adminCert;
+            options.ModifyDatabaseName = s => dbName;
             var path = NewDataPath();
-            using (var store = GetDocumentStore(new Options
-            {
-                AdminCertificate = adminCert,
-                ClientCertificate = adminCert,
-                ModifyDatabaseName = s => dbName,
-                ModifyDatabaseRecord = Options.ModifyForJavaScriptEngine(jsEngineType, record => record.Encrypted = true),
-                Path = path
-            }))
+            options.Path = path;
+            options.ModifyDatabaseRecord = record => record.Encrypted = true;
+
+            using (var store = GetDocumentStore(options))
             {
                 store.Maintenance.Send(new CreateSampleDataOperation(operateOnTypes: DatabaseSmugglerOptions.DefaultOperateOnTypes));
 

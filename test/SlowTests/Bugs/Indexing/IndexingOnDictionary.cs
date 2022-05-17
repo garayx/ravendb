@@ -7,7 +7,6 @@
 using System.Collections.Generic;
 using FastTests;
 using Xunit;
-using System.Linq;
 using Xunit.Abstractions;
 
 namespace SlowTests.Bugs.Indexing

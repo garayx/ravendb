@@ -16,7 +16,6 @@ using Raven.Server.ServerWide;
 using Raven.Server.Utils;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
-using Sparrow.Logging;
 using Sparrow.LowMemory;
 
 namespace Raven.Server.Documents.Operations
