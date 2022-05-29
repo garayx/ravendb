@@ -466,7 +466,7 @@ return ({
                 var indexDefinition = timeSeriesIndex.CreateIndexDefinition();
 
                 timeSeriesIndex.Execute(store);
-
+                //WaitForUserToContinueTheTest(store);
                 var staleness = store.Maintenance.Send(new GetIndexStalenessOperation(indexName));
                 Assert.True(staleness.IsStale);
                 Assert.Equal(1, staleness.StalenessReasons.Count);
@@ -526,7 +526,7 @@ return ({
                 store.Maintenance.Send(new StartIndexingOperation());
 
                 Indexes.WaitForIndexing(store);
-
+                WaitForUserToContinueTheTest(store);
                 staleness = store.Maintenance.Send(new GetIndexStalenessOperation(indexName));
                 Assert.False(staleness.IsStale);
 
