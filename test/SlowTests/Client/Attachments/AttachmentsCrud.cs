@@ -225,7 +225,7 @@ namespace SlowTests.Client.Attachments
         }
 
         [Theory]
-        [InlineData("\t", null)]
+        [InlineData("\r\n", null)]
         [InlineData("\\", "\\")]
         [InlineData("/", "/")]
         [InlineData("5", "5")]
@@ -278,7 +278,6 @@ namespace SlowTests.Client.Attachments
                 }
             }
         }
-
         [Fact]
         public async Task DeleteAttachments()
         {
