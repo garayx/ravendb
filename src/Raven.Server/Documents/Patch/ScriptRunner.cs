@@ -149,7 +149,7 @@ namespace Raven.Server.Documents.Patch
                 throw new ArgumentException($"{signature} : {argName} must be of type 'DateInstance' or a DateTime string. {GetTypes(arg)}");
         }
 
-        private static DateTime GetTimeSeriesDateArg(T arg, string signature, string argName)
+        /*private static DateTime GetTimeSeriesDateArg(T arg, string signature, string argName)
         {
             if (arg.IsDate)
                 return arg.AsDate;
@@ -158,7 +158,7 @@ namespace Raven.Server.Documents.Patch
                 throw new ArgumentException($"{signature} : {argName} must be of type 'DateInstance' or a DateTime string. {GetTypes(arg)}");
 
             return TimeSeriesRetriever.ParseDateTime(arg.AsString);
-        }
+        }*/
         
         private static string GetTypes(T value) => $"JintType({value.ValueType}) .NETType({value.GetType().Name})";
 
