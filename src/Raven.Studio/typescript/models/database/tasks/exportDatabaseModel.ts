@@ -169,11 +169,12 @@ class exportDatabaseModel {
             EncryptionKey: this.encryptOutput() ? this.encryptionKey() : undefined,
             OperateOnTypes: operateOnTypes.join(",") as Raven.Client.Documents.Smuggler.DatabaseItemType,
             OperateOnDatabaseRecordTypes: recordTypes,
-            MaxStepsForTransformScript: 10 * 1000,
+  
             ReadLegacyEtag: undefined,
             SkipRevisionCreation: undefined,
             AuthorizationStatus: undefined,
-            IsShard: undefined
+            IsShard: undefined,
+            OptionsForTransformScript: undefined
         };
     }
     
