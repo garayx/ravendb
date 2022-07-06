@@ -18,6 +18,7 @@ using Raven.Server.Documents.Indexes;
 using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents;
 using Raven.Server.Documents.Indexes.Static;
 using Raven.Server.Documents.Indexes.Static.JavaScript.Jint;
+using Raven.Server.Documents.Indexes.Static.JavaScript.V8;
 using Raven.Server.Documents.Patch;
 using Raven.Server.Documents.Patch.Jint;
 using Raven.Server.Documents.Patch.V8;
@@ -385,7 +386,6 @@ namespace Raven.Server.Utils
             var js = value;
             if (js.IsNull)
             {
-                //TODO: egor this is works only for jint atm
                 if (forIndexing)
                 {
                     // TODO: egor handle casting
@@ -449,9 +449,11 @@ namespace Raven.Server.Utils
             var js = value;
             if (js.IsNull)
             {
-                //TODO: egor add this
-                //if (forIndexing && value.IsObject && value.Object is DynamicJsNullV8 dynamicJsNull)
-                //    return dynamicJsNull.IsExplicitNull ? DynamicNullObject.ExplicitNull : DynamicNullObject.Null;
+                //TODO: egor this is now object in v8
+                /*
+                if (forIndexing && value.IsObject && value.Object is DynamicJsNullV8 dynamicJsNull)
+                    return dynamicJsNull.IsExplicitNull ? DynamicNullObject.ExplicitNull : DynamicNullObject.Null;
+                    */
 
                 return null;
             }
@@ -466,6 +468,9 @@ namespace Raven.Server.Utils
                 object boundObject = js.Item.BoundObject;
                 if (boundObject != null)
                 {
+                    if (forIndexing && boundObject is DynamicJsNullV8 dynamicJsNull)
+                        return dynamicJsNull.IsExplicitNull ? DynamicNullObject.ExplicitNull : DynamicNullObject.Null;
+                    
                     //TODO: egor we throw here, in original v8 code we continue, need to check
                     if (TryReturnLazyValue(boundObject, out var lazyVal))
                         return lazyVal;
