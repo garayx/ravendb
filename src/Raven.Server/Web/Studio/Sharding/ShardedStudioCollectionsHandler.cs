@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using Raven.Server.Documents.Sharding;
 using Raven.Server.Documents.Sharding.Handlers;
 using Raven.Server.Routing;
 using Raven.Server.Web.Studio.Sharding.Processors;

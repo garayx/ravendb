@@ -2,6 +2,7 @@
 using Raven.Client.Documents.Commands;
 using Raven.Client.Http;
 using Raven.Client.Json;
+using Raven.Server.Documents.Handlers.Processors.Revisions;
 using Sparrow.Json;
 
 namespace Raven.Server.Documents.Sharding.Operations

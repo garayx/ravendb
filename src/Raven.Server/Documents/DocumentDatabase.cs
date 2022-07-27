@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -17,7 +16,6 @@ using Raven.Client.Exceptions.Database;
 using Raven.Client.Extensions;
 using Raven.Client.Http;
 using Raven.Client.ServerWide;
-using Raven.Client.ServerWide.JavaScript;
 using Raven.Client.ServerWide.Operations;
 using Raven.Client.Util;
 using Raven.Server.Commercial;
@@ -28,7 +26,6 @@ using Raven.Server.Documents.Handlers;
 using Raven.Server.Documents.Handlers.Processors.Batches;
 using Raven.Server.Documents.Indexes;
 using Raven.Server.Documents.Patch;
-using Raven.Server.Documents.Patch.V8;
 using Raven.Server.Documents.PeriodicBackup;
 using Raven.Server.Documents.PeriodicBackup.Restore;
 using Raven.Server.Documents.Queries;
@@ -36,7 +33,6 @@ using Raven.Server.Documents.Replication;
 using Raven.Server.Documents.Subscriptions;
 using Raven.Server.Documents.TcpHandlers;
 using Raven.Server.Documents.TimeSeries;
-using IndexesStatic = Raven.Server.Documents.Indexes.Static;
 using Raven.Server.Json;
 using Raven.Server.NotificationCenter.Notifications;
 using Raven.Server.NotificationCenter.Notifications.Details;
@@ -66,7 +62,7 @@ using Voron.Impl.Backup;
 using Constants = Raven.Client.Constants;
 using DatabaseInfo = Raven.Client.ServerWide.Operations.DatabaseInfo;
 using Size = Raven.Client.Util.Size;
-    
+
 namespace Raven.Server.Documents
 {
     public class DocumentDatabase : IDisposable

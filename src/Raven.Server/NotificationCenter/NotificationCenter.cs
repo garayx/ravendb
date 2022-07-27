@@ -9,6 +9,7 @@ using Raven.Server.Documents;
 using Raven.Server.NotificationCenter.BackgroundWork;
 using Raven.Server.NotificationCenter.Notifications;
 using Raven.Server.ServerWide;
+using Raven.Server.ServerWide.Context;
 using Sparrow.Json.Parsing;
 using Sparrow.Logging;
 using Sparrow.Server.Collections;

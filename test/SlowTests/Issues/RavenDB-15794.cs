@@ -1,10 +1,10 @@
-using Tests.Infrastructure;
 using System.Collections.Generic;
 using System.Linq;
 using FastTests;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Indexes.Spatial;
+using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 

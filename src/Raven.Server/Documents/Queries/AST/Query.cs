@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Raven.Client;
+using Raven.Client.Exceptions;
 using Sparrow;
 
 namespace Raven.Server.Documents.Queries.AST

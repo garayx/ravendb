@@ -8,6 +8,7 @@ using Lucene.Net.Store;
 using Raven.Client;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Exceptions;
+using Raven.Client.ServerWide.JavaScript;
 using Raven.Server.Documents.Includes;
 using Raven.Server.Documents.Indexes;
 using Raven.Server.Documents.Indexes.Persistence.Lucene.Documents;
@@ -21,6 +22,9 @@ using Raven.Server.Utils;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
 using Sparrow.Server.Json.Sync;
+using Raven.Server.Config.Categories;
+using Raven.Server.Config.Settings;
+using Raven.Server.Documents.Indexes.Static;
 
 namespace Raven.Server.Documents.Queries.Results
 {

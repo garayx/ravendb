@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -32,6 +33,7 @@ using Voron;
 using Voron.Data;
 using Voron.Data.Tables;
 using Voron.Impl;
+using Sparrow.Collections;
 
 namespace Raven.Server.Rachis
 {

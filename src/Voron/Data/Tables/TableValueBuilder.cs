@@ -5,6 +5,7 @@ using Sparrow;
 using Sparrow.Collections;
 using Sparrow.Json.Parsing;
 using Sparrow.Server;
+using Voron.Impl;
 using Voron.Util;
 
 namespace Voron.Data.Tables

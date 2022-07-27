@@ -1,5 +1,4 @@
-﻿using Tests.Infrastructure;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,6 +11,7 @@ using Raven.Server.Rachis;
 using Raven.Server.ServerWide.Commands;
 using Sparrow.Json;
 using Sparrow.Logging;
+using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 

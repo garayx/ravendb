@@ -1,4 +1,5 @@
-﻿using Sparrow.Json.Parsing;
+﻿using System;
+using Sparrow.Json.Parsing;
 using Sparrow.LowMemory;
 
 namespace Raven.Server.Dashboard

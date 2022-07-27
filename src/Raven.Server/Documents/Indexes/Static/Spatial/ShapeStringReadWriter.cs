@@ -5,6 +5,7 @@ using Raven.Client;
 using Raven.Client.Documents.Indexes.Spatial;
 using Raven.Client.Documents.Queries.Spatial;
 using Spatial4n.Core.Context.Nts;
+using Spatial4n.Core.IO.Nts;
 using Spatial4n.Core.Shapes;
 
 namespace Raven.Server.Documents.Indexes.Static.Spatial

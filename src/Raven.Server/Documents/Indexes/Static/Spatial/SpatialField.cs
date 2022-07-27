@@ -4,6 +4,7 @@ using Lucene.Net.Documents;
 using Lucene.Net.Spatial;
 using Lucene.Net.Spatial.Prefix.Tree;
 using NetTopologySuite;
+using NetTopologySuite.Geometries;
 using Raven.Client;
 using Raven.Client.Documents.Indexes.Spatial;
 using Sparrow.Json;
