@@ -7,7 +7,6 @@ using Raven.Client.Documents.Operations.OngoingTasks;
 using Raven.Client.ServerWide;
 using Raven.Server.Utils;
 using Sparrow.Json.Parsing;
-using Raven.Client.ServerWide.JavaScript;
 
 namespace Raven.Server.ServerWide.Commands.ETL
 {

@@ -7,7 +7,6 @@ using Raven.Client.Documents.Operations.ETL.SQL;
 using Raven.Client.ServerWide;
 using Raven.Server.Utils;
 using Sparrow.Json.Parsing;
-using Raven.Server.Config.Categories;
 
 namespace Raven.Server.ServerWide.Commands.ETL
 {

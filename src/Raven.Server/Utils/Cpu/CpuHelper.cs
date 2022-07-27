@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Raven.Client.Util;
 using Raven.Server.Config.Categories;
 using Raven.Server.Dashboard;
@@ -7,6 +8,7 @@ using Sparrow.Binary;
 using Sparrow.Json;
 using Sparrow.Logging;
 using Sparrow.Platform;
+using Sparrow.Server.Platform.Posix;
 using Sparrow.Utils;
 
 namespace Raven.Server.Utils.Cpu
