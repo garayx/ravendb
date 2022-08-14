@@ -18,6 +18,11 @@ namespace Raven.Server.Documents.Patch.Jint
 
         public override bool TryPropertyReference(Engine engine, Reference reference, ref JsValue value)
         {
+
+            if (reference.GetReferencedName() == "getContentAsString")
+            {
+
+            }
             if (value.IsObject() &&
                 value.AsObject() is ObjectWrapper objectWrapper &&
                 objectWrapper.Target is Task task &&

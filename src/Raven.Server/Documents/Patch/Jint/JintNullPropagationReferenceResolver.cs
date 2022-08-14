@@ -84,7 +84,7 @@ namespace Raven.Server.Documents.Patch.Jint
                         case "map":
                         case "filter":
                         case "reverse":
-                            value = new ClrFunctionInstance(engine, "map", (thisObj, values) => engine.Realm.Intrinsics.Array.Construct(Array.Empty<JsValue>()));
+                            value = new ClrFunctionInstance(engine, "map", (thisObj, values) => engine.Array.Construct(Array.Empty<JsValue>()));
                             return true;
                     }
                 }

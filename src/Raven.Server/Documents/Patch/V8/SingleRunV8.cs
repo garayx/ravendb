@@ -154,10 +154,10 @@ namespace Raven.Server.Documents.Patch.V8
                                 }
                                 else
                                 {
-                                    var valueNewStr = EngineHandle.JsonStringify().Item.StaticCall(valueNew);
-                                    var valuePrevStr = EngineHandle.JsonStringify().Item.StaticCall(valuePrev);
+                                   // var valueNewStr = EngineHandle.JsonStringify().Item.StaticCall(valueNew);
+                                   // var valuePrevStr = EngineHandle.JsonStringify().Item.StaticCall(valuePrev);
                                     throw new ArgumentException(
-                                        $"Can't set argument '{propertyName}' as property on global object as it already exists with value {valuePrevStr}, new value {valueNewStr}");
+                                        $"Can't set argument '{propertyName}' as property on global object as it already exists with value {{valuePrevStr}}, new value {{valueNewStr}}");
                                 }
                             }
                         }
@@ -197,12 +197,18 @@ namespace Raven.Server.Documents.Patch.V8
                 using (var jsMethod = EngineHandle.GetGlobalProperty(method))
                 {
                     if (jsMethod.IsUndefined)
+                    {
                         throw new InvalidOperationException(
-                            $"Failed to get global function '{method}', global object is: {EngineHandle.JsonStringify().StaticCall(EngineHandle.GlobalObject)}");
+                            $"Failed to get global function '{method}', global object is:");
+                        /*throw new InvalidOperationException(
+                            $"Failed to get global function '{method}', global object is: {EngineHandle.JsonStringify().StaticCall(EngineHandle.GlobalObject)}");*/
+                    }
 
                     if (!jsMethod.IsFunction)
-                        throw new InvalidOperationException(
-                            $"Obtained {method} global property is not a function: {EngineHandle.JsonStringify().StaticCall(method)}");
+                    {
+                        throw new InvalidOperationException($"Obtained {method} global property is not a function:");
+                        //throw new InvalidOperationException($"Obtained {method} global property is not a function: {EngineHandle.JsonStringify().StaticCall(method)}");
+                    }
 
 #if false //DEBUG
                             var argsStr = "";
@@ -309,10 +315,10 @@ namespace Raven.Server.Documents.Patch.V8
                             }
                             else
                             {
-                                var valueNewStr = EngineHandle.JsonStringify().Item.StaticCall(valueNew);
-                                var valuePrevStr = EngineHandle.JsonStringify().Item.StaticCall(valuePrev);
+                               // var valueNewStr = EngineHandle.JsonStringify().Item.StaticCall(valueNew);
+                               // var valuePrevStr = EngineHandle.JsonStringify().Item.StaticCall(valuePrev);
                                 throw new ArgumentException(
-                                    $"Can't set argument '{propertyName}' as property on global object as it already exists with value {valuePrevStr}, new value {valueNewStr}");
+                                    $"Can't set argument '{propertyName}' as property on global object as it already exists with value {{valuePrevStr}}, new value {{valueNewStr}}");
                             }
                         }
                     }

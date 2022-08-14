@@ -35,7 +35,7 @@ namespace Raven.Server.Documents.Indexes.Static
             var properties = new List<Expression>
             {
                 new Property(PropertyKind.Data, new Identifier(field), false,
-                    new StaticMemberExpression(new Identifier("self"), new Identifier(field), false), false, false)
+                    new StaticMemberExpression(new Identifier("self"), new Identifier(field)), false, false)
             };
             var fields = new List<string> { field };
 
@@ -52,7 +52,7 @@ namespace Raven.Server.Documents.Indexes.Static
                     if (field != null)
                     {
                         properties.Add(new Property(PropertyKind.Data, new Identifier(field), false,
-                        new StaticMemberExpression(new Identifier("self"), new Identifier(field), false), false, false));
+                        new StaticMemberExpression(new Identifier("self"), new Identifier(field)), false, false));
                         fields.Add(field);
                     }
                 }
@@ -114,7 +114,7 @@ namespace Raven.Server.Documents.Indexes.Static
             var properties = new List<Expression>
             {
                 new Property(PropertyKind.Data, new Identifier(field), false,
-                    new StaticMemberExpression(new Identifier("self"), new Identifier(field), false), false, false)
+                    new StaticMemberExpression(new Identifier("self"), new Identifier(field)), false, false)
             };
 
             if (MoreArguments != null)
@@ -131,7 +131,7 @@ namespace Raven.Server.Documents.Indexes.Static
                     if (field != null)
                     {
                         properties.Add(new Property(PropertyKind.Data, new Identifier(field), false,
-                        new StaticMemberExpression(new Identifier("self"), new Identifier(field), false), false, false));
+                        new StaticMemberExpression(new Identifier("self"), new Identifier(field)), false, false));
                     }
                 }
             }
@@ -151,7 +151,7 @@ namespace Raven.Server.Documents.Indexes.Static
                   var  functionObject = new JsHandleJint(new ScriptFunctionInstance(
                       engine,
                       functionExp,
-                      JintEnvironment.NewDeclarativeEnvironment(engine, engine.ExecutionContext.LexicalEnvironment), //TODO [shlomo] restore whne Jint gets updated
+                      LexicalEnvironment.NewDeclarativeEnvironment(engine, engine.ExecutionContext.LexicalEnvironment), //TODO [shlomo] restore whne Jint gets updated
                       function.Strict
                   ));
    

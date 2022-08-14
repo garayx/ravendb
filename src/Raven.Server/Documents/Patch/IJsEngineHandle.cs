@@ -50,7 +50,7 @@ public interface IJsEngineHandle<T> : /*IJavaScriptEngineForParsing<T>,*/ IScrip
     T ImplicitNull { get; set; }
     T ExplicitNull { get; set; }
 
-    T JsonStringify();
+  //  T JsonStringify();
 
     void ForceGarbageCollection();
 

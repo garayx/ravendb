@@ -118,12 +118,16 @@ namespace Raven.Server.Documents.Patch.Jint
                 using (var jsMethod = EngineHandle.GetGlobalProperty(method))
                 {
                     if (jsMethod.IsUndefined)
-                        throw new InvalidOperationException(
-                            $"Failed to get global function '{method}', global object is: {EngineHandle.JsonStringify().StaticCall(EngineHandle.GlobalObject)}");
+                    {
+                        throw new InvalidOperationException($"Failed to get global function '{method}'");
+                       // throw new InvalidOperationException($"Failed to get global function '{method}', global object is: {EngineHandle.JsonStringify().StaticCall(EngineHandle.GlobalObject)}");
+                    }
 
                     if (!jsMethod.IsFunction)
-                        throw new InvalidOperationException(
-                            $"Obtained {method} global property is not a function: {EngineHandle.JsonStringify().StaticCall(method)}");
+                    {
+                        throw new InvalidOperationException($"Obtained {method} global property is not a function:");
+                       // throw new InvalidOperationException($"Obtained {method} global property is not a function: {EngineHandle.JsonStringify().StaticCall(method)}");
+                    }
 
 
                     using (var jsRes = jsMethod.StaticCall(_args))

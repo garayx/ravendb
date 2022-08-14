@@ -39,7 +39,7 @@ namespace Raven.Server.Documents.Indexes.Static.TimeSeries.Jint
                 
             _segment = segment ?? throw new ArgumentNullException(nameof(segment));
 
-            SetPrototypeOf(_engine.Realm.Intrinsics.Object.PrototypeObject);
+            SetPrototypeOf(_engine.Object.PrototypeObject);
         }
 
         public override bool Delete(JsValue property)
@@ -70,10 +70,10 @@ namespace Raven.Server.Documents.Indexes.Static.TimeSeries.Jint
                 return new PropertyDescriptor(_segment.Count, writable: false, enumerable: false, configurable: false);
 
             if (property == nameof(DynamicTimeSeriesSegment.End))
-                return new PropertyDescriptor(_engine.Realm.Intrinsics.Date.Construct(_segment.End), writable: false, enumerable: false, configurable: false);
+                return new PropertyDescriptor(_engine.Date.Construct(_segment.End), writable: false, enumerable: false, configurable: false);
 
             if (property == nameof(DynamicTimeSeriesSegment.Start))
-                return new PropertyDescriptor(_engine.Realm.Intrinsics.Date.Construct(_segment.Start), writable: false, enumerable: false, configurable: false);
+                return new PropertyDescriptor(_engine.Date.Construct(_segment.Start), writable: false, enumerable: false, configurable: false);
 
             return PropertyDescriptor.Undefined;
         }
@@ -127,7 +127,7 @@ namespace Raven.Server.Documents.Indexes.Static.TimeSeries.Jint
                 }
 
                 var jsArray = new ArrayInstance(engine, items);
-                jsArray.SetPrototypeOf(engine.Realm.Intrinsics.Array.PrototypeObject);
+                jsArray.SetPrototypeOf(engine.Array.PrototypeObject);
 
                 return jsArray;
             }
@@ -161,19 +161,19 @@ namespace Raven.Server.Documents.Indexes.Static.TimeSeries.Jint
                 var value = new ObjectInstance(engine);
 
                 value.Set(nameof(entry.Tag), entry._entry.Tag?.ToString());
-                value.Set(nameof(entry.Timestamp), engine.Realm.Intrinsics.Date.Construct(entry._entry.Timestamp));
+                value.Set(nameof(entry.Timestamp), engine.Date.Construct(entry._entry.Timestamp));
 
                 var values = new JsValue[entry._entry.Values.Length];
                 for (var i = 0; i < values.Length; i++)
                     values[i] = entry._entry.Values.Span[i];
 
-                var array = engine.Realm.Intrinsics.Array.Construct(Arguments.Empty);
-                engine.Realm.Intrinsics.Array.PrototypeObject.Push(array, values);
+                var array = engine.Array.Construct(Arguments.Empty);
+                engine.Array.PrototypeObject.Push(array, values);
 
                 value.Set(nameof(entry.Value), values[0]);
                 value.Set(nameof(entry.Values), array);
 
-                value.SetPrototypeOf(engine.Realm.Intrinsics.Object.PrototypeObject);
+                value.SetPrototypeOf(engine.Object.PrototypeObject);
 
                 return value;
             }

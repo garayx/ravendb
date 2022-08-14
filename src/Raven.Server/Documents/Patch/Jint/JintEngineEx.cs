@@ -41,8 +41,8 @@ var process = {
         //public JsHandleJint ImplicitNull() => new(ImplicitNullJint);
         //public JsHandleJint ExplicitNull() => new(ExplicitNullJint);
 
-        private readonly JsHandleJint _jsonStringify;
-        public JsHandleJint JsonStringify() => _jsonStringify;
+        //private readonly JsHandleJint _jsonStringify;
+     //   public JsHandleJint JsonStringify() => _jsonStringify;
 
         [CanBeNull]
         private IJavaScriptOptions _jsOptions;
@@ -92,7 +92,7 @@ var process = {
 
             ExecuteWithReset(ExecEnvCodeJint, "ExecEnvCode");
 
-            _jsonStringify = new JsHandleJint(Engine.Evaluate("JSON.stringify"));
+           // _jsonStringify = new JsHandleJint(Engine.Evaluate("JSON.stringify"));
         }
 
         public void Dispose()
@@ -102,7 +102,7 @@ var process = {
 
         public void Dispose(bool disposing)
         {
-            _jsonStringify.Dispose();
+            //_jsonStringify.Dispose();
         }
 
         public void SetBasicConfiguration()
@@ -159,14 +159,14 @@ var process = {
 
         public IDisposable ChangeMaxDuration(TimeSpan value)
         {
-            var maxDuration = Engine.FindConstraint<TimeConstraint2>();
+            /*var maxDuration = Engine.FindConstraint<TimeConstraint2>();
             if (maxDuration == null)
                 return null;
 
             var oldMaxDuration = maxDuration.Timeout;
-            maxDuration.Change(value);
+            maxDuration.Change(value);*/
 
-            return new DisposableAction(() => maxDuration.Change(oldMaxDuration));
+            return new DisposableAction(() =>/* maxDuration.Change(oldMaxDuration)*/{});
         }
 
         public void ForceGarbageCollection()
@@ -227,7 +227,8 @@ var process = {
         public JsHandleJint GlobalObject
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => new(Engine.Realm.GlobalObject);
+            get => new(Engine.Global.Prototype);
+            //get => new(Engine.Realm.GlobalObject);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -286,7 +287,7 @@ var process = {
 
         public JsHandleJint CreateObject()
         {
-            return new JsHandleJint(Engine.Realm.Intrinsics.Object.Construct(System.Array.Empty<JsValue>())); //new ObjectInstance(this));
+            return new JsHandleJint(Engine.Object.Construct(System.Array.Empty<JsValue>())); //new ObjectInstance(this));
         }
 
         public JsHandleJint CreateEmptyArray()

@@ -73,10 +73,10 @@ namespace Raven.Server.Documents.Indexes.Static.JavaScript.Jint
             throw new NotSupportedException();
         }
 
-        public override bool PreventExtensions()
+        /*public override bool PreventExtensions()
         {
             throw new NotSupportedException();
-        }
+        }*/
 
         public override void RemoveOwnProperty(JsValue property)
         {

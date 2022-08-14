@@ -1,4 +1,4 @@
-using Tests.Infrastructure;
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -6,8 +6,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using Amazon.SQS.Model;
 using FastTests;
-using FastTests.Server.Documents.Revisions;
+using Jint;
 using Microsoft.Diagnostics.NETCore.Client;
+using Raven.Server.Documents.Patch.Jint;
+using Raven.Server.Extensions.Jint;
+using SlowTests.Issues;
+using Tests.Infrastructure;
 
 namespace Tryouts
 {
@@ -23,15 +27,63 @@ namespace Tryouts
             Console.WriteLine(Process.GetCurrentProcess().Id);
             for (int i = 0; i < 10_000; i++)
             {
+
+
+
+
+
+
+                /*
+                var Engine = new Engine(options =>
+                {
+                    options.LimitRecursion(64)
+                        .MaxStatements(10_000)
+                        .Strict(true)
+                        .AddObjectConverter(new JintGuidConverter())
+                        .AddObjectConverter(new JintStringConverter())
+                        .AddObjectConverter(new JintEnumConverter())
+                        .AddObjectConverter(new JintDateTimeConverter())
+                        .AddObjectConverter(new JintTimeSpanConverter())
+                        .LocalTimeZone(TimeZoneInfo.Utc);
+
+
+                    options.SetReferencesResolver(new JintPreventResolvingTasksReferenceResolver());
+                });
+
+
+
+
+                Engine.ExecuteWithReset(@"
+var process = {
+    env: {
+        EXEC_ENV: 'RavenDB',
+        ENGINE: 'Jint'
+    }
+}
+");
+
+                Console.WriteLine();*/
+
+
+
+
+
+
+
+
+
+
+
+
                 Console.WriteLine($"Starting to run {i}");
                 try
                 {
                     using (var testOutputHelper = new ConsoleTestOutputHelper())
                         //using (var test = new RollingIndexesClusterTests(testOutputHelper))
-                    using (var test = new RevisionsTests(testOutputHelper))
+                    using (var test = new RavenDB_14784(testOutputHelper))
                     {
                         //await test.RemoveNodeFromDatabaseGroupWhileRollingDeployment();
-                        await test.CanGetRevisionsCountFor(RavenTestBase.Options.ForMode(RavenDatabaseMode.Sharded));
+                         test.Can_Index_Attachments_JavaScript(RavenTestBase.Options.ForMode(RavenDatabaseMode.Single, RavenJavascriptEngineMode.Jint));
                     }
                 }
                 catch (Exception e)

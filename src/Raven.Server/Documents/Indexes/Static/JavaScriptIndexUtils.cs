@@ -200,28 +200,29 @@ public abstract class JavaScriptIndexUtils<T>
 
     public T StringifyObject(T jsValue)
     {
+        throw new NotSupportedException(nameof(StringifyObject));
         // json string of the object
-        return EngineHandle.JsonStringify().StaticCall(jsValue);
+       // return EngineHandle.JsonStringify().StaticCall(jsValue);
     }
 
     [ThreadStatic]
     private static JsValue[] _oneItemArray;
 
-    public static object StringifyObject(JsValue jsValue)
-    {
-        if (_oneItemArray == null)
-            _oneItemArray = new JsValue[1];
-        _oneItemArray[0] = jsValue;
-        try
-        {
-            // json string of the object
-            return jsValue.AsObject().Engine.Realm.Intrinsics.Json.Stringify(JsValue.Null, _oneItemArray);
-        }
-        finally
-        {
-            _oneItemArray[0] = null;
-        }
-    }
+    // public static object StringifyObject(JsValue jsValue)
+    // {
+    //     if (_oneItemArray == null)
+    //         _oneItemArray = new JsValue[1];
+    //     _oneItemArray[0] = jsValue;
+    //     try
+    //     {
+    //         // json string of the object
+    //         return jsValue.AsObject().Engine.Json.Stringify(JsValue.Null, _oneItemArray);
+    //     }
+    //     finally
+    //     {
+    //         _oneItemArray[0] = null;
+    //     }
+    // }
 }
 
 public class JavaScriptIndexUtilsJint : JavaScriptIndexUtils<JsHandleJint>

@@ -86,9 +86,9 @@ namespace Raven.Server.Documents.Indexes.Static
                 case Nodes.CatchClause:
                     VisitCatchClause(statement.As<CatchClause>());
                     break;
-                case Nodes.ChainExpression:
+                /*case Nodes.ChainExpression:
                     VisitChainExpression(statement.As<ChainExpression>());
-                    break;
+                    break;*/
                 default:
                     VisitUnknownNode(statement);
                     break;
@@ -111,10 +111,10 @@ namespace Raven.Server.Documents.Indexes.Static
             VisitStatement(catchClause.Body);
         }
         
-        private void VisitChainExpression(ChainExpression chainExpression)
+        /*private void VisitChainExpression(ChainExpression chainExpression)
         {
             VisitExpression(chainExpression.Expression);
-        }
+        }*/
 
         public virtual void VisitFunctionDeclaration(FunctionDeclaration functionDeclaration)
         {
@@ -329,9 +329,9 @@ namespace Raven.Server.Documents.Indexes.Static
                 case Nodes.ArrowFunctionExpression:
                     VisitArrowFunctionExpression(expression.As<ArrowFunctionExpression>());
                     break;
-                case Nodes.ChainExpression:
+                /*case Nodes.ChainExpression:
                     VisitChainExpression(expression.As<ChainExpression>());
-                    break;
+                    break;*/
                 default:
                     VisitUnknownNode(expression);
                     break;
@@ -630,9 +630,9 @@ namespace Raven.Server.Documents.Indexes.Static
                 case Nodes.ClassExpression:
                     VisitClassExpression(node.As<ClassExpression>());
                     break;
-                case Nodes.ChainExpression:
+                /*case Nodes.ChainExpression:
                     VisitChainExpression(node.As<ChainExpression>());
-                    break;
+                    break;*/
                 default:
                     VisitUnknownNode(node);
                     break;

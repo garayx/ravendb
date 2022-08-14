@@ -87,11 +87,11 @@ namespace Raven.Server.Documents.Patch.Jint
             for (var i = 0; i < attachments.Length; i++)
                 attachmentsArray[i] = new AttachmentNameObjectInstanceJint(Engine, (BlittableJsonReaderObject)attachments[i]);
 
-            return new JsHandleJint(Engine.Realm.Intrinsics.Array.Construct(attachmentsArray));
+            return new JsHandleJint(Engine.Array.Construct(attachmentsArray));
 
             static ArrayInstance EmptyArray(Engine engine)
             {
-                return engine.Realm.Intrinsics.Array.Construct(0);
+                return engine.Array.Construct(0);
             }
         }
 
@@ -161,8 +161,8 @@ namespace Raven.Server.Documents.Patch.Jint
             for (var i = 0; i < values.Length; i++)
                 values[i] = new AttachmentObjectInstanceJint(Engine, attachments[i]);
 
-            var array = Engine.Realm.Intrinsics.Array.Construct(Arguments.Empty);
-            Engine.Realm.Intrinsics.Array.PrototypeObject.Push(array, values);
+            var array = Engine.Array.Construct(Arguments.Empty);
+            Engine.Array.PrototypeObject.Push(array, values);
 
             return new JsHandleJint(array);
 
@@ -190,7 +190,7 @@ namespace Raven.Server.Documents.Patch.Jint
 
             static ArrayInstance EmptyArray(Engine engine)
             {
-                return engine.Realm.Intrinsics.Array.Construct(0);
+                return engine.Array.Construct(0);
             }
         }
 
@@ -219,11 +219,11 @@ namespace Raven.Server.Documents.Patch.Jint
             for (var i = 0; i < timeSeries.Length; i++)
                 timeSeriesArray[i] = timeSeries[i]?.ToString();
 
-            return new JsHandleJint(Engine.Realm.Intrinsics.Array.Construct(timeSeriesArray));
+            return new JsHandleJint(Engine.Array.Construct(timeSeriesArray));
 
             static ArrayInstance EmptyArray(Engine engine)
             {
-                return engine.Realm.Intrinsics.Array.Construct(0);
+                return engine.Array.Construct(0);
             }
         }
 
@@ -333,34 +333,34 @@ namespace Raven.Server.Documents.Patch.Jint
                 return new JsHandleJint(lng);
             if (o is BlittableJsonReaderArray bjra)
             {
-                var jsArray = Engine.Realm.Intrinsics.Array.Construct(Array.Empty<JsValue>());
+                var jsArray = Engine.Array.Construct(Array.Empty<JsValue>());
                 var args = new JsHandleJint[1];
                 for (var i = 0; i < bjra.Length; i++)
                 {
                     args[0] = TranslateToJs(context, bjra[i]);
-                    Engine.Realm.Intrinsics.Array.PrototypeObject.Push(jsArray, args.ToJsValueArray());
+                    Engine.Array.PrototypeObject.Push(jsArray, args.ToJsValueArray());
                 }
                 return new JsHandleJint(jsArray);
             }
             if (o is List<object> list)
             {
-                var jsArray = Engine.Realm.Intrinsics.Array.Construct(Array.Empty<JsValue>());
+                var jsArray = Engine.Array.Construct(Array.Empty<JsValue>());
                 var args = new JsHandleJint[1];
                 for (var i = 0; i < list.Count; i++)
                 {
                     args[0] = TranslateToJs(context, list[i]);
-                    Engine.Realm.Intrinsics.Array.PrototypeObject.Push(jsArray, args.ToJsValueArray());
+                    Engine.Array.PrototypeObject.Push(jsArray, args.ToJsValueArray());
                 }
                 return new JsHandleJint(jsArray);
             }
             if (o is List<Document> docList)
             {
-                var jsArray = Engine.Realm.Intrinsics.Array.Construct(Array.Empty<JsValue>());
+                var jsArray = Engine.Array.Construct(Array.Empty<JsValue>());
                 var args = new JsValue[1];
                 for (var i = 0; i < docList.Count; i++)
                 {
                     args[0] = new BlittableObjectInstanceJint(EngineEx, null, Clone(docList[i].Data, context), docList[i]);
-                    Engine.Realm.Intrinsics.Array.PrototypeObject.Push(jsArray, args);
+                    Engine.Array.PrototypeObject.Push(jsArray, args);
                 }
                 return new JsHandleJint(jsArray);
             }

@@ -37,7 +37,7 @@ namespace Raven.Server.Documents.Indexes.Static.Counters.Jint
                 
             _entry = entry ?? throw new ArgumentNullException(nameof(entry));
 
-            SetPrototypeOf(_engine.Realm.Intrinsics.Object.PrototypeObject);
+            SetPrototypeOf(_engine.Object.PrototypeObject);
         }
 
         public override bool Delete(JsValue property)

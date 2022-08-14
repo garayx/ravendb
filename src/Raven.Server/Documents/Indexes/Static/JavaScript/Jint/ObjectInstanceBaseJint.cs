@@ -12,7 +12,7 @@ namespace Raven.Server.Documents.Indexes.Static.JavaScript.Jint
 
         protected ObjectInstanceBaseJint(Engine engine) : base(engine)
         {
-            SetPrototypeOf(engine.Realm.Intrinsics.Object.PrototypeObject);
+            SetPrototypeOf(engine.Object.PrototypeObject);
         }
     }
 }

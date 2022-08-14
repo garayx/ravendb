@@ -228,6 +228,9 @@ public abstract class AbstractJavaScriptIndex<T> : AbstractJavaScriptIndexBase
         EngineHandle.SetGlobalClrCallBack("loadAttachment", LoadAttachment);
         EngineHandle.SetGlobalClrCallBack("loadAttachments", LoadAttachments);
         EngineHandle.SetGlobalClrCallBack("id", GetDocumentId);
+
+
+     //   EngineHandle.SetGlobalClrCallBack("loadAttachment", LoadAttachment);
     }
 
     protected abstract T MetadataFor(T self, T[] args);
