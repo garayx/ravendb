@@ -8,5 +8,8 @@ public enum Feature
     PostgreSql,
     
     [Description("Corax")]
-    Corax
+    Corax,
+
+    [Description("V8")]
+    V8
 }

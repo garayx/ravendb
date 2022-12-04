@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using Raven.Client.Documents.Indexes;
+using Raven.Client.ServerWide.JavaScript;
 using Raven.Client.Util;
 using Raven.Server.Config;
 using Raven.Server.Documents.Indexes.Static;
@@ -151,7 +152,7 @@ namespace Raven.Server.Documents.Indexes
                     AssertAndPersistAnalyzer(configurationTree, RavenConfiguration.GetKey(x => x.Indexing.DefaultAnalyzer), _index.Configuration.DefaultAnalyzer, Raven.Client.Constants.Documents.Indexing.Analyzers.Default);
                     AssertAndPersistAnalyzer(configurationTree, RavenConfiguration.GetKey(x => x.Indexing.DefaultExactAnalyzer), _index.Configuration.DefaultExactAnalyzer, Raven.Client.Constants.Documents.Indexing.Analyzers.DefaultExact);
                     AssertAndPersistAnalyzer(configurationTree, RavenConfiguration.GetKey(x => x.Indexing.DefaultSearchAnalyzer), _index.Configuration.DefaultSearchAnalyzer, Raven.Client.Constants.Documents.Indexing.Analyzers.DefaultSearch);
-                    
+                    AssertAndPersistJavascriptEngine(configurationTree);
                 }
 
                 void AssertAndPersistAnalyzer(Tree configurationTree, string configurationKey, string expectedAnalyzer, string defaultAnalyzer)
@@ -200,7 +201,55 @@ namespace Raven.Server.Documents.Indexes
                             configurationTree.Add(configurationKey, defaultEngineType.ToString());
                     }
                 }
+
+                void AssertAndPersistJavascriptEngine(Tree configurationTree)
+                {
+                    JavaScriptEngineType defaultEngineType = _index.Configuration.EngineForScript;
+                    var configurationKey = RavenConfiguration.GetKey(x => x.JavaScript.EngineType);
+                    JavaScriptEngineType expectedEngineType;
+                    if (defaultEngineType == JavaScriptEngineType.None)
+                    {
+                        var dbConfigurationKey = RavenConfiguration.GetKey(x => x.Indexing.EngineForScript);
+                        if (DocumentDatabase.Configuration.JavaScript.EngineType == JavaScriptEngineType.None)
+                        {
+                            ThrowInvalidJavascriptEngineException(configurationKey, dbConfigurationKey);
+                        }
+
+                        expectedEngineType = DocumentDatabase.Configuration.JavaScript.EngineType;
+                        configurationKey = dbConfigurationKey;
+                    }
+                    else
+                    {
+                        expectedEngineType = defaultEngineType;
+                    }
+
+                    var result = configurationTree.Read(IndexSchema.JavaScriptEngineType);
+                    if (result != null)
+                    {
+                        if (Enum.TryParse(result.Reader.ToStringValue(), out JavaScriptEngineType persistedSearchEngineType) == false)
+                        {
+                            throw new InvalidDataException($"Invalid javascript engine for {_index.Name} was saved previously or it's corrupted. Please reset the index.");
+                        }
+
+                        if (persistedSearchEngineType != expectedEngineType)
+                        {
+                            throw new InvalidOperationException($"Invalid javascript. The index '{_index.Name}' was created with analyzer '{persistedSearchEngineType}' for '{configurationKey}' configuration, but current configured one is '{expectedEngineType}'. Please reset the index.");
+                        }
+                    }
+                    else
+                    {
+                        if (_index.Definition.Version < IndexDefinitionBaseServerSide.IndexVersion.JavascriptEngineTypeStored)
+                            configurationTree.Add(configurationKey, JavaScriptEngineType.Jint.ToString());
+                        else
+                            configurationTree.Add(configurationKey, expectedEngineType.ToString());
+                    }
+                }
             }
+        }
+
+        public static void ThrowInvalidJavascriptEngineException(string key1, string key2)
+        {
+            throw new InvalidDataException($"Default javascript engine is {JavaScriptEngineType.None}. Please set {key1} or {key2}.");
         }
 
         private long InitializeLastDatabaseEtagOnIndexCreation(TransactionOperationContext indexContext)
@@ -935,7 +984,7 @@ namespace Raven.Server.Documents.Indexes
             }
         }
 
-        public static SearchEngineType ReadSearchEngineType(string name, StorageEnvironment environment)
+        public static (SearchEngineType, JavaScriptEngineType) ReadSearchAndJsEngineType(string name, StorageEnvironment environment)
         {
             using (var tx = environment.ReadTransaction())
             {
@@ -945,18 +994,36 @@ namespace Raven.Server.Documents.Indexes
                     throw new InvalidOperationException($"Index '{name}' does not contain {nameof(IndexSchema.ConfigurationTree)}' tree.");
                 }
 
-                var result = configurationTree.Read(IndexSchema.SearchEngineType);
-                if (result == null)
+                JavaScriptEngineType javaScriptEngineType;
+                SearchEngineType searchEngineType;
+                var searchEngineTypeResult = configurationTree.Read(IndexSchema.SearchEngineType);
+                if (searchEngineTypeResult == null)
                 {
-                    return SearchEngineType.None;
+                    searchEngineType = SearchEngineType.None;
+                } else if (Enum.TryParse(searchEngineTypeResult.Reader.ToStringValue(), out SearchEngineType persistedSearchEngineType))
+                {
+                    searchEngineType = persistedSearchEngineType;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Index '{name}' does not contain valid {nameof(SearchEngineType)} property. It contains: {searchEngineTypeResult.Reader.ToStringValue()}.");
                 }
 
-                if (Enum.TryParse(result.Reader.ToStringValue(), out SearchEngineType persistedSearchEngineType) == false)
+                var javaScriptEngineTypeResult = configurationTree.Read(IndexSchema.JavaScriptEngineType);
+                if (javaScriptEngineTypeResult == null)
                 {
-                    throw new InvalidOperationException($"Index '{name}' does not contain valid {nameof(SearchEngineType)} property. It contains: {result.Reader.ToStringValue()}.");
+                    javaScriptEngineType = JavaScriptEngineType.Jint;
                 }
-               
-                return persistedSearchEngineType;
+                else if (Enum.TryParse(javaScriptEngineTypeResult.Reader.ToStringValue(), out JavaScriptEngineType persistedJavaScriptEngineType))
+                {
+                    javaScriptEngineType = persistedJavaScriptEngineType;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Index '{name}' does not contain valid {nameof(JavaScriptEngineType)} property. It contains: {javaScriptEngineTypeResult.Reader.ToStringValue()}.");
+                }
+
+                return (searchEngineType, javaScriptEngineType);
             }
         }        
         
@@ -1103,7 +1170,8 @@ namespace Raven.Server.Documents.Indexes
             public static readonly Slice TimeSlice;
 
             public static readonly Slice SearchEngineType;
-            
+            public static readonly Slice JavaScriptEngineType;
+
             static IndexSchema()
             {
                 using (StorageEnvironment.GetStaticContext(out var ctx))
@@ -1129,6 +1197,7 @@ namespace Raven.Server.Documents.Indexes
                     Slice.From(ctx, "EntriesCount", ByteStringType.Immutable, out EntriesCount);
                     Slice.From(ctx, "Time", ByteStringType.Immutable, out TimeSlice);
                     Slice.From(ctx, nameof(Client.Documents.Indexes.SearchEngineType), ByteStringType.Immutable, out SearchEngineType);
+                    Slice.From(ctx, nameof(Raven.Client.ServerWide.JavaScript.JavaScriptEngineType), ByteStringType.Immutable, out JavaScriptEngineType);
                 }
             }
         }

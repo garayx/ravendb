@@ -172,8 +172,9 @@ namespace Raven.Client
             internal class Indexes
             {
                 internal const string IndexingStaticSearchEngineType = "Indexing.Static.SearchEngineType";
+                internal const string IndexingEngineForScript = "Indexing.EngineForScript";
             }
-            
+
             public const string ClientId = "Configuration/Client";
 
             public const string StudioId = "Configuration/Studio";

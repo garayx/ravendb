@@ -150,10 +150,12 @@ namespace Raven.Server.Documents.Indexes
             public const long ProperlyParseThreeDigitsMillisecondsDates = 52_002; // RavenDB-17711
 
             public const long EngineTypeStored = 54_000; // introducing Corax, added engine type to the index storage
+
+            public const long JavascriptEngineTypeStored = 60_000; // introducing v8, added JavascriptEngine type to the index storage
             /// <summary>
             /// Remember to bump this
             /// </summary>
-            public const long CurrentVersion = EngineTypeStored;
+            public const long CurrentVersion = JavascriptEngineTypeStored;
         }
     }
 

@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration.CommandLine;
 using Microsoft.Extensions.Configuration.Memory;
 using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Indexes;
+using Raven.Client.ServerWide.JavaScript;
 #endif
 using Raven.Client.Documents;
 using Raven.Client.Extensions;
@@ -99,6 +100,8 @@ namespace Raven.Server.Config
 
         public IntegrationsConfiguration Integrations { get;  }
 
+        public JavaScriptConfiguration JavaScript { get; }
+
         internal IConfigurationRoot ServerWideSettings { get; set; }
 
         internal IConfigurationRoot Settings { get; set; }
@@ -152,6 +155,7 @@ namespace Raven.Server.Config
             Updates = new UpdatesConfiguration();
             Migration = new MigrationConfiguration();
             Integrations = new IntegrationsConfiguration();
+            JavaScript = new JavaScriptConfiguration();
         }
 
         private void AddJsonConfigurationVariables(string customConfigPath = null)
@@ -212,6 +216,7 @@ namespace Raven.Server.Config
             Updates.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
             Migration.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
             Integrations.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
+            JavaScript.Initialize(Settings, settingsNames, ServerWideSettings, serverWideSettingsNames, ResourceType, ResourceName);
 
             PostInit();
 
@@ -220,16 +225,19 @@ namespace Raven.Server.Config
             return this;
         }
 
-        public static void AssertPostInitCanUseCoraxFeature(RavenConfiguration configuration)
+        public static void AssertPostInitCanUseFeatures(RavenConfiguration configuration)
         {
             if (configuration.Indexing.AutoIndexingEngineType == SearchEngineType.Corax || configuration.Indexing.StaticIndexingEngineType == SearchEngineType.Corax)
-                AssertCanUseCoraxFeature(configuration);
+                AssertCanUseFeature(configuration, Feature.Corax);
+
+            if (configuration.Indexing.EngineForScript == JavaScriptEngineType.V8 || configuration.JavaScript.EngineType == JavaScriptEngineType.V8)
+                AssertCanUseFeature(configuration, Feature.V8);
         }
         
-        public static void AssertCanUseCoraxFeature(RavenConfiguration configuration)
+        public static void AssertCanUseFeature(RavenConfiguration configuration, Feature feature)
         {
             var featureGuardian = new FeatureGuardian(configuration);
-            featureGuardian.Assert(Feature.Corax, () => $"To use {nameof(Corax)} search engine you have set {nameof(CoreConfiguration.FeaturesAvailability)} as {FeaturesAvailability.Experimental}.");
+            featureGuardian.Assert(feature, () => $"To use {feature} feature you have set {nameof(CoreConfiguration.FeaturesAvailability)} as {FeaturesAvailability.Experimental}.");
         }
         
         public void PostInit()
@@ -237,7 +245,7 @@ namespace Raven.Server.Config
             if (ResourceType != ResourceType.Server)
                 return;
 
-            AssertPostInitCanUseCoraxFeature(this);
+            AssertPostInitCanUseFeatures(this);
             
             try
             {

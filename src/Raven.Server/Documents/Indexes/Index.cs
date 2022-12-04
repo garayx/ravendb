@@ -18,6 +18,7 @@ using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Queries;
 using Raven.Client.Exceptions.Database;
 using Raven.Client.Exceptions.Documents.Indexes;
+using Raven.Client.ServerWide.JavaScript;
 using Raven.Client.ServerWide.Operations;
 using Raven.Client.Util;
 using Raven.Server.Config;
@@ -37,6 +38,8 @@ using Raven.Server.Documents.Indexes.Static.Counters;
 using Raven.Server.Documents.Indexes.Static.Spatial;
 using Raven.Server.Documents.Indexes.Static.TimeSeries;
 using Raven.Server.Documents.Indexes.Workers;
+using Raven.Server.Documents.Patch.Jint;
+using Raven.Server.Documents.Patch.V8;
 using Raven.Server.Documents.Queries;
 using Raven.Server.Documents.Queries.AST;
 using Raven.Server.Documents.Queries.Facets;
@@ -55,6 +58,7 @@ using Raven.Server.Storage.Layout;
 using Raven.Server.Storage.Schema;
 using Raven.Server.Utils;
 using Raven.Server.Utils.Enumerators;
+using Raven.Server.Utils.Features;
 using Raven.Server.Utils.Metrics;
 using Sparrow;
 using Sparrow.Json;
@@ -81,14 +85,16 @@ namespace Raven.Server.Documents.Indexes
     {
         public new TIndexDefinition Definition => (TIndexDefinition)base.Definition;
 
-        protected Index(IndexType type, IndexSourceType sourceType, TIndexDefinition definition)
-            : base(type, sourceType, definition)
+        protected Index(IndexType type, IndexSourceType sourceType, TIndexDefinition definition, AbstractStaticIndexBase compiled)
+            : base(type, sourceType, definition, compiled)
         {
         }
     }
 
     public abstract class Index : ITombstoneAware, IDisposable, ILowMemoryHandler
     {
+        protected internal AbstractStaticIndexBase _compiled;
+
         private int _writeErrors;
 
         private int _unexpectedErrors;
@@ -122,8 +128,7 @@ namespace Raven.Server.Documents.Indexes
         private readonly SemaphoreSlim _doingIndexingWork = new SemaphoreSlim(1, 1);
 
         private readonly SemaphoreSlim _executingIndexing = new SemaphoreSlim(1, 1);
-
-
+        
         private long _allocatedAfterPreviousCleanup = 0;
 
         /// <summary>
@@ -259,7 +264,7 @@ namespace Raven.Server.Documents.Indexes
 
         private readonly string _itemType;
 
-        protected Index(IndexType type, IndexSourceType sourceType, IndexDefinitionBaseServerSide definition)
+        protected Index(IndexType type, IndexSourceType sourceType, IndexDefinitionBaseServerSide definition, AbstractStaticIndexBase compiled)
         {
             Type = type;
             SourceType = sourceType;
@@ -269,6 +274,7 @@ namespace Raven.Server.Documents.Indexes
             if (Collections.Contains(Constants.Documents.Collections.AllDocumentsCollection))
                 HandleAllDocs = true;
 
+            _compiled = compiled;
             _queryBuilderFactories = new QueryBuilderFactories
             {
                 GetSpatialFieldFactory = GetOrAddSpatialField,
@@ -358,9 +364,20 @@ namespace Raven.Server.Documents.Indexes
 
             exceptionAggregator.Execute(() => { _mre?.Dispose(); });
 
+            if (Type.IsJavaScript())
+            {
+                exceptionAggregator.Execute(() =>
+                {
+                    if (_compiled is AbstractJavaScriptIndexV8 jsIndex)
+                    {
+                        V8EngineEx.ReturnEngine(jsIndex.EngineEx);
+                    }
+                });
+            }
+
             exceptionAggregator.ThrowIfNeeded();
         }
-
+        
         public static Index Open(string path, DocumentDatabase documentDatabase, bool generateNewDatabaseId)
         {
             var logger = LoggingSource.Instance.GetLogger<Index>(documentDatabase.Name);
@@ -552,8 +569,10 @@ namespace Raven.Server.Documents.Indexes
         }
 
         public IndexType Type { get; }
-        
+
         public SearchEngineType SearchEngineType { get; private set; }
+
+        public JavaScriptEngineType JavaScriptEngineType { get; private set; }
 
         public IndexSourceType SourceType { get; }
 
@@ -808,7 +827,7 @@ namespace Raven.Server.Documents.Indexes
             _indexStorage.Initialize(documentDatabase, environment);
 
             IndexPersistence?.Dispose();
-            SearchEngineType = IndexStorage.ReadSearchEngineType(Name, environment);
+            (SearchEngineType, JavaScriptEngineType) = IndexStorage.ReadSearchAndJsEngineType(Name, environment);
 
             switch (SearchEngineType)
             {
@@ -818,14 +837,27 @@ namespace Raven.Server.Documents.Indexes
                     SearchEngineType = SearchEngineType.Lucene;
                     break;
                 case SearchEngineType.Corax:
-                    RavenConfiguration.AssertCanUseCoraxFeature(DocumentDatabase.ServerStore.Configuration);
+                    RavenConfiguration.AssertCanUseFeature(DocumentDatabase.ServerStore.Configuration, Feature.Corax);
                     IndexPersistence = new CoraxIndexPersistence(this);
                     SearchEngineType = SearchEngineType.Corax;
                     break;
                 default:
                     throw new InvalidDataException($"Cannot read search engine type for {Name}. Please reset the index.");
             }
-            
+
+            switch (JavaScriptEngineType)
+            {
+                case JavaScriptEngineType.V8:
+                    RavenConfiguration.AssertCanUseFeature(DocumentDatabase.ServerStore.Configuration, Feature.V8);
+                    break;
+                case JavaScriptEngineType.None:
+                case JavaScriptEngineType.Jint:
+                    JavaScriptEngineType = JavaScriptEngineType.Jint;
+                    break;
+                default:
+                    throw new InvalidDataException($"Cannot read javascript engine type for {Name}. Please reset the index.");
+            }
+
             IndexPersistence.Initialize(environment);
 
             IndexFieldsPersistence = new IndexFieldsPersistence(this);
@@ -2861,6 +2893,7 @@ namespace Raven.Server.Documents.Indexes
                         Name = Name,
                         Type = Type,
                         SearchEngineType = SearchEngineType,
+                        JavaScriptEngineType = JavaScriptEngineType,
                         SourceType = SourceType,
                         LockMode = Definition?.LockMode ?? IndexLockMode.Unlock,
                         Priority = Definition?.Priority ?? IndexPriority.Normal,
@@ -2881,6 +2914,7 @@ namespace Raven.Server.Documents.Indexes
                     stats.Name = Name;
                     stats.SourceType = SourceType;
                     stats.SearchEngineType = SearchEngineType;
+                    stats.JavaScriptEngineType = JavaScriptEngineType;
                     stats.Type = Type;
                     stats.LockMode = Definition.LockMode;
                     stats.Priority = Definition.Priority;

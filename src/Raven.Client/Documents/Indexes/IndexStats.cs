@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using Raven.Client.ServerWide.JavaScript;
 using Raven.Client.Util;
 
 namespace Raven.Client.Documents.Indexes
@@ -138,6 +139,11 @@ namespace Raven.Client.Documents.Indexes
         /// Indicates search engine.
         /// </summary>
         public SearchEngineType SearchEngineType { get; set; }
+
+        /// <summary>
+        /// Indicates JavaScript engine.
+        /// </summary>
+        public JavaScriptEngineType JavaScriptEngineType { get; set; }
 
         public IndexRunningStatus Status { get; set; }
 
