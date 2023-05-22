@@ -45,6 +45,7 @@ public class OrchestratedSubscriptionProcessor : AbstractSubscriptionProcessor<O
         return _includes;
     }
 
+    public int Count = 0;
     public override IEnumerable<(Document Doc, Exception Exception)> GetBatch()
     {
         if (_state.Batches.TryTake(out CurrentBatch, TimeSpan.Zero) == false)
@@ -68,6 +69,11 @@ public class OrchestratedSubscriptionProcessor : AbstractSubscriptionProcessor<O
 
                 yield return (document, null);
             }
+
+            Count += CurrentBatch.Items.Count;
+
+        //    Console.WriteLine($"Processor batch from '{CurrentBatch.ShardName}': {CurrentBatch.Items.Count} / Total: {Count}");
+
 
             CurrentBatch.CloneIncludes(ClusterContext, _includes);
         }

@@ -43,6 +43,12 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                         DocumentId = result.Doc.Id,
                         ChangeVector = result.Doc.ChangeVector,
                     });
+                    if (ShardHelper.GetShardNumberFromDatabaseName(((SubscriptionConnectionForShard)this._connection).ShardName) == 0)
+                    {
+                        Console.WriteLine($"{((SubscriptionConnectionForShard)this._connection).ShardName} fetched: {result.Doc.Id} (CV: {result.Doc.ChangeVector}, etag: {result.Doc.Etag}) " +
+                                          $"from: {this.Fetcher.FetchingFrom.ToString()} 1");
+                    }
+
 
                     yield return result;
 
@@ -56,6 +62,13 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                 {
                     item.Data?.Dispose();
                     item.Data = null;
+                    if (ShardHelper.GetShardNumberFromDatabaseName(((SubscriptionConnectionForShard)this._connection).ShardName) == 0)
+                    {
+                        Console.WriteLine(
+                            $"{((SubscriptionConnectionForShard)this._connection).ShardName} fetched: {result.Doc.Id} (CV: {result.Doc.ChangeVector}, etag: {result.Doc.Etag}) " +
+                            $"from: {this.Fetcher.FetchingFrom.ToString()} 2");
+                    }
+
                     yield return result;
                 }
             }

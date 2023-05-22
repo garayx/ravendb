@@ -57,10 +57,12 @@ public class SubscriptionConnectionForShard : SubscriptionConnection
             return currentLast;
 
         var vector = context.GetChangeVector(sentDocument.ChangeVector);
+        var cv = ChangeVectorUtils.NewChangeVector(_serverStore.NodeTag, sentDocument.Etag, _shardedDatabase.DbBase64Id);
+     //   Console.WriteLine($"{this._shardedDatabase.Name}: {sentDocument.Id}, currentLast:{currentLast}, cv: {cv}, order: {vector.Order}");
 
         var result = ChangeVectorUtils.MergeVectors(
             currentLast,
-            ChangeVectorUtils.NewChangeVector(_serverStore.NodeTag, sentDocument.Etag, _shardedDatabase.DbBase64Id),
+            cv,
             vector.Order);
 
         return result;
@@ -109,11 +111,18 @@ public class SubscriptionConnectionForShard : SubscriptionConnection
     protected override bool FoundAboutMoreDocs()
     {
         if (base.FoundAboutMoreDocs())
+        {
+            //   Console.WriteLine($"{this.ShardName}: FoundAboutMoreDocs: base.FoundAboutMoreDocs()");
             return true;
+        }
 
         if (_state.HasDocumentFromResend())
-            return true;
+        {
+            //      Console.WriteLine($"{this.ShardName}: FoundAboutMoreDocs: _state.HasDocumentFromResend()");
 
+            return true;
+        }
+        //    Console.WriteLine($"{this.ShardName}: FoundAboutMoreDocs: false");
         return false;
     }
 

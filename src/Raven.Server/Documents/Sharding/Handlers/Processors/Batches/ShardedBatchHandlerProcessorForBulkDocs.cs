@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Raven.Client.Documents.Commands.Batches;
@@ -33,6 +34,22 @@ internal class ShardedBatchHandlerProcessorForBulkDocs : AbstractBatchHandlerPro
             try
             {
                 var commands = command.GetCommands(batchBehavior, indexBatchOptions, replicationBatchOptions);
+                /*var first = commands.First().Value.Commands.First();
+                if (first.Id == "num-322$users/1-A")
+                {
+                    Console.WriteLine($"num-322$users/1-A\"  is: "+first.ShardNumber);
+                    var f = true;
+                    while (f)
+                    {
+                        if (f == false)
+                        {
+                            break;
+                        }
+
+                        Thread.Sleep(100);
+                    }
+                }*/
+
                 var op = new ShardedBatchOperation(HttpContext, context, commands, command);
 
                 return await RequestHandler.ShardExecutor.ExecuteParallelAndIgnoreErrorsForShardsAsync(commands.Keys.ToArray(), op);

@@ -338,7 +338,7 @@ public unsafe class ShardedDocumentsStorage : DocumentsStorage
 
         MarkTombstonesAsArtificial(context, bucket, upTo);
         var result = ShardedDocumentDatabase.DeleteBucketCommand.DeleteBucketResult.Empty;
-        
+        //Console.WriteLine($"{this._documentDatabase.Name} DeleteBucket start");
         var docs = GetDocumentsByBucketFrom(context, bucket, 0, take: MaxDocumentsToDeleteInBucket, fields: DocumentFields.ChangeVector | DocumentFields.Id).ToList();
         foreach (var document in docs)
         {
@@ -355,19 +355,38 @@ public unsafe class ShardedDocumentsStorage : DocumentsStorage
                 result = ShardedDocumentDatabase.DeleteBucketCommand.DeleteBucketResult.Skipped;
                 continue;
             }
-            
+
+          //Console.WriteLine($"{this._documentDatabase.Name} deletes {document.Id}");
             Delete(context, document.Id, flags: DocumentFlags.Artificial | DocumentFlags.FromResharding);
 
             // delete revisions for document
             RevisionsStorage.DeleteRevisionsFor(context, document.Id, flags: DocumentFlags.Artificial | DocumentFlags.FromResharding);
             deleted++;
         }
+        //Console.WriteLine($"{this._documentDatabase.Name} DeleteBucket end");
+
+        _forTestingPurposes?.WhenDeleteBucket?.Invoke("finish");
 
         if (deleted >= MaxDocumentsToDeleteInBucket)
             return ShardedDocumentDatabase.DeleteBucketCommand.DeleteBucketResult.FullBatch;
 
         return result;
     }
+
+    /*internal TestingStuff _forTestingPurposes;
+
+    internal TestingStuff ForTestingPurposesOnly()
+    {
+        if (_forTestingPurposes != null)
+            return _forTestingPurposes;
+
+        return _forTestingPurposes = new TestingStuff();
+    }
+
+    public class TestingStuff
+    {
+        internal Action WhenDeleteBucket;
+    }*/
 
     private void MarkTombstonesAsArtificial(DocumentsOperationContext context, int bucket, ChangeVector upTo)
     {

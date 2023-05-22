@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Sharding;
@@ -121,7 +122,7 @@ public class ShardedDocumentDatabase : DocumentDatabase
                                 if (t.IsCompleted == false)
                                     continue;
                             }
-
+                            // here upto some CV (in this time we add doc) then its removed in few batches
                             t = ServerStore.Sharding.DestinationMigrationConfirm(ShardedDatabaseName, process.Bucket, process.MigrationIndex);
                         }
                     }
@@ -204,6 +205,20 @@ public class ShardedDocumentDatabase : DocumentDatabase
 
         while (true)
         {
+            /*
+            var f = true;
+            while (f)
+            {
+                if (f == false)
+                {
+                    break;
+                }
+
+                Thread.Sleep(100);
+            }
+            */
+
+            //TODO: egor can we save [bucket, uptoChangeVector] in cluster so we can know if we missing items in resend list?
             var cmd = new DeleteBucketCommand(this, bucket, uptoChangeVector);
             await TxMerger.Enqueue(cmd);
 

@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Orders;
 using Raven.Client;
 using Raven.Client.Documents.Indexes;
+using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Operations.Attachments;
 using Raven.Client.Documents.Operations.Backups;
 using Raven.Client.Documents.Operations.ConnectionStrings;
@@ -71,19 +72,31 @@ namespace SlowTests.Sharding.Cluster
                 }
 
                 var result = await Server.ServerStore.Sharding.StartBucketMigration(store.Database, bucket, toShard, RaftIdGenerator.NewId());
-
+                var migrationIndex = result.Index;
                 var exists = WaitForDocument<User>(store, id, predicate: null, database: ShardHelper.ToShardName(store.Database, toShard));
                 Assert.True(exists);
+                string changeVector;
+                using (var session = store.OpenAsyncSession(ShardHelper.ToShardName(store.Database, toShard)))
+                {
+                    var user = await session.LoadAsync<User>(id);
+                    changeVector = session.Advanced.GetChangeVectorFor(user);
+                    Assert.False(string.IsNullOrEmpty(changeVector), "changeVector");
+
+                    var res1 = await Server.ServerStore.Sharding.SourceMigrationCompleted(store.Database, bucket, migrationIndex, changeVector, RaftIdGenerator.NewId());
+                    await Server.ServerStore.Cluster.WaitForIndexNotification(res1.Index);
+                }
+
+                var res2 = await Server.ServerStore.Sharding.DestinationMigrationConfirm(store.Database, bucket, migrationIndex);
+                await Server.ServerStore.Cluster.WaitForIndexNotification(res2.Index);
+
+                var shardDb = await Sharding.GetShardsDocumentDatabaseInstancesFor(store).Where(x => x.ShardNumber == shardNumber).FirstOrDefaultAsync();
+                await shardDb.DeleteBucketAsync(bucket, migrationIndex, changeVector);
 
                 using (var session = store.OpenAsyncSession(ShardHelper.ToShardName(store.Database, toShard)))
                 {
                     var user = await session.LoadAsync<User>(id);
-                    var changeVector = session.Advanced.GetChangeVectorFor(user);
-                    await Server.ServerStore.Sharding.SourceMigrationCompleted(store.Database, bucket, result.Index, changeVector, RaftIdGenerator.NewId());
+                    Assert.Equal("Original shard", user.Name);
                 }
-
-                result = await Server.ServerStore.Sharding.DestinationMigrationConfirm(store.Database, bucket, result.Index);
-                await Server.ServerStore.Cluster.WaitForIndexNotification(result.Index);
 
                 // the document will be written to the new location
                 using (var session = store.OpenAsyncSession())
@@ -93,11 +106,14 @@ namespace SlowTests.Sharding.Cluster
                     await session.SaveChangesAsync();
                 }
 
-                using (var session = store.OpenAsyncSession(ShardHelper.ToShardName(store.Database, shardNumber)))
+                using (var session = store.OpenAsyncSession(ShardHelper.ToShardName(store.Database, toShard)))
                 {
                     var user = await session.LoadAsync<User>(id);
-                    Assert.Equal("Original shard", user.Name);
+                    Assert.Equal("New shard", user.Name);
                 }
+
+                var stats = await store.Maintenance.SendAsync(new GetEssentialStatisticsOperation());
+                Assert.Equal(1, stats.CountOfDocuments);
             }
         }
 

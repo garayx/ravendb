@@ -18,6 +18,7 @@ using Raven.Server.Documents.Includes;
 using Raven.Server.Documents.Queries;
 using Raven.Server.Documents.Queries.AST;
 using Raven.Server.Documents.Queries.TimeSeries;
+using Raven.Server.Documents.Replication;
 using Raven.Server.Documents.Subscriptions;
 using Raven.Server.Documents.Subscriptions.Stats;
 using Raven.Server.Documents.Subscriptions.SubscriptionProcessor;
@@ -419,13 +420,38 @@ namespace Raven.Server.Documents.TcpHandlers
 
         protected override async Task UpdateStateAfterBatchSentAsync(IChangeVectorOperationContext context, string lastChangeVectorSentInThisBatch)
         {
+            //Console.WriteLine($"UpdateStateAfterBatchSentAsync {this._database.Name}: {Environment.NewLine}LastSentChangeVectorInThisConnection: {LastSentChangeVectorInThisConnection} {Environment.NewLine} lastChangeVectorSentInThisBatch: {lastChangeVectorSentInThisBatch}");
             //Entire unsent batch could contain docs that have to be skipped, but we still want to update the etag in the cv
             LastSentChangeVectorInThisConnection = lastChangeVectorSentInThisBatch;
             CurrentBatchId = await Processor.RecordBatch(lastChangeVectorSentInThisBatch);
+            if (lastChangeVectorSentInThisBatch == null)
+                return;
+            // Console.WriteLine($"UpdateStateAfterBatchSentAsync {this._database.Name}, CurrentBatchId: {CurrentBatchId} {Environment.NewLine} _subscriptionConnectionsState.LastChangeVectorSent (cur): {_subscriptionConnectionsState.LastChangeVectorSent}");
 
+
+            /*if (cvs.FirstOrDefault(x => x.DbId == _database.DbBase64Id))
+            {
+
+            }*/
+
+
+            var old = _subscriptionConnectionsState.LastChangeVectorSent;
             _subscriptionConnectionsState.LastChangeVectorSent = ChangeVectorUtils.MergeVectors(
                 _subscriptionConnectionsState.LastChangeVectorSent,
                 lastChangeVectorSentInThisBatch);
+         //   Console.WriteLine($"{this._database.Name} UpdateStateAfterBatchSentAsync, cur: {old} {Environment.NewLine} new: {lastChangeVectorSentInThisBatch}{Environment.NewLine} merge: {_subscriptionConnectionsState.LastChangeVectorSent}");
+            if (string.IsNullOrEmpty(old) == false)
+            {
+                var cvs = old.ToChangeVectorList();
+                var cvs2 = _subscriptionConnectionsState.LastChangeVectorSent.ToChangeVectorList();
+
+                ChangeVectorEntry f = cvs.FirstOrDefault(x => x.DbId == _database.DbBase64Id);
+                ChangeVectorEntry f2 = cvs2.FirstOrDefault(x => x.DbId == _database.DbBase64Id);
+                if (f.Etag + 2 != f2.Etag)
+                {
+
+                }
+            }
         }
 
         protected virtual void FillIncludedDocuments(DatabaseIncludesCommandImpl includeDocumentsCommand, List<Document> includes)

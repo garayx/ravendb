@@ -192,6 +192,7 @@ namespace Raven.Server.Documents.Subscriptions
                         }
                         catch (Exception e)
                         {
+                          //  Console.WriteLine("ProcessSubscriptionAsync: " + e);
                             OnError(e);
                             batchScope.RecordException(e.ToString());
                             throw;
@@ -284,6 +285,12 @@ namespace Raven.Server.Documents.Subscriptions
                                     {
                                         WriteDocument(writer, context, item, includeCommand);
                                     }
+                                    //TODO: egor need to put it back?
+                                    /*if (await FlushBatchIfNeededAsync(sendingCurrentBatchStopwatch, SubscriptionId, writer, _buffer, TcpConnection, Stats.Metrics, _logger, docsToFlush,
+                                            CancellationTokenSource.Token))
+                                    {
+                                        sendingCurrentBatchStopwatch.Restart();
+                                    }*/
                                 }
 
                                 if (includeCommand != null)
@@ -836,7 +843,7 @@ namespace Raven.Server.Documents.Subscriptions
             {
                 RecentSubscriptionStatuses.TryDequeue(out _);
             }
-
+            // Console.WriteLine(message);
             RecentSubscriptionStatuses.Enqueue(message);
         }
 
@@ -1003,7 +1010,7 @@ namespace Raven.Server.Documents.Subscriptions
                 return false;
 
             await FlushDocsToClientAsync(subscriptionId, writer, buffer, tcpConnection, metrics, logger, docsToFlush, endOfBatch: false, token: token);
-            if (logger.IsInfoEnabled)
+            if (logger != null && logger.IsInfoEnabled)
             {
                 logger.Info($"Finished flushing a batch with {docsToFlush} documents for subscription {subscriptionId}");
             }

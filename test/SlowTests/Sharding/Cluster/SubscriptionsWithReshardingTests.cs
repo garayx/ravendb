@@ -4,14 +4,29 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NuGet.Packaging;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Session;
 using Raven.Client.Documents.Subscriptions;
 using Raven.Client.Exceptions.Documents.Subscriptions;
+using Raven.Client.ServerWide;
+using Raven.Client.ServerWide.Operations;
+using Raven.Client.ServerWide.Sharding;
+using Raven.Client.Util;
+using Raven.Server;
 using Raven.Server.Config;
+using Raven.Server.Documents;
+using Raven.Server.Documents.Sharding;
+using Raven.Server.Documents.TcpHandlers;
 using Raven.Server.Rachis;
+using Raven.Server.ServerWide.Commands.Sharding;
+using Raven.Server.ServerWide.Commands.Subscriptions;
+using Raven.Server.ServerWide.Context;
 using Raven.Server.Utils;
 using Raven.Tests.Core.Utils.Entities;
+using SlowTests.Client.Subscriptions;
+using Sparrow.Json.Parsing;
 using Sparrow.Server;
 using Tests.Infrastructure;
 using Xunit;
@@ -82,11 +97,694 @@ namespace SlowTests.Sharding.Cluster
             }
         }
 
-        [RavenFact(RavenTestCategory.Sharding | RavenTestCategory.Subscriptions)]
+        [RavenFact(RavenTestCategory.Sharding)]
+        public async Task GetDocumentOnce6()
+        {
+            DoNotReuseServer();
+            Console.WriteLine($"{this.Server.WebUrl}");
+            using var store = Sharding.GetDocumentStore(
+                new Options
+                {
+                    ModifyDatabaseRecord = record =>
+                    {
+                        record.Sharding ??= new ShardingConfiguration()
+                        {
+                            Shards = new Dictionary<int, DatabaseTopology>() { { 0, new DatabaseTopology() }, { 1, new DatabaseTopology() } }
+                        };
+                    }
+                }
+            );
+            Server.ServerStore.Sharding.ManualMigration = true;
+            var id = "users/1-A";
+            using (var session = store.OpenSession())
+            {
+                session.Store(new User { }, id);
+                session.SaveChanges();
+            }
+
+            var lastId = string.Empty;
+            var lastCV = string.Empty;
+            using (var session = store.OpenSession())
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    lastId = $"num-{i}${id}";
+                    session.Store(new User { }, lastId);
+                }
+
+                session.SaveChanges();
+
+                lastCV= session.Advanced.GetChangeVectorFor(lastId);
+            }
+
+            var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var sub = await store.Subscriptions.CreateAsync<User>();
+            var subscription = store.Subscriptions.GetSubscriptionWorker<User>(new SubscriptionWorkerOptions(sub)
+            {
+                MaxDocsPerBatch = 1,
+                TimeToWaitBeforeConnectionRetry = TimeSpan.FromMilliseconds(250)
+            });
+
+            var t11 = subscription.Run(batch =>
+            {
+                foreach (var item in batch.Items)
+                {
+                    if (users.Add(item.Id) == false)
+                    {
+
+                    }
+                }
+            });
+            var state = store.Subscriptions.GetSubscriptionState(sub);
+            var record = await store.Maintenance.Server.SendAsync(new GetDatabaseRecordOperation(store.Database));
+            var bucket = Sharding.GetBucket(record.Sharding, id);
+            var curShard = ShardHelper.GetShardNumberFor(record.Sharding, bucket);
+            var toShard = ShardingTestBase.GetNextSortedShardNumber(record.Sharding.Shards, curShard);
+
+            var sourceName = ShardHelper.ToShardName(store.Database, curShard);
+            var destName = ShardHelper.ToShardName(store.Database, toShard);
+            var srcDb = await Server.ServerStore.DatabasesLandlord.TryGetOrCreateShardedResourceStore(sourceName);
+            var destDb = await Server.ServerStore.DatabasesLandlord.TryGetOrCreateShardedResourceStore(destName);
+            var res = WaitForValue(() =>
+            {
+                string cv1 = null;
+                using (srcDb.ServerStore.Engine.ContextPool.AllocateOperationContext(out ClusterOperationContext ctx))
+                using (ctx.OpenReadTransaction())
+                {
+                    var state = store.Subscriptions.GetSubscriptionState(sub);
+                    var s = srcDb.SubscriptionStorage.GetSubscriptionConnectionsState(ctx, state.SubscriptionName);
+                    var c = s?.GetConnections().FirstOrDefault();
+                    var subsState = c?.SubscriptionState;
+                    subsState?.ShardingState.ChangeVectorForNextBatchStartingPointPerShard.TryGetValue(sourceName, out cv1);
+                    return cv1;
+                }
+            }, lastCV, interval: 333);
+
+            Assert.Equal(lastCV, res);
+
+
+            var srcTestingStuff = srcDb.ForTestingPurposesOnly();
+            var srcTransientError = srcTestingStuff.CallAfterRegisterSubscriptionConnection(_ => throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null });
+
+
+            using (srcDb.ServerStore.Engine.ContextPool.AllocateOperationContext(out ClusterOperationContext ctx))
+            using (ctx.OpenReadTransaction())
+            {
+                var s = srcDb.SubscriptionStorage.DropSubscriptionConnections(state.SubscriptionId,
+                    new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null });
+                Assert.True(s);
+            }
+
+            using (var session = store.OpenSession(sourceName))
+            {
+                for (int i = 0; i < 7; i++)
+                {
+                    lastId = $"num-{i}${id}";
+                    session.Store(new User { }, lastId);
+                    session.SaveChanges();
+                }
+
+
+            }
+
+
+            /*var cmd = new StartBucketMigrationCommand(bucket, curShard, toShard, store.Database, RaftIdGenerator.NewId());
+            var result = await Server.ServerStore.SendToLeaderAsync(cmd);*/
+
+
+            var testingStuff = destDb.ForTestingPurposesOnly();
+            var transientError = testingStuff.CallAfterRegisterSubscriptionConnection(_ => throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null });
+
+
+
+
+
+            await Sharding.Resharding.StartManualShardMigrationForId(store, lastId, Server, bucket, curShard, toShard);
+            //Thread.Sleep(10_000);
+            srcDb.ForTestingPurposesOnly().EnableWritesToTheWrongShard = true;
+
+            using (var session = store.OpenSession(sourceName))
+            {
+                for (int i = 0; i < 15; i++)
+                {
+                    lastId = $"num-{i}${id}";
+                    session.Store(new User { }, lastId);
+                    session.SaveChanges();
+                }
+
+          
+            }
+            WaitForUserToContinueTheTest(store);
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        [RavenFact(RavenTestCategory.Sharding)]
+        public async Task GetDocumentOnce5()
+        {
+           // DoNotReuseServer();
+            using var store = Sharding.GetDocumentStore(
+                new Options
+                {
+                    ModifyDatabaseRecord = record =>
+                    {
+                        record.Sharding ??= new ShardingConfiguration() { Shards = new Dictionary<int, DatabaseTopology>() { { 0, new DatabaseTopology() }, { 1, new DatabaseTopology() } } };
+                    }
+                }
+            );
+          //  Server.ServerStore.Sharding.ManualMigration = true;
+          //  var record = await store.Maintenance.Server.SendAsync(new GetDatabaseRecordOperation(store.Database));
+
+            var id = "users/1-A";
+            using (var session = store.OpenSession())
+            {
+                session.Store(new User
+                {
+                }, id);
+                session.SaveChanges();
+            }
+
+            var lastId = string.Empty;
+            using (var session = store.OpenSession())
+            {
+                for (int i = 0; i < 10; i++)
+                {
+                    lastId = $"num-{i}${id}";
+                    session.Store(new User { }, lastId);
+                }
+                session.SaveChanges();
+            }
+
+            var sub = await store.Subscriptions.CreateAsync<User>();
+            var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+
+            var record = await store.Maintenance.Server.SendAsync(new GetDatabaseRecordOperation(store.Database));
+            var bucket = Sharding.GetBucket(record.Sharding, id);
+            var curShard = ShardHelper.GetShardNumberFor(record.Sharding, bucket);
+            var toShard = ShardingTestBase.GetNextSortedShardNumber(record.Sharding.Shards, curShard);
+
+            var sourceName = ShardHelper.ToShardName(store.Database, curShard);
+            var destName = ShardHelper.ToShardName(store.Database, toShard);
+            var db = await Server.ServerStore.DatabasesLandlord.TryGetOrCreateShardedResourceStore(sourceName);
+
+            await db.DocumentsMigrator.ExecuteMoveDocumentsAsync();
+
+
+            var subscription = store.Subscriptions.GetSubscriptionWorker<User>(new SubscriptionWorkerOptions(sub)
+            {
+                MaxDocsPerBatch = 1,
+                TimeToWaitBeforeConnectionRetry = TimeSpan.FromMilliseconds(250)
+            });
+
+            db.ForTestingPurposesOnly().EnableWritesToTheWrongShard = true;
+
+            using (var session = store.OpenSession(sourceName))
+            {
+                session.Store(new User { Name = "EGR" }, $"num-322$users/1-A");
+                session.SaveChanges();
+            }
+
+            Thread.Sleep(Int32.MaxValue);
+
+
+
+
+
+
+
+
+
+
+
+
+
+            /*using (Sharding.Resharding.ForTestingPurposesOnly().CallBetweenSourceAndDestinationMigrationCompletion(() =>
+            {
+                // ReSharper disable once AccessToDisposedClosure
+                /*using (var session = store.OpenSession())
+                {
+                    session.Store(new User { Name = "EGR" }, $"num-322$users/1-A");
+                    session.SaveChanges();
+                }#1#
+            }))
+            {
+                await Sharding.Resharding.StartManualShardMigrationForId(store, lastId, Server);
+                var subscription = store.Subscriptions.GetSubscriptionWorker<User>(new SubscriptionWorkerOptions(sub)
+                {
+                    MaxDocsPerBatch = 1,
+                    TimeToWaitBeforeConnectionRetry = TimeSpan.FromMilliseconds(250)
+                });
+
+
+
+            }*/
+
+
+
+            Thread.Sleep(int.MaxValue);
+
+
+        }
+
+        [RavenFact(RavenTestCategory.Sharding)]
+        public async Task GetDocumentOnce4()
+        {
+            DoNotReuseServer();
+            Console.WriteLine($"{this.Server.WebUrl}");
+            using var store = Sharding.GetDocumentStore(
+                new Options
+                {
+                    ModifyDatabaseRecord = record =>
+                    {
+                        record.Sharding ??= new ShardingConfiguration() { Shards = new Dictionary<int, DatabaseTopology>() { { 0, new DatabaseTopology() }, { 1, new DatabaseTopology() } } };
+                    }
+                }
+            );
+            Server.ServerStore.Sharding.ManualMigration = true;
+            //var record = await store.Maintenance.Server.SendAsync(new GetDatabaseRecordOperation(store.Database));
+
+            var id = "users/1-A";
+            using (var session = store.OpenSession())
+            {
+                session.Store(new User
+                {
+                }, id);
+                session.SaveChanges();
+            }
+
+            var lastId = string.Empty;
+            using (var session = store.OpenSession())
+            {
+                for (int i = 0; i < 12; i++)
+                {
+                    lastId = $"num-{i}${id}";
+                    session.Store(new User { }, lastId);
+                }
+                session.SaveChanges();
+            }
+
+            var sub = await store.Subscriptions.CreateAsync<User>();
+            var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+
+            var subscription = store.Subscriptions.GetSubscriptionWorker<User>(new SubscriptionWorkerOptions(sub)
+            {
+                MaxDocsPerBatch = 1,
+                TimeToWaitBeforeConnectionRetry = TimeSpan.FromMilliseconds(250)
+            });
+
+            var record = await store.Maintenance.Server.SendAsync(new GetDatabaseRecordOperation(store.Database));
+            var bucket = Sharding.GetBucket(record.Sharding, id);
+            var curShard = ShardHelper.GetShardNumberFor(record.Sharding, bucket);
+            var toShard = ShardingTestBase.GetNextSortedShardNumber(record.Sharding.Shards, curShard);
+
+            var sourceName = ShardHelper.ToShardName(store.Database, curShard);
+            var destName = ShardHelper.ToShardName(store.Database, toShard);
+            var db1 = await Server.ServerStore.DatabasesLandlord.TryGetOrCreateShardedResourceStore(sourceName);
+            var db2 = await Server.ServerStore.DatabasesLandlord.TryGetOrCreateShardedResourceStore(destName);
+        
+
+
+
+
+            using (var session = store.OpenAsyncSession(sourceName))
+            {
+                var user = await session.LoadAsync<dynamic>(id);
+                Assert.NotNull(user);
+            }
+
+            /*var cmd = new StartBucketMigrationCommand(bucket, curShard, toShard, store.Database, RaftIdGenerator.NewId());
+            var result = await Server.ServerStore.SendToLeaderAsync(cmd);*/
+
+            var result = await Server.ServerStore.Sharding.StartBucketMigration(store.Database, bucket, toShard, RaftIdGenerator.NewId());
+            var migrationIndex = result.Index;
+
+            var exists = WaitForDocument<dynamic>(store, id, predicate: null, database: destName);
+            Assert.True(exists);
+
+
+            var t11 = subscription.Run(batch =>
+            {
+                foreach (var item in batch.Items)
+                {
+                    if (users.Add(item.Id) == false)
+                    {
+
+                    }
+                }
+            });
+
+
+            var shards1 = await Sharding.GetShardsDocumentDatabaseInstancesFor(store).ToListAsync();
+            var state = await store.Subscriptions.GetSubscriptionStateAsync(sub);
+
+            string cv1;
+
+
+            var res = WaitForValue(() =>
+                    {
+                        string cv2;
+                        foreach (var db in shards1)
+                        {
+                            using (db.ServerStore.Engine.ContextPool.AllocateOperationContext(out ClusterOperationContext ctx))
+                            using (ctx.OpenReadTransaction())
+                            {
+
+                                var s = db.SubscriptionStorage.GetSubscriptionConnectionsState(ctx, state.SubscriptionName);
+                                var c = s?.GetConnections().FirstOrDefault();
+                                var subsState = c?.SubscriptionState;
+                                subsState.ShardingState.ChangeVectorForNextBatchStartingPointPerShard.TryGetValue(sourceName, out cv1);
+                                subsState.ShardingState.ChangeVectorForNextBatchStartingPointPerShard.TryGetValue(destName, out  cv2);
+                                if (string.IsNullOrEmpty(cv1) == false && string.IsNullOrEmpty(cv2) == false)
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+            
+                        return false;
+                    }, true, interval: 333);
+
+                    Assert.True(res);
+
+
+                    // 
+            // var ts = db2.ShardedDocumentsStorage.ForTestingPurposesOnly();
+            var testingStuff = db2.ForTestingPurposesOnly();
+            var transientError = testingStuff.CallAfterRegisterSubscriptionConnection(_ => throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null });
+
+            using (db2.ServerStore.Engine.ContextPool.AllocateOperationContext(out ClusterOperationContext ctx))
+            using (ctx.OpenReadTransaction())
+            {
+                var s = db2.SubscriptionStorage.DropSubscriptionConnections(state.SubscriptionId,
+                    new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null });
+            }
+
+            Console.WriteLine("");
+            Thread.Sleep(Int32.MaxValue);
+
+            transientError.Dispose();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            using (Sharding.Resharding.ForTestingPurposesOnly().CallBetweenSourceAndDestinationMigrationCompletion(() =>
+                   {
+                       // ReSharper disable once AccessToDisposedClosure
+                       /*using (var session = store.OpenSession())
+                       {
+                           session.Store(new User { Name = "EGR" }, $"num-322$users/1-A");
+                           session.SaveChanges();
+                       }*/
+                   }))
+            {
+                // WaitForUserToContinueTheTest(store);
+
+                 /*
+                 DatabaseRecordWithEtag record = await store.Maintenance.Server.SendAsync(new GetDatabaseRecordOperation(store.Database));
+               var bucket = Sharding.GetBucket(record.Sharding, id);
+            var curShard = ShardHelper.GetShardNumberFor(record.Sharding, bucket);
+        var toShard = ShardingTestBase.GetNextSortedShardNumber(record.Sharding.Shards, curShard);
+        */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                await Sharding.Resharding.StartManualShardMigrationForId(store, lastId, Server, bucket, curShard, toShard);
+
+
+
+
+                //Thread.Sleep(10_000);
+                db1.ForTestingPurposesOnly().EnableWritesToTheWrongShard = true;
+
+                using (var session = store.OpenSession(sourceName))
+                {
+                    session.Store(new User { Name = "EGR" }, $"num-322$users/1-A");
+                    session.SaveChanges();
+                }
+                var t = subscription.Run(batch =>
+                                {
+                                    foreach (var item in batch.Items)
+                                    {
+                                        if (users.Add(item.Id) == false)
+                                        {
+
+                                        }
+                                    }
+                                });
+                while (users.Count != 11)
+                {
+                    Console.WriteLine("11: "+string.Join(",", users));
+                    Thread.Sleep(333);
+                }
+                db1.ForTestingPurposesOnly().EnableWritesToTheWrongShard = false;
+                WaitForUserToContinueTheTest(store);
+                await Sharding.Resharding.StartManualShardMigrationForId(store, "num-322$users/1-A", Server, bucket, curShard, toShard);
+                //Thread.Sleep(10_000);
+            }
+            while (users.Count != 12)
+            {
+                Console.WriteLine("12: " + string.Join(",", users));
+                Thread.Sleep(333);
+            }
+
+
+        }
+
+        [RavenFact(RavenTestCategory.Sharding)]
+        public async Task GetDocumentOnce3()
+        {
+            using var store = Sharding.GetDocumentStore(
+                new Options
+                {
+                    ModifyDatabaseRecord = record =>
+                    {
+                        record.Sharding ??= new ShardingConfiguration() { Shards = new Dictionary<int, DatabaseTopology>() { { 0, new DatabaseTopology() }, { 1, new DatabaseTopology() } } };
+                    }
+                }
+                );
+            using (var session = store.OpenSession())
+            {
+                session.Store(new User
+                {
+                }, "users/1-A");
+                session.SaveChanges();
+            }
+
+            using (var session = store.OpenSession())
+            {
+                for (int i = 0; i < 10; i++)
+                {
+                    session.Store(new User { }, $"num-{i}$users/1-A");
+                }
+                session.SaveChanges();
+            }
+
+            var sub = await store.Subscriptions.CreateAsync<User>();
+            var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var subscription = store.Subscriptions.GetSubscriptionWorker<User>(new SubscriptionWorkerOptions(sub)
+            {
+                MaxDocsPerBatch = 1,
+                TimeToWaitBeforeConnectionRetry = TimeSpan.FromMilliseconds(250),
+
+            }))
+            {
+                var mre = new AsyncManualResetEvent();
+                var mre2 = new AsyncManualResetEvent();
+                var mre3 = new AsyncManualResetEvent();
+                var mre4 = new AsyncManualResetEvent();
+                subscription.AfterAcknowledgment += async batch => 
+                {
+                    mre.Set();
+                    await mre2.WaitAsync();
+
+
+                    users.AddRange(batch.Items.Select(x=>x.Id));
+                };
+
+                var gotTwice = false;
+                var twiceId = string.Empty;
+                /*var t = subscription.Run(batch =>
+                {
+                    foreach (var item in batch.Items)
+                    {
+                        Console.WriteLine($"processed: {item.Id} ");
+                        if (users.Add(item.Id) == false)
+                        {
+                            Console.WriteLine($"Got exact same {item.Id} twice");
+                            gotTwice = true;
+                            twiceId = item.Id;
+                        }
+                    }
+                });*/
+
+
+              //  Assert.True(await mre.WaitAsync());
+
+                //       var stats = await store.Maintenance.SendAsync(new GetStatisticsOperation());
+                var shards =  await Sharding.GetShardsDocumentDatabaseInstancesFor(store).ToListAsync();
+                //    var shard = shards.FirstAsync().Result.ShardedDocumentsStorage.GetCollectionDetails().ForTestingPurposesOnly();
+                ShardedDocumentDatabase documentDatabase = null;
+                foreach (var db in shards)
+                {
+                    documentDatabase = db;
+                    using (documentDatabase.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+                    using (context.OpenReadTransaction())
+                    {
+                        var ids = documentDatabase.DocumentsStorage.GetCollectionDetails(context, "Users").CountOfDocuments;
+                        if (ids > 0)
+                        {
+                            break;
+                        }
+                    }
+                }
+                /*documentDatabase.TxMerger.Start();*/
+
+
+                    Assert.NotNull(documentDatabase);
+                var nextShard = (documentDatabase.ShardNumber + 1) % 2;
+                var shard = shards.FirstOrDefault(x => x.ShardNumber == nextShard);
+                Assert.NotNull(shard);
+
+                IEnumerable<DynamicJsonValue> dynamicJsonValues1 = Cluster.GetRaftCommands(Server, nameof(RecordBatchSubscriptionDocumentsCommand));
+                var ts = documentDatabase.ShardedDocumentsStorage.ForTestingPurposesOnly();
+                //       var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+                var testingStuff = documentDatabase.ForTestingPurposesOnly();
+                var transientError = testingStuff.CallAfterRegisterSubscriptionConnection(_ => throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null });
+                using (ts.CallWhenDeleteBucket(id =>
+                       {
+                           mre4.Set();
+                           mre3.WaitAsync().GetAwaiter().GetResult();
+                       }))
+                {
+                    var bucket = await Sharding.Resharding.StartMovingShardForId(store, "users/1-A", nextShard, Servers.Count == 0 ? new List<RavenServer>() { Server } : Servers);
+                    var t = subscription.Run(batch =>
+                    {
+                        foreach (var item in batch.Items)
+                        {
+                            //Console.WriteLine($"processed: {item.Id} ");
+                            if (users.Add(item.Id) == false)
+                            {
+                         //       Console.WriteLine($"Got exact same {item.Id} twice");
+                                gotTwice = true;
+                                twiceId = item.Id;
+                            }
+                        }
+                    });
+
+               //     await mre.WaitAsync();
+              //      await mre4.WaitAsync();
+                    using (var session = store.OpenSession())
+                    {
+                        session.Store(new User { Name = "EGR" }, $"num-322$users/1-A");
+                        session.SaveChanges();
+                    }
+                    mre3.Set();
+                    transientError.Dispose();
+   
+                    var t11 = Sharding.Resharding.WaitForMigrationComplete(store, bucket);
+
+                    await t11;
+                    // here we started to delete document after resharding
+                    // and the dest shard started to process docs
+                    // we stop both operations
+                    // and start source shard subscription
+                    /*
+                    var x1 = Cluster.GetRaftCommands(Server, nameof(RecordBatchSubscriptionDocumentsCommand)).Count();
+                    transientError.Dispose();
+
+
+                    Assert.True(await WaitForValueAsync(() =>
+                    {
+                        var x = Cluster.GetRaftCommands(Server, nameof(RecordBatchSubscriptionDocumentsCommand));
+                        if (x.Count() > x1)
+                        {
+                            mre3.Set();
+                            return true;
+                        }
+
+                        return false;
+                    }, true));
+                    */
+
+                    mre2.Set();
+
+                    /*Assert.Equal(11, await WaitForValueAsync(() => users.Count, 11, timeout: 15_000));*/
+                    while (users.Count != 12)
+                    {
+                        Console.WriteLine(string.Join(",", users));
+                        Thread.Sleep(333);
+                    }
+                }
+            }
+        }
+
+
+        [RavenFact(RavenTestCategory.Sharding)]
         public async Task GetDocumentOnce2()
         {
-            using var store = Sharding.GetDocumentStore();
-            var numberOfDocs = 100;
+            using var store = Sharding.GetDocumentStore(
+                new Options
+            {
+                ModifyDatabaseRecord = record =>
+                {
+                    record.Sharding ??= new ShardingConfiguration() { Shards = new Dictionary<int, DatabaseTopology>() { { 0, new DatabaseTopology() }, { 1, new DatabaseTopology() } } };
+                }
+            }
+                );
 
             using (var session = store.OpenSession())
             {
@@ -96,54 +794,59 @@ namespace SlowTests.Sharding.Cluster
                 session.SaveChanges();
             }
 
+            var adding = true;
+            int? cc = null;
             var writes = Task.Run(() =>
             {
-                for (int i = 0; i < numberOfDocs; i++)
+                var i = 0;
+                while (adding)
                 {
                     using (var session = store.OpenSession())
                     {
-                        session.Store(new User
-                        {
-                        }, $"num-{i}$users/1-A");
+                        session.Store(new User { }, $"num-{i++}$users/1-A");
                         session.SaveChanges();
                     }
                 }
+
+                cc = i;
             });
 
             var sub = await store.Subscriptions.CreateAsync<User>();
             var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             await using (var subscription = store.Subscriptions.GetSubscriptionWorker<User>(new SubscriptionWorkerOptions(sub)
             {
-                MaxDocsPerBatch = 5,
+                MaxDocsPerBatch = 6,
                 TimeToWaitBeforeConnectionRetry = TimeSpan.FromMilliseconds(250),
+
             }))
             {
-                var mre = new AsyncManualResetEvent();
+                var gotTwice = false;
+                var twiceId = string.Empty;
                 var t = subscription.Run(batch =>
                 {
                     foreach (var item in batch.Items)
                     {
+                  Console.WriteLine($"processed: {item.Id} # CV: {item.ChangeVector}");
                         if (users.Add(item.Id) == false)
                         {
-                            throw new SubscriberErrorException($"Got exact same {item.Id} twice");
-                        }
-
-                        if (users.Count == numberOfDocs + 1)
-                        {
-                            mre.Set();
+                       //     Console.WriteLine($"Got exact same {item.Id} twice");
+                            gotTwice = true;
+                            twiceId = item.Id;
                         }
                     }
                 });
-
+                await Sharding.Resharding.MoveShardForId(store, "users/1-A");
+                /*await Sharding.Resharding.MoveShardForId(store, "users/1-A");
                 await Sharding.Resharding.MoveShardForId(store, "users/1-A");
                 await Sharding.Resharding.MoveShardForId(store, "users/1-A");
-                await Sharding.Resharding.MoveShardForId(store, "users/1-A");
-                await Sharding.Resharding.MoveShardForId(store, "users/1-A");
-                await Sharding.Resharding.MoveShardForId(store, "users/1-A");
-
+                await Sharding.Resharding.MoveShardForId(store, "users/1-A");*/
+                adding = false;
                 await writes;
 
+
+
                 try
+
                 {
                     await t.WaitAsync(TimeSpan.FromSeconds(15));
                     Assert.True(false, "Worker completed without exception");
@@ -153,19 +856,46 @@ namespace SlowTests.Sharding.Cluster
                     // expected, means the worker is still alive  
                 }
 
-                if (await mre.WaitAsync(TimeSpan.FromSeconds(3)) == false)
+                var zzz = WaitForValue(() =>
                 {
-                    await subscription.DisposeAsync(true);
-                }
+                    if (cc == null)
+                        return false;
+                    if (cc + 1 != users.Count)
+                    {
+                        Console.WriteLine($"cc: {cc + 1} / users: {users.Count}");
+                        return false;
+                    }
 
-                for (int i = 0; i < numberOfDocs; i++)
+                    return true;
+                }, true, timeout: 5 * 60_000, interval: 1000);
+
+                Assert.True(zzz, $"cc: {cc} / users: {users.Count}");
+                Assert.False(gotTwice, "GotTwice " + twiceId);
+
+                for (int i = 0; i < cc; i++)
                 {
                     var id = $"num-{i}$users/1-A";
                     Assert.True(users.Contains(id), $"{id} is missing");
+                    /*if (users.Contains(id) == false)
+                    {
+                        Console.WriteLine($"users Contains '{id}' == false");
+                        Thread.Sleep(int.MaxValue);
+                    }
+                    else
+                    {
+                     //   Assert.True(users.Contains(id), $"{id} is missing");
+
+                    }*/
                 }
 
+                /*if (users.Contains("users/1-A") == false)
+                {
+                    Console.WriteLine($"users Contains 'users/1-A' == false");
+                    Thread.Sleep(int.MaxValue);
+                }*/
+
                 Assert.True(users.Contains("users/1-A"), "users/1-A is missing");
-                Assert.Equal(numberOfDocs + 1, users.Count);
+                Assert.Equal(cc + 1, users.Count);
 
                 await Sharding.Subscriptions.AssertNoItemsInTheResendQueueAsync(store, sub);
             }

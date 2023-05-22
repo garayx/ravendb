@@ -11,6 +11,7 @@ using Raven.Client.Documents.Operations;
 using Raven.Client.Exceptions;
 using Raven.Client.Exceptions.Database;
 using Raven.Client.Exceptions.Documents;
+using Raven.Client.Util;
 using Raven.Server.Config;
 using Raven.Server.Documents.Expiration;
 using Raven.Server.Documents.Handlers.Processors.Replication;
@@ -823,7 +824,7 @@ namespace Raven.Server.Documents
             }
         }
 
-        private TestingStuff _forTestingPurposes;
+        internal TestingStuff _forTestingPurposes;
 
         internal TestingStuff ForTestingPurposesOnly()
         {
@@ -836,6 +837,15 @@ namespace Raven.Server.Documents
         internal class TestingStuff
         {
             public ManualResetEventSlim DelayDocumentLoad;
+
+            internal Action<string> WhenDeleteBucket;
+
+            internal IDisposable CallWhenDeleteBucket(Action<string> action)
+            {
+                WhenDeleteBucket = action;
+
+                return new DisposableAction(() => WhenDeleteBucket = null);
+            }
         }
 
         public IEnumerable<Document> GetDocumentsFrom(DocumentsOperationContext context, long etag, long start, long take, DocumentFields fields = DocumentFields.All)

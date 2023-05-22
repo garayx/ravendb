@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Raven.Client.Documents.Commands;
@@ -52,6 +53,17 @@ namespace Raven.Server.ServerWide
 
         public Task<(long Index, object Result)> DestinationMigrationConfirm(string database, int bucket, long migrationIndex)
         {
+            /*var f = true;
+            while (f)
+            {
+                if (f == false)
+                {
+                    break;
+                }
+
+                Thread.Sleep(100);
+            }*/
+
             var raftId = GenerateDestinationMigrationConfirmRaftId(bucket, migrationIndex, _serverStore.NodeTag);
             var cmd = new DestinationMigrationConfirmCommand(bucket, migrationIndex, _serverStore.NodeTag, database, raftId);
             return _serverStore.SendToLeaderAsync(cmd);
@@ -148,6 +160,10 @@ namespace Raven.Server.ServerWide
                     case nameof(SourceMigrationSendCompletedCommand):
                     case nameof(DestinationMigrationConfirmCommand):
                     case nameof(SourceMigrationCleanupCommand):
+                        if (nameof(SourceMigrationCleanupCommand) == type)
+                        {
+
+                        }
                         var config = _serverStore.Cluster.ReadShardingConfiguration(database);
                         
                         if (config.BucketMigrations.Count == 0)

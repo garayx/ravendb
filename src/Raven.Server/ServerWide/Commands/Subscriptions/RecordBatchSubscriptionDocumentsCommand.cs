@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Raven.Client;
 using Raven.Client.Documents.Subscriptions;
@@ -9,6 +10,7 @@ using Raven.Client.Json.Serialization;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Sharding;
 using Raven.Server.Documents;
+using Raven.Server.Documents.Replication;
 using Raven.Server.Documents.Subscriptions;
 using Raven.Server.Rachis;
 using Raven.Server.ServerWide.Context;
@@ -158,6 +160,9 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
 
                 foreach (var documentRecord in Documents)
                 {
+                    if (DocId == documentRecord.DocumentId)
+                    {
+                    }
                     using (AbstractSubscriptionConnectionsState.GetDatabaseAndSubscriptionAndDocumentKey(context, DatabaseName, SubscriptionId, documentRecord.DocumentId,
                                out var key))
                     {
@@ -190,6 +195,10 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
                             }
                             else
                             {
+                                if (DocId == documentRecord.DocumentId)
+                                {
+                                }
+
                                 if (IsAlreadyProcessed(context, record.Sharding, subscriptionState.ShardingState, documentRecord.DocumentId,
                                         documentRecord.ChangeVector))
                                 {
@@ -215,6 +224,10 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
 
                             if (batchId > ISubscriptionConnection.NonExistentBatch)
                             {
+                                if (DocId == documentRecord.DocumentId)
+                                {
+                                }
+
                                 if (subscriptionState.ShardingState.ProcessedChangeVectorPerBucket.TryGetValue(bucket, out var current))
                                 {
                                     subscriptionState.ShardingState.ProcessedChangeVectorPerBucket[bucket] = ChangeVectorUtils.MergeVectors(current, vector.Version);
@@ -262,9 +275,36 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
                     {
                         var changeVector = context.GetChangeVector(CurrentChangeVector);
                         subscriptionState.ShardingState.ChangeVectorForNextBatchStartingPointPerShard.TryGetValue(ShardName, out string current);
-                        subscriptionState.ShardingState.ChangeVectorForNextBatchStartingPointPerShard[ShardName] =
-                            changeVector.Order.MergeWith(current, context);
+                        var merge = changeVector.Order.MergeWith(current, context);
+                        subscriptionState.ShardingState.ChangeVectorForNextBatchStartingPointPerShard[ShardName] = merge;
                         subscriptionState.ShardingState.NodeTagPerShard[ShardName] = NodeTag;
+
+                        if (ShardHelper.GetShardNumberFromDatabaseName(ShardName) == 1)
+                        {
+                            var cv1 = current.ToChangeVector();
+                            var cv2 = merge.AsString().ToChangeVector();
+
+                            if (cv1.Length != 0 && cv2.Length != 0)
+                            {
+                                var d = cv2.FirstOrDefault().Etag - cv1.FirstOrDefault().Etag;
+                                if (d > 3)
+                                {
+                                    Console.WriteLine($"{ShardName}: shouldUpdateChangeVector");
+                                    Console.WriteLine("----");
+                                    Console.WriteLine($"cv1: {current}");
+                                    Console.WriteLine($"cv2: {merge}");
+                                    Console.WriteLine($"Diff: {d}");
+                                    if (string.IsNullOrEmpty(DocId))
+                                    {
+                                        DocId = Documents.FirstOrDefault()?.DocumentId;
+                                    }
+
+                                    Console.WriteLine($"ids: {string.Join(", ", Documents.Select(x => $"({x.DocumentId}#{x.ChangeVector})"))}");
+                                    Console.WriteLine("----");
+                                }
+                            }
+                        }
+
                     }
                 }
 
@@ -381,6 +421,8 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
         {
             throw new System.NotImplementedException();
         }
+
+        public static string DocId = null;
     }
 
     public abstract class SubscriptionRecord
