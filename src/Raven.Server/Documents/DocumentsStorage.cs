@@ -1920,7 +1920,6 @@ namespace Raven.Server.Documents
                     ChangeVectorUtils.ThrowConflictingEtag(lowerId.ToString(), docChangeVector, newEtag, Environment.Base64Id, DocumentDatabase.ServerStore.NodeTag);
 
                 context.LastDatabaseChangeVector ??= GetDatabaseChangeVector(context);
-                context.LastDatabaseChangeVector = ChangeVector.Merge(context.LastDatabaseChangeVector, context.GetChangeVector(mergedChangeVector), context);
                 changeVector = context.LastDatabaseChangeVector;
             }
             else
