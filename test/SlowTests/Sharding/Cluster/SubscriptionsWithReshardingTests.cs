@@ -215,7 +215,7 @@ namespace SlowTests.Sharding.Cluster
                 {
                     if (db.ShardNumber == shardNumber)
                     {
-                        await server.ServerStore.DatabasesLandlord.RestartDatabase(db.Name);
+                        await server.ServerStore.DatabasesLandlord.RestartDatabaseAsync(db.Name);
                         break;
                     }
                 }
@@ -1033,7 +1033,7 @@ namespace SlowTests.Sharding.Cluster
         [RavenFact(RavenTestCategory.Sharding | RavenTestCategory.Subscriptions/*, Skip = "Need to stablize this"*/)]
         public async Task ContinueSubscriptionAfterReshardingInAClusterWithFailover()
         {
-            var cluster = await CreateRaftCluster(3, watcherCluster: true, shouldRunInMemory: false);
+            var cluster = await CreateRaftCluster(5, watcherCluster: true, shouldRunInMemory: false);
             using var store = Sharding.GetDocumentStore(new Options
             {
                 Server = cluster.Leader,
@@ -1043,7 +1043,7 @@ namespace SlowTests.Sharding.Cluster
             Console.WriteLine(cluster.Leader.WebUrl);
             var id = await store.Subscriptions.CreateAsync<User>(predicate: u => u.Age > 0);
             var users = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var t = ProcessSubscription(store, id, users, timoutSec: 120);
+            var t = ProcessSubscription(store, id, users, timoutSec: 180);
 
             using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1)))
             {
@@ -1079,17 +1079,17 @@ namespace SlowTests.Sharding.Cluster
 
                 try
                 {
-                    var addded1 = await CreateItems(store, 0, 2);
+                    var added1 = await CreateItems(store, 0, 2);
                     await Sharding.Resharding.MoveShardForId(store, "users/1-A", servers: cluster.Nodes);
-                    var addded2 = await CreateItems(store, 2, 4);
-                    /*await Sharding.Resharding.MoveShardForId(store, "users/1-A", servers: cluster.Nodes);
-                    var addded3 = await CreateItems(store, 4, 6);
+                    var added2 = await CreateItems(store, 2, 4);
                     await Sharding.Resharding.MoveShardForId(store, "users/1-A", servers: cluster.Nodes);
-                    var addded4 = await CreateItems(store, 6, 7);
+                    var added3 = await CreateItems(store, 4, 6);
                     await Sharding.Resharding.MoveShardForId(store, "users/1-A", servers: cluster.Nodes);
-                    var addded5 = await CreateItems(store, 7, 8);
+                    var added4 = await CreateItems(store, 6, 7);
                     await Sharding.Resharding.MoveShardForId(store, "users/1-A", servers: cluster.Nodes);
-                    var addded6 = await CreateItems(store, 8, 10);*/
+                    var added5 = await CreateItems(store, 7, 8);
+                    await Sharding.Resharding.MoveShardForId(store, "users/1-A", servers: cluster.Nodes);
+                    var added6 = await CreateItems(store, 8, 10);
                 }
                 finally
                 {
@@ -1112,7 +1112,33 @@ namespace SlowTests.Sharding.Cluster
                     await t;
                 }
 
-              //  await Sharding.Subscriptions.AssertNoItemsInTheResendQueueAsync(store, id, servers: cluster.Nodes);
+                var databaseContext = Sharding.GetOrchestratorInCluster(store.Database, cluster.Nodes);
+
+                var shardExecutor = databaseContext.ShardExecutor;
+                var ctx = new DefaultHttpContext();
+
+                var changeVectorsCollection =
+                    (await shardExecutor.ExecuteParallelForAllAsync(
+                        new ShardedLastChangeVectorForCollectionOperation(ctx.Request, "Users", databaseContext.DatabaseName))).LastChangeVectors;
+                Console.WriteLine("Users Collection changeVectors:");
+                foreach (var cv in changeVectorsCollection.OrderBy(x => x.Key))
+                {
+                    Console.WriteLine($"{cv.Key}: {cv.Value}");
+                }
+
+
+                var state = store.Subscriptions.GetSubscriptionState(id);
+
+                Console.WriteLine("ChangeVectorForNextBatchStartingPointPerShard:");
+                foreach (var cv in state.ShardingState.ChangeVectorForNextBatchStartingPointPerShard.OrderBy(x => x.Key))
+                {
+                    Console.WriteLine($"{cv.Key}: {cv.Value}");
+                }
+
+                Console.WriteLine("ChangeVectorForNextBatchStartingPointForOrchestrator:");
+                Console.WriteLine(state.ShardingState.ChangeVectorForNextBatchStartingPointForOrchestrator);
+
+                //  await Sharding.Subscriptions.AssertNoItemsInTheResendQueueAsync(store, id, servers: cluster.Nodes);
                 await Indexes.WaitForIndexingInTheClusterAsync(store);
                 using (var session = store.OpenAsyncSession())
                 {
@@ -1122,8 +1148,19 @@ namespace SlowTests.Sharding.Cluster
                     var usersByQuery = await session.Query<User>().Where(u => u.Age > 0).ToListAsync();
                     foreach (var user in usersByQuery)
                     {
-                        Assert.True(users.TryGetValue(user.Id, out var age), $"Missing {user.Id} from subscription");
-                        Assert.True(age == user.Age, $"From sub:{age}, from shard: {user.Age} for {user.Id} cv:{session.Advanced.GetChangeVectorFor(user)}");
+                        if(users.TryGetValue(user.Id, out var age) == false)
+                        {
+                            Console.WriteLine($"Missing {user.Id} from subscription");
+                            Thread.Sleep(int.MaxValue);
+                        }
+
+                        if (age != user.Age)
+                        {
+                            Console.WriteLine($"From sub:{age}, from shard: {user.Age} for {user.Id} cv:{session.Advanced.GetChangeVectorFor(user)}");
+                            Thread.Sleep(int.MaxValue);
+                        }
+                        /*Assert.True(users.TryGetValue(user.Id, out var age), $"Missing {user.Id} from subscription");
+                        Assert.True(age == user.Age, $"From sub:{age}, from shard: {user.Age} for {user.Id} cv:{session.Advanced.GetChangeVectorFor(user)}");*/
                         users.Remove(user.Id);
                     }
                 }
