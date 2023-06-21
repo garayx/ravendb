@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
+using FastTests;
 using Tests.Infrastructure;
 using FastTests.Voron.Sets;
 using FastTests.Corax.Bugs;
@@ -11,6 +13,8 @@ using SlowTests.Cluster;
 using SlowTests.Issues;
 using SlowTests.Server.Documents.PeriodicBackup;
 using SlowTests.Sharding.Cluster;
+using Raven.Server.Documents.Subscriptions;
+using Xunit;
 
 namespace Tryouts;
 
@@ -28,13 +32,23 @@ public static class Program
         for (int i = 0; i < 1000; i++)
         {
             Console.WriteLine($"Starting to run {i}");
+
             try
             {
                 using (var testOutputHelper = new ConsoleTestOutputHelper())
-                using (var test = new RavenDB_17760(testOutputHelper))
+                using (var test = new SubscriptionsWithReshardingTests(testOutputHelper))
                 {
+                    var p = System.AppDomain.CurrentDomain.BaseDirectory;
+                    var dbPath = Path.Combine(p, "Databases");
+                    if (Directory.Exists(dbPath))
+                    {
+                        Directory.Delete(dbPath, true);
+                        Assert.False(Directory.Exists(dbPath), "Directory.Exists(dbPath)");
+                    }
+
+
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
-                    await test.CanGetTombstonesByBucket();
+                    await test.ContinueSubscriptionAfterReshardingInAClusterWithFailover();
                 }
             }
             catch (Exception e)

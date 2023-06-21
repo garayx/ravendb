@@ -21,7 +21,9 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
     public class AcknowledgeSubscriptionBatchCommand : UpdateValueForDatabaseCommand
     {
         public string ChangeVector;
-        public string LastKnownSubscriptionChangeVector; // Now this used only for backward compatibility
+        // v6.0 in regular subscription this used only for backward compatibility
+        // v6.0 in sharing subscription this used to save orchestrator cv
+        public string LastKnownSubscriptionChangeVector; 
         public long SubscriptionId;
         public string SubscriptionName;
         public string NodeTag;
@@ -53,7 +55,7 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
             if (existingValue == null)
                 throw new SubscriptionDoesNotExistException($"Subscription with name '{subscriptionName}' does not exist");
 
-            var currentState = JsonDeserializationCluster.SubscriptionState(existingValue);
+            SubscriptionState currentState = JsonDeserializationCluster.SubscriptionState(existingValue);
 
             var appropriateNode = AbstractSubscriptionStorage.GetSubscriptionResponsibleNodeForProgress(record, ShardName, currentState, HasHighlyAvailableTasks);
             var deletionKey = DatabaseRecord.GetKeyForDeletionInProgress(NodeTag, ShardName);
@@ -69,14 +71,14 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
                 { AppropriateNode = appropriateNode };
             }
 
-            if (string.IsNullOrEmpty(ShardName) == false)
-            {
-                CheckConcurrencyForBatchCv(currentState, subscriptionName);
-            }
-
             if (ChangeVector == nameof(Constants.Documents.SubscriptionChangeVectorSpecialStates.DoNotChange))
             {
                 return context.ReadObject(existingValue, SubscriptionName);
+            }
+
+            if (string.IsNullOrEmpty(ShardName) == false)
+            {
+                CheckConcurrencyForBatchCv(currentState, subscriptionName);
             }
 
             if (IsLegacyCommand())
@@ -97,6 +99,10 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
                 currentState.ShardingState.NodeTagPerShard[ShardName] = NodeTag;
                 currentState.ChangeVectorForNextBatchStartingPoint =
                     ChangeVectorUtils.MergeVectors(changeVector.Order.StripMoveTag(context), currentState.ChangeVectorForNextBatchStartingPoint);
+
+                var orchChangeVector = context.GetChangeVector(LastKnownSubscriptionChangeVector);
+                currentState.ShardingState.ChangeVectorForNextBatchStartingPointForOrchestrator = 
+                    ChangeVectorUtils.MergeVectors(orchChangeVector.Order.StripMoveTag(context), currentState.ShardingState.ChangeVectorForNextBatchStartingPointForOrchestrator);
             }
 
             currentState.LastBatchAckTime = LastTimeServerMadeProgressWithDocuments;
@@ -114,11 +120,11 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
         {
             if (state.ShardingState.ChangeVectorForNextBatchStartingPointPerShard.TryGetValue(ShardName, out string cvInStorage)) 
             {
-                if (cvInStorage != LastKnownSubscriptionChangeVector)
+                if (cvInStorage != ChangeVector)
                 {
                     throw new SubscriptionChangeVectorUpdateConcurrencyException($"Can't apply {nameof(AcknowledgeSubscriptionBatchCommand)} for sharded subscription with name '{subscriptionName}' on shard '{ShardName}' due to inconsistency in change vector progress. " +
                                                                                  $"Probably there was an admin intervention that changed the change vector value." +
-                                                                                 $" Stored value: '{cvInStorage}', received value: '{LastKnownSubscriptionChangeVector}'.");
+                                                                                 $" Stored value: '{cvInStorage}', received value: '{ChangeVector}'.");
                 }
             }
         }
@@ -152,8 +158,9 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
             }
 
             var subscriptionStateTable = context.Transaction.InnerTransaction.OpenTable(ClusterStateMachine.SubscriptionStateSchema, ClusterStateMachine.SubscriptionState);
-            var bigEndBatchId = Bits.SwapBytes(BatchId ?? 0);
+            var bigEndBatchId = Bits.SwapBytes(BatchId.Value);
             using var _ = Slice.External(context.Allocator, (byte*)&bigEndBatchId, sizeof(long), out var batchIdSlice);
+            /*TODO: egor not needed ???*/
             using (AbstractSubscriptionConnectionsState.GetDatabaseAndSubscriptionPrefix(context, DatabaseName, SubscriptionId, out var prefix))
             using (Slice.External(context.Allocator, prefix, out var prefixSlice))
             {

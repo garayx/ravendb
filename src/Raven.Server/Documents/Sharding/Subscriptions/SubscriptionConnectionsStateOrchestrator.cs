@@ -107,6 +107,17 @@ public class SubscriptionConnectionsStateOrchestrator : AbstractSubscriptionConn
         // await WaitForIndexNotificationAsync(etag);
     }
 
+    protected override void SetLastChangeVectorSent(OrchestratedSubscriptionConnection connection)
+    {
+        LastChangeVectorSent = connection.SubscriptionState.ShardingState.ChangeVectorForNextBatchStartingPointForOrchestrator;
+    }
+
+    public override void Initialize(OrchestratedSubscriptionConnection connection, bool afterSubscribe = false)
+    {
+        base.Initialize(connection, afterSubscribe);
+        SetLastChangeVectorSent(connection);
+    }
+
     protected override UpdateSubscriptionClientConnectionTime GetUpdateSubscriptionClientConnectionTime()
     {
         var cmd = base.GetUpdateSubscriptionClientConnectionTime();

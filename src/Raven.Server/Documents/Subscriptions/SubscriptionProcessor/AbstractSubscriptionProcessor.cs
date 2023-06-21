@@ -40,20 +40,20 @@ public abstract class AbstractSubscriptionProcessor<TIncludesCommand> : IDisposa
         RemoteEndpoint = Connection.TcpConnection.TcpClient.Client.RemoteEndPoint;
     }
 
-    public abstract IEnumerable<(Document Doc, Exception Exception)> GetBatch();
+    public abstract IEnumerable<(Document Doc, Exception Exception, bool IsActiveMigration)> GetBatch();
 
     public abstract Task<long> RecordBatch(string lastChangeVectorSentInThisBatch);
 
-    public abstract Task AcknowledgeBatch(long batchId);
+    public abstract Task AcknowledgeBatch(long batchId, string changevector);
 
     protected ClusterOperationContext ClusterContext;
     protected TIncludesCommand IncludesCmd;
 
     public virtual IDisposable InitializeForNewBatch(ClusterOperationContext clusterContext, out TIncludesCommand includesCommands)
     {
+        ClusterContext = clusterContext;
         InitializeProcessor();
 
-        ClusterContext = clusterContext;
         var commands = CreateIncludeCommands();
         IncludesCmd = commands;
         includesCommands = commands;

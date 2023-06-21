@@ -15,8 +15,12 @@ using Raven.Client.Exceptions.Documents.Subscriptions;
 using Raven.Client.Http;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Commands;
+using Raven.Client.ServerWide.Sharding;
 using Raven.Client.ServerWide.Tcp;
 using Raven.Server.Documents.Includes;
+using Raven.Server.Documents.Sharding;
+using Raven.Server.Documents.Sharding.Subscriptions;
+using Raven.Server.Documents.Subscriptions.Sharding;
 using Raven.Server.Documents.Subscriptions.Stats;
 using Raven.Server.Documents.Subscriptions.SubscriptionProcessor;
 using Raven.Server.Documents.TcpHandlers;
@@ -50,7 +54,7 @@ namespace Raven.Server.Documents.Subscriptions
 
         internal SubscriptionWorkerOptions _options;
         internal readonly Logger _logger;
-
+        public string LastSentChangeVectorInThisConnection;
         public readonly ConcurrentQueue<string> RecentSubscriptionStatuses = new();
         public SubscriptionWorkerOptions Options => _options;
         public SubscriptionException ConnectionException;
@@ -63,7 +67,7 @@ namespace Raven.Server.Documents.Subscriptions
         public readonly string ClientUri;
 
         public string WorkerId => _options.WorkerId ??= Guid.NewGuid().ToString();
-        public SubscriptionState SubscriptionState { get; private set; }
+        public SubscriptionState SubscriptionState { get; set; }
         public SubscriptionConnection.ParsedSubscription Subscription { get; private set; }
 
         public TcpConnectionHeaderMessage.SupportedFeatures SupportedFeatures { get; }
@@ -160,8 +164,7 @@ namespace Raven.Server.Documents.Subscriptions
                             {
                                 var sendingCurrentBatchStopwatch = Stopwatch.StartNew();
 
-                                var anyDocumentsSentInCurrentIteration =
-                                    await TrySendingBatchToClient<TState, TConnection>(state, sendingCurrentBatchStopwatch, batchScope, inProgressBatchStats);
+                                (bool anyDocumentsSentInCurrentIteration, bool isActiveMigration) = await TrySendingBatchToClient<TState, TConnection>(state, sendingCurrentBatchStopwatch, batchScope, inProgressBatchStats);
 
                                 if (anyDocumentsSentInCurrentIteration == false)
                                 {
@@ -178,13 +181,27 @@ namespace Raven.Server.Documents.Subscriptions
                                     if (sendingCurrentBatchStopwatch.Elapsed > HeartbeatTimeout)
                                         await SendHeartBeatAsync("Didn't find any documents to send and more then 1000ms passed");
 
-                                    if (FoundAboutMoreDocs())
-                                        state.NotifyHasMoreDocs();
+                                    if (isActiveMigration)
+                                    {
+                                        Debug.Assert(_subscriptions is ShardSubscriptionStorage);
+                                        if (await WaitForDocsMigrationAsync(state, replyFromClientTask))
+                                        {
+                                            // we waited for Migration and try to pull the docs again
+                                            continue;
+                                        }
 
-                                    AssertCloseWhenNoDocsLeft();
+                                        // replyFromClientTask is completed (it will be awaited in WaitForClientAck)
+                                    }
+                                    else
+                                    {
+                                        if (FoundAboutMoreDocs())
+                                            state.NotifyHasMoreDocs();
 
-                                    if (await WaitForChangedDocsAsync(state, replyFromClientTask))
-                                        continue;
+                                        AssertCloseWhenNoDocsLeft();
+
+                                        if (await WaitForChangedDocsAsync(state, replyFromClientTask))
+                                            continue;
+                                    }
                                 }
                             }
 
@@ -217,20 +234,21 @@ namespace Raven.Server.Documents.Subscriptions
         /// Iterates on a batch in document collection, process it and send documents if found any match
         /// </summary>
         /// <returns>Whether succeeded finding any documents to send</returns>
-        private async Task<bool> TrySendingBatchToClient<TState, TConnection>(TState state, Stopwatch sendingCurrentBatchStopwatch,
+        private async Task<(bool AnyDocumentsSentInCurrentIteration, bool IsActiveMigration)> TrySendingBatchToClient<TState, TConnection>(TState state, Stopwatch sendingCurrentBatchStopwatch,
             SubscriptionBatchStatsScope batchScope, SubscriptionBatchStatsAggregator batchStatsAggregator)
             where TState : AbstractSubscriptionConnectionsState<TConnection, TIncludesCommand>
             where TConnection : SubscriptionConnectionBase<TIncludesCommand>
         {
             if (await state.WaitForSubscriptionActiveLock(300) == false)
             {
-                return false;
+                return (false, false);
             }
 
             try
             {
                 AddToStatusDescription(CreateStatusMessage(ConnectionStatus.Info, "Start trying to send docs to client"));
                 bool anyDocumentsSentInCurrentIteration = false;
+                var isActiveMigration = false;
 
                 using (batchScope.For(SubscriptionOperationScope.BatchSendDocuments))
                 {
@@ -250,26 +268,33 @@ namespace Raven.Server.Documents.Subscriptions
 
                         using (Processor.InitializeForNewBatch(clusterOperationContext, out var includeCommand))
                         {
-                            foreach (var result in Processor.GetBatch())
+                            foreach ((Document Doc, Exception Exception, bool IsActiveMigration) result in Processor.GetBatch())
                             {
                                 CancellationTokenSource.Token.ThrowIfCancellationRequested();
 
-                                lastChangeVectorSentInThisBatch = SetLastChangeVectorInThisBatch(clusterOperationContext, lastChangeVectorSentInThisBatch, result.Doc);
-
+                                lastChangeVectorSentInThisBatch = SetLastChangeVectorInThisBatch(clusterOperationContext, lastChangeVectorSentInThisBatch, result.Doc, result.IsActiveMigration);
                                 if (result.Doc.Data == null)
                                 {
+                                    //TODO: egor now in v6.0 we dont use FlushBatchIfNeededAsync, shouldn't we send heartbeats each 1sec even if we are not skipping docs?? 
                                     if (sendingCurrentBatchStopwatch.Elapsed > HeartbeatTimeout)
                                     {
                                         await SendHeartBeatAsync("Skipping docs for more than 1000ms without sending any data");
                                         sendingCurrentBatchStopwatch.Restart();
                                     }
 
+                                    if (result.IsActiveMigration)
+                                    {
+                                        isActiveMigration = true;
+                                        break;
+                                    }
+
+
                                     continue;
                                 }
 
                                 anyDocumentsSentInCurrentIteration = true;
 
-                                CurrentBatch.Add(result);
+                                CurrentBatch.Add((result.Doc, result.Exception));
 
                                 docsToFlush++;
                                 batchScope.RecordDocumentInfo(result.Doc.Data.Size);
@@ -277,12 +302,31 @@ namespace Raven.Server.Documents.Subscriptions
                                 TcpConnection.LastEtagSent = result.Doc.Etag;
                             }
 
-                            await UpdateStateAfterBatchSentAsync(clusterOperationContext, lastChangeVectorSentInThisBatch);
+                            if (isActiveMigration)
+                            {
+                                if (anyDocumentsSentInCurrentIteration == false)
+                                {
+                                    Debug.Assert(CurrentBatch.Count == 0);
+                                    // we didn't pull anything and there is migration, we don't update the cv and will wait for migration to complete
+                                    return (false, true);
+                                }
 
+                                // we already pulled some docs, we will send the docs in CurrentBatch and then will wait for migration to complete
+                            }
+
+                            if (await TryUpdateStateAfterBatchSentAsync(clusterOperationContext, lastChangeVectorSentInThisBatch) == false)
+                            {
+                                //TODO: egor the false case is only relevant for shard, maybe move it to helper method?
+
+                                // one of the batch docs is under active migration
+                                // we canceled this batch and wait for migration to complete 
+                                return (false, true);
+                            }
+                            // TODO: egor if we skipped all docs anyDocumentsSentInCurrentIteration should be false
                             if (anyDocumentsSentInCurrentIteration)
                             {
                                 if (CurrentBatch.Count == 0)
-                                    return false;
+                                    return (false, isActiveMigration);
 
                                 foreach (var item in CurrentBatch)
                                 {
@@ -307,7 +351,7 @@ namespace Raven.Server.Documents.Subscriptions
                     }
                 }
 
-                return anyDocumentsSentInCurrentIteration;
+                return (anyDocumentsSentInCurrentIteration, isActiveMigration);
             }
             finally
             {
@@ -403,6 +447,8 @@ namespace Raven.Server.Documents.Subscriptions
             return false;
         }
 
+        protected abstract Task<bool> WaitForDocsMigrationAsync(AbstractSubscriptionConnectionsState state, Task pendingReply);
+      
         internal async Task<SubscriptionConnectionClientMessage> GetReplyFromClientAsync()
         {
             try
@@ -977,8 +1023,8 @@ namespace Raven.Server.Documents.Subscriptions
 
         protected abstract void AfterProcessorCreation();
         protected abstract void RaiseNotificationForBatchEnd(string name, SubscriptionBatchStatsAggregator last);
-        protected abstract string SetLastChangeVectorInThisBatch(IChangeVectorOperationContext context, string currentLast, Document sentDocument);
-        protected abstract Task UpdateStateAfterBatchSentAsync(IChangeVectorOperationContext context, string lastChangeVectorSentInThisBatch);
+        protected abstract string SetLastChangeVectorInThisBatch(IChangeVectorOperationContext context, string currentLast, Document sentDocument, bool isActiveMigration);
+        protected abstract Task<bool> TryUpdateStateAfterBatchSentAsync(IChangeVectorOperationContext context, string lastChangeVectorSentInThisBatch);
 
         internal static void WriteEndOfBatch(AsyncBlittableJsonTextWriter writer)
         {

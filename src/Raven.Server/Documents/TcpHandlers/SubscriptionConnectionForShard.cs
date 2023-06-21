@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Raven.Client.Documents.Subscriptions;
+using Raven.Client.Exceptions.Documents.Subscriptions;
+using Raven.Client.ServerWide;
 using Raven.Server.Documents.Includes;
 using Raven.Server.Documents.Sharding;
 using Raven.Server.Documents.Sharding.Subscriptions;
@@ -8,6 +12,7 @@ using Raven.Server.Documents.Subscriptions;
 using Raven.Server.Documents.Subscriptions.Sharding;
 using Raven.Server.Documents.Subscriptions.SubscriptionProcessor;
 using Raven.Server.ServerWide;
+using Raven.Server.ServerWide.Commands.Subscriptions;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.Utils;
 using Sparrow.Json;
@@ -49,10 +54,18 @@ public class SubscriptionConnectionForShard : SubscriptionConnection
 
     protected override RawDatabaseRecord GetRecord(ClusterOperationContext context) => ServerStore.Cluster.ReadRawDatabaseRecord(context, ShardName);
 
-    protected override string SetLastChangeVectorInThisBatch(IChangeVectorOperationContext context, string currentLast, Document sentDocument)
+    protected override string SetLastChangeVectorInThisBatch(IChangeVectorOperationContext context, string currentLast, Document sentDocument, bool isActiveMigration)
     {
-        if (sentDocument.Etag == 0) // got this document from resend
+        if (isActiveMigration) // got this document from resend or active migration
             return currentLast;
+
+        if (sentDocument.Etag == 0)
+        {
+            if (sentDocument.Data == null)
+                return currentLast;
+
+            // shard might read only from resend 
+        }
 
         var vector = context.GetChangeVector(sentDocument.ChangeVector);
 
@@ -82,12 +95,21 @@ public class SubscriptionConnectionForShard : SubscriptionConnection
         throw new InvalidOperationException($"Expected to create a processor for '{nameof(SubscriptionConnectionForShard)}', but got: '{connection.GetType().Name}'.");
     }
 
-    protected override async Task UpdateStateAfterBatchSentAsync(IChangeVectorOperationContext context, string lastChangeVectorSentInThisBatch)
+    protected override async Task<bool> TryUpdateStateAfterBatchSentAsync(IChangeVectorOperationContext context, string lastChangeVectorSentInThisBatch)
     {
         var vector = context.GetChangeVector(lastChangeVectorSentInThisBatch);
         vector.TryRemoveIds(_dbIdToRemove, context, out vector);
+        var lastSentChangeVectorInThisConnection = LastSentChangeVectorInThisConnection;
 
-        await base.UpdateStateAfterBatchSentAsync(context, vector.Order);
+        try
+        {
+            await base.TryUpdateStateAfterBatchSentAsync(context, vector.Order);
+        }
+        catch (DocumentUnderActiveMigrationException)
+        {
+            LastSentChangeVectorInThisConnection = lastSentChangeVectorInThisConnection;
+            return false;
+        }
 
         var p = (ShardedDocumentsDatabaseSubscriptionProcessor)Processor;
         if (p.Skipped != null)
@@ -102,6 +124,15 @@ public class SubscriptionConnectionForShard : SubscriptionConnection
                 }
             }
         }
+
+        /*
+        var x = string.Join(Environment.NewLine, CurrentBatch.Select(x => $"id:{x.Document.Id},cv:{x.Document.ChangeVector}"));
+
+        Console.WriteLine($"{Environment.NewLine}----{ShardName}-----{Environment.NewLine}{x}");
+        */
+    
+
+        return true;
     }
 
     protected override bool FoundAboutMoreDocs()
@@ -127,5 +158,30 @@ public class SubscriptionConnectionForShard : SubscriptionConnection
     protected override void FillIncludedDocuments(DatabaseIncludesCommandImpl includeDocumentsCommand, List<Document> includes)
     {
         includeDocumentsCommand.IncludeDocumentsCommand.Fill(includes, includeMissingAsNull: true);
+    }
+
+    protected override async Task<bool> WaitForDocsMigrationAsync(AbstractSubscriptionConnectionsState state, Task pendingReply)
+    {
+        AddToStatusDescription(CreateStatusMessage(ConnectionStatus.Info, "Start waiting for documents migration"));
+        var migrationWaitTask = TimeoutManager.WaitFor(TimeSpan.FromSeconds(5));
+        do
+        {
+            CancellationTokenSource.Token.ThrowIfCancellationRequested();
+
+            var resultingTask = await Task
+                .WhenAny(migrationWaitTask, pendingReply, TimeoutManager.WaitFor(HeartbeatTimeout)).ConfigureAwait(false);
+
+            if (CancellationTokenSource.IsCancellationRequested)
+                return false;
+            if (resultingTask == pendingReply)
+                return false;
+            if (migrationWaitTask == resultingTask)
+                return true;
+
+            await SendHeartBeatAsync("Waiting for documents migration");
+            await SendNoopAckAsync();
+        } while (CancellationTokenSource.IsCancellationRequested == false);
+
+        return false;
     }
 }

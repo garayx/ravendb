@@ -7,6 +7,7 @@ using Raven.Server.ServerWide;
 using Raven.Server.Utils;
 using Sparrow.Server;
 using Sparrow.Threading;
+using Sparrow.Utils;
 
 namespace Raven.Server.Documents.Sharding.Subscriptions;
 
@@ -28,11 +29,13 @@ public class ShardedRevisionsDatabaseSubscriptionProcessor : RevisionsDatabaseSu
         return base.CreateFetcher();
     }
 
-    protected override bool ShouldSend((Document Previous, Document Current) item, out string reason, out Exception exception, out Document result)
+    protected override bool ShouldSend((Document Previous, Document Current) item, out string reason, out Exception exception, out Document result, out bool isActiveMigration)
     {
         exception = null;
         result = item.Current;
-
+        isActiveMigration = false;
+        DevelopmentHelper.ShardingToDo(DevelopmentHelper.TeamMember.Egor, DevelopmentHelper.Severity.Normal, "https://issues.hibernatingrhinos.com/issue/RavenDB-18881/Sharding-Subscription-Revisions");
+        
         var shard = ShardHelper.GetShardNumberFor(_sharding, _allocator, result.Id);
         if (shard != _database.ShardNumber)
         {
@@ -40,7 +43,7 @@ public class ShardedRevisionsDatabaseSubscriptionProcessor : RevisionsDatabaseSu
             return false;
         }
 
-        return base.ShouldSend(item, out reason, out exception, out result);
+        return base.ShouldSend(item, out reason, out exception, out result, out isActiveMigration);
     }
 
     public override void Dispose()

@@ -9,12 +9,13 @@ using Raven.Server.ServerWide.Commands.Subscriptions;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.Utils;
 using Sparrow;
+using Sparrow.Json;
 
 namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
 {
     public class DocumentsDatabaseSubscriptionProcessor : DatabaseSubscriptionProcessor<Document>
     {
-        private readonly SubscriptionConnection _connection;
+        protected readonly SubscriptionConnection _connection;
 
         public DocumentsDatabaseSubscriptionProcessor(ServerStore server, DocumentDatabase database, SubscriptionConnection connection) :
             base(server, database, connection)
@@ -22,7 +23,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
             _connection = connection;
         }
 
-        public override IEnumerable<(Document Doc, Exception Exception)> GetBatch()
+        public override IEnumerable<(Document Doc, Exception Exception, bool IsActiveMigration)> GetBatch()
         {
             Size size = default;
             var numberOfDocs = 0;
@@ -67,7 +68,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
         public override async Task<long> RecordBatch(string lastChangeVectorSentInThisBatch) =>
             (await SubscriptionConnectionsState.RecordBatchDocuments(BatchItems, ItemsToRemoveFromResend, lastChangeVectorSentInThisBatch)).Index;
 
-        public override async Task AcknowledgeBatch(long batchId)
+        public override async Task AcknowledgeBatch(long batchId, string changevector)
         {
             ItemsToRemoveFromResend.Clear();
 
@@ -86,7 +87,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                 }
             }
 
-            await SubscriptionConnectionsState.AcknowledgeBatch(_connection, batchId, BatchItems);
+            await SubscriptionConnectionsState.AcknowledgeBatch(_connection.LastSentChangeVectorInThisConnection ?? nameof(Client.Constants.Documents.SubscriptionChangeVectorSpecialStates.DoNotChange), batchId, BatchItems);
 
             if (BatchItems?.Count > 0)
             {
@@ -111,11 +112,12 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
             return new DocumentSubscriptionFetcher(Database, SubscriptionConnectionsState, Collection);
         }
 
-        protected override bool ShouldSend(Document item, out string reason, out Exception exception, out Document result)
+        protected override bool ShouldSend(Document item, out string reason, out Exception exception, out Document result, out bool isActiveMigration)
         {
             exception = null;
             reason = null;
             result = item;
+            isActiveMigration = false;
 
             if (Fetcher.FetchingFrom == SubscriptionFetcher.FetchingOrigin.Storage)
             {
@@ -224,7 +226,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                     return true;
 
                 case ConflictStatus.Conflict:
-                    reason = $"document '{id}' is in conflict with";
+                    reason = $"document '{id}' is in conflict, CV in storage '{item.Document.ChangeVector}' CV in resend list '{currentChangeVector}' (sub progress: {SubscriptionConnectionsState.LastChangeVectorSent})";
                     return false;
 
                 default:

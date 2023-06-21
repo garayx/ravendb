@@ -26,7 +26,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
 
         public List<RevisionRecord> BatchItems = new List<RevisionRecord>();
 
-        public override IEnumerable<(Document Doc, Exception Exception)> GetBatch()
+        public override IEnumerable<(Document Doc, Exception Exception, bool IsActiveMigration)> GetBatch()
         {
             if (Database.DocumentsStorage.RevisionsStorage.Configuration == null ||
                 Database.DocumentsStorage.RevisionsStorage.GetRevisionsConfiguration(Collection).Disabled)
@@ -76,8 +76,8 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
         public override async Task<long> RecordBatch(string lastChangeVectorSentInThisBatch) => 
             (await SubscriptionConnectionsState.RecordBatchRevisions(BatchItems, lastChangeVectorSentInThisBatch)).Index;
 
-        public override Task AcknowledgeBatch(long batchId) => 
-            SubscriptionConnectionsState.AcknowledgeBatch(_connection, batchId, null);
+        public override Task AcknowledgeBatch(long batchId, string changevector) => 
+            SubscriptionConnectionsState.AcknowledgeBatch(_connection.LastSentChangeVectorInThisConnection, batchId, null);
 
         public override long GetLastItemEtag(DocumentsOperationContext context, string collection)
         {
@@ -94,11 +94,12 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
             return new RevisionSubscriptionFetcher(Database, SubscriptionConnectionsState, Collection);
         }
 
-        protected override bool ShouldSend((Document Previous, Document Current) item, out string reason, out Exception exception, out Document result)
+        protected override bool ShouldSend((Document Previous, Document Current) item, out string reason, out Exception exception, out Document result, out bool isActiveMigration)
         {
             exception = null;
             reason = null;
             result = item.Current.CloneWith(DocsContext, newData: null);
+            isActiveMigration = false;
 
             if (Fetcher.FetchingFrom == SubscriptionFetcher.FetchingOrigin.Storage)
             {

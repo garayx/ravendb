@@ -10,6 +10,7 @@ using Raven.Client.Documents.Subscriptions;
 using Raven.Client.Exceptions.Documents.Subscriptions;
 using Raven.Client.Util;
 using Raven.Server.Documents.Includes;
+using Raven.Server.Documents.Sharding.Subscriptions;
 using Raven.Server.Documents.TcpHandlers;
 using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Commands.Subscriptions;
@@ -243,7 +244,7 @@ public abstract class AbstractSubscriptionConnectionsState<TSubscriptionConnecti
     }
 
     public abstract Task UpdateClientConnectionTime();
-
+    protected abstract void SetLastChangeVectorSent(TSubscriptionConnection connection);
     public abstract Task WaitForIndexNotificationAsync(long index);
 
     public abstract void DropSubscription(SubscriptionException e);

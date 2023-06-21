@@ -41,9 +41,9 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
             }
         }
 
-        protected (Document Doc, Exception Exception) GetBatchItem(T item)
+        protected (Document Doc, Exception Exception, bool IsActiveMigration) GetBatchItem(T item)
         {
-            if (ShouldSend(item, out var reason, out var exception, out var result))
+            if (ShouldSend(item, out var reason, out var exception, out var result, out var isActiveMigration))
             {
                 if (IncludesCmd != null && IncludesCmd.IncludeDocumentsCommand != null && Run != null)
                     IncludesCmd.IncludeDocumentsCommand.AddRange(Run.Includes, result.Id);
@@ -51,7 +51,7 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                 if (result.Data != null)
                     Fetcher.MarkDocumentSent();
 
-                return (result, null);
+                return (result, null, false);
             }
 
             if (Logger.IsInfoEnabled)
@@ -62,16 +62,16 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                 if (result.Data != null)
                     Fetcher.MarkDocumentSent();
 
-                return (result, exception);
+                return (result, exception, false);
             }
 
             result.Data = null;
-            return (result, null);
+            return (result, null, isActiveMigration);
         }
 
         protected abstract SubscriptionFetcher<T> CreateFetcher();
 
-        protected abstract bool ShouldSend(T item, out string reason, out Exception exception, out Document result);
+        protected abstract bool ShouldSend(T item, out string reason, out Exception exception, out Document result, out bool isActiveMigration);
     }
 
     public abstract class DatabaseSubscriptionProcessor : AbstractSubscriptionProcessor<DatabaseIncludesCommandImpl>
