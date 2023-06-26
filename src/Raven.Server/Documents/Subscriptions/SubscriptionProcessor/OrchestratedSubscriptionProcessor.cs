@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Amazon.Runtime.Internal.Transform;
+using Lextm.SharpSnmpLib.Security;
 using Raven.Client.Documents.Subscriptions;
 using Raven.Client.ServerWide.Sharding;
 using Raven.Server.Documents.Includes.Sharding;
@@ -95,6 +97,8 @@ public class OrchestratedSubscriptionProcessor : AbstractSubscriptionProcessor<O
         return conflictStatus;
     }
 
+    public static Dictionary<string, int> Users = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
     public override IEnumerable<(Document Doc, Exception Exception, bool IsActiveMigration)> GetBatch()
     {
         if (_state.Batches.TryTake(out CurrentBatch, TimeSpan.Zero) == false)
@@ -105,11 +109,22 @@ public class OrchestratedSubscriptionProcessor : AbstractSubscriptionProcessor<O
             foreach (SubscriptionBatchBase<BlittableJsonReaderObject>.Item batchItem in CurrentBatch.Items)
             {
                 Connection.CancellationTokenSource.Token.ThrowIfCancellationRequested();
-
                 if (GetConflictStatus(batchItem) == ConflictStatus.AlreadyMerged)
                 {
                     continue;
                 }
+
+                if (Users.TryGetValue(batchItem.Id, out var age))
+                {
+                    batchItem.Result.TryGet("Age", out int age2);
+                    if (Math.Abs(age) > Math.Abs(age2))
+                    {
+                        Console.WriteLine($"XXX($\"Got an outdated user {batchItem.Id}, existing: {age} ({Math.Abs(age)}), received: {age2}({Math.Abs(age2)})\")");
+                    }
+                }
+                batchItem.Result.TryGet("Age", out int age22);
+
+                Users[batchItem.Id] = age22;
 
                 if (batchItem.ExceptionMessage != null)
                     yield return (null, new Exception(batchItem.ExceptionMessage), IsActiveMigration: false);

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Raven.Client;
 using Raven.Client.Documents.Subscriptions;
@@ -46,7 +47,7 @@ public class PutShardedSubscriptionCommand : PutSubscriptionCommand
         {
             return;
         }
-        
+
         // remove the old state from storage
         RemoveSubscriptionStateFromStorage(context, subscriptionId);
     }

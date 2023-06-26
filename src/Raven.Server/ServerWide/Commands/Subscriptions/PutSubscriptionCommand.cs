@@ -142,6 +142,8 @@ namespace Raven.Server.ServerWide.Commands.Subscriptions
 
         protected void RemoveSubscriptionStateFromStorage(ClusterOperationContext context, long subscriptionId)
         {
+            Console.WriteLine($"RemoveSubscriptionStateFromStorage: {context.Environment.Options.BasePath}");
+
             var subscriptionStateTable = context.Transaction.InnerTransaction.OpenTable(ClusterStateMachine.SubscriptionStateSchema, ClusterStateMachine.SubscriptionState);
             using (AbstractSubscriptionConnectionsState.GetDatabaseAndSubscriptionPrefix(context, DatabaseName, subscriptionId, out var prefix))
             {

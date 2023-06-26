@@ -50,6 +50,7 @@ public class ShardedDocumentsDatabaseSubscriptionProcessor : DocumentsDatabaseSu
         isActiveMigration = false;
 
         var bucket = ShardHelper.GetBucketFor(_sharding, _allocator, item.Id);
+        var shard = ShardHelper.GetShardNumberFor(_sharding, bucket);
         if (_sharding.BucketMigrations.TryGetValue(bucket, out var migration) && migration.IsActive)
         {
             var s = ShardHelper.GetShardNumberFor(_sharding, bucket);
@@ -60,11 +61,15 @@ public class ShardedDocumentsDatabaseSubscriptionProcessor : DocumentsDatabaseSu
             {
                 isActiveMigration = true;
             }
+            //TODO: egor add this
+            /*if (shard == _database.ShardNumber)
+            {
+                isActiveMigration = true;
+            }*/
 
             return false;
         }
 
-        var shard = ShardHelper.GetShardNumberFor(_sharding, bucket);
         if (shard != _database.ShardNumber)
         {
             reason = $"The owner of '{item.Id}' document is shard '{shard}' (current shard number: '{_database.ShardNumber}').";

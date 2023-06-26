@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ using SlowTests.Server.Documents.PeriodicBackup;
 using SlowTests.Sharding.Cluster;
 using Raven.Server.Documents.Subscriptions;
 using Xunit;
+using Raven.Server.Documents.Subscriptions.SubscriptionProcessor;
 
 namespace Tryouts;
 
@@ -48,7 +50,7 @@ public static class Program
 
 
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
-                    await test.ContinueSubscriptionAfterReshardingInAClusterWithFailover();
+                    await test.ContinueSubscriptionAfterReshardingInAClusterRF1WithOrchestratorFailover();
                 }
             }
             catch (Exception e)
@@ -56,7 +58,10 @@ public static class Program
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine(e);
                 Console.ForegroundColor = ConsoleColor.White;
-                return;
+            }
+            finally
+            {
+                OrchestratedSubscriptionProcessor.Users = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             }
         }
     }

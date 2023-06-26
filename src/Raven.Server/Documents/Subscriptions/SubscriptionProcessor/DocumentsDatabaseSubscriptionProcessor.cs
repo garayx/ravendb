@@ -200,7 +200,8 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                 reason = $"document '{id}' removed and skipped from resend";
                 return false;
             }
-
+            // local: A:5-db1
+            // remote B:10-db2|A:3-db1
             var status = Database.DocumentsStorage.GetConflictStatus(context, item.Document.ChangeVector, currentChangeVector, ChangeVectorMode.Version);
             switch (status)
             {
@@ -223,6 +224,10 @@ namespace Raven.Server.Documents.Subscriptions.SubscriptionProcessor
                     return fetch;
 
                 case ConflictStatus.AlreadyMerged:
+                    if (currentChangeVector != item.Document.ChangeVector)
+                    {
+                        Console.WriteLine($"local: {currentChangeVector} != remote: {item.Document.ChangeVector}");
+                    }
                     return true;
 
                 case ConflictStatus.Conflict:

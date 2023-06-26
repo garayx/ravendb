@@ -6,6 +6,7 @@ using Raven.Client.Documents;
 using Raven.Client.ServerWide.Operations;
 using Raven.Client.ServerWide.Sharding;
 using Raven.Server;
+using Raven.Server.ServerWide.Maintenance.Sharding;
 using Raven.Server.Utils;
 using Sparrow.Json;
 using Xunit;
@@ -54,6 +55,7 @@ public partial class RavenTestBase
                 try
                 {
                     await server.ServerStore.Sharding.StartBucketMigration(store.Database, bucket, moveToShard);
+                    Console.WriteLine($"StartBucketMigration on '{server.ServerStore.NodeTag}' from '{shardNumber}' to '{moveToShard}'");
                     break;
                 }
                 catch
@@ -88,6 +90,8 @@ public partial class RavenTestBase
                 servers ??= _parent.GetServers();
                 var bucket = await StartMovingShardForId(store, id, toShard, servers);
                 await WaitForMigrationComplete(store, bucket);
+                Console.WriteLine($"StartBucketMigration finish");
+
             }
             catch (Exception e)
             {
