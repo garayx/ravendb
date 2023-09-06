@@ -48,6 +48,7 @@
     <None Remove="Data\RavenDB_21957\js_index_with_dates_601.ravendb-snapshot" />
     <None Remove="Smuggler\Data\DocumentWithRevisions.ravendbdump" />
     <None Remove="Smuggler\Data\RevisionsWithoutADocument.ravendbdump" />
+    <None Remove="Smuggler\Data\revisionTombstonesWithBigChangeVector.ravendbdump" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Tests.Infrastructure\CommonTestsAssemblyInfo.cs" Link="Properties\CommonTestsAssemblyInfo.cs" />
@@ -146,6 +147,9 @@
     <EmbeddedResource Include="Smuggler\Data\Northwind_3.5.35168.ravendbdump" />
     <EmbeddedResource Include="Smuggler\Data\RevisionsWithoutADocument.ravendbdump" />
     <EmbeddedResource Include="Smuggler\Data\Revisions_3.5.35220.ravendbdump" />
+    <EmbeddedResource Include="Smuggler\Data\revisionTombstonesWithBigChangeVector.ravendbdump">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Raven.Client\Raven.Client.csproj" />

@@ -306,6 +306,17 @@ namespace Raven.Server.Documents.Revisions
             Debug.Assert(changeVector != null, "Change vector must be set");
             Debug.Assert(lastModifiedTicks != DateTime.MinValue.Ticks, "last modified ticks must be set");
 
+            if (flags.Contain(DocumentFlags.FromReplication) == false &&
+                nonPersistentFlags.Contain(NonPersistentDocumentFlags.FromReplication) == false &&
+                nonPersistentFlags.Contain(NonPersistentDocumentFlags.FromSmuggler) == false &&
+                changeVector.ToString().Length > DocumentIdWorker.MaxIdSize)
+            {
+                // RavenDB-21047 
+                // throw if the change vector length exceeds the maximum id length (512 bytes)
+                // we allow it if the operation originated from smuggler/replication to avoid inconsistent data or broken replication
+                DocumentIdWorker.ThrowDocumentIdTooBig(id, changeVector);
+            }
+
             BlittableJsonReaderObject.AssertNoModifications(document, id, assertChildren: true);
 
             if (collectionName == null)
@@ -1295,7 +1306,12 @@ namespace Raven.Server.Documents.Revisions
 
             var newEtag = _documentsStorage.GenerateNextEtag();
 
-            using (DocumentIdWorker.GetStringPreserveCase(context, collectionName.Name, out Slice collectionSlice))
+            if (changeVector.Length > DocumentIdWorker.MaxIdSize * 2)
+            {
+                // RavenDB-21047 
+                // throw if the change vector length exceeds 1024 bytes
+                DocumentIdWorker.ThrowDocumentIdTooBig(changeVector);
+            }            using (DocumentIdWorker.GetStringPreserveCase(context, collectionName.Name, out Slice collectionSlice))
             using (Slice.From(context.Allocator, changeVector, out var cv))
             using (table.Allocate(out TableValueBuilder tvb))
             {
