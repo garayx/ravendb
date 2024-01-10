@@ -102,10 +102,10 @@ namespace Raven.Server.Documents.Subscriptions
             return etag;
         }
 
-        public async Task<SubscriptionConnectionsState> OpenSubscriptionAsync(SubscriptionConnection connection)
+        public SubscriptionConnectionsState OpenSubscription(SubscriptionConnection connection)
         {
             var subscriptionState = _subscriptions.GetOrAdd(connection.SubscriptionId, subId => new SubscriptionConnectionsState(subId, this));
-            await subscriptionState.InitializeAsync(connection);
+            subscriptionState.RefreshSubscriptionNameAndQuery(connection);
             return subscriptionState;
         }
 

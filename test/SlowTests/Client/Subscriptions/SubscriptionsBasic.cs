@@ -1182,7 +1182,7 @@ namespace SlowTests.Client.Subscriptions
                        {
                            worker1Retry ??= new AsyncManualResetEvent();
                            subscriptionInterrupt.Set();
-                           throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null };
+                           throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST 0") { AppropriateNode = null };
                        }))
                 {
                     await subscriptionInterrupt.WaitAsync(_reasonableWaitTime);
@@ -1208,7 +1208,7 @@ namespace SlowTests.Client.Subscriptions
                            }
                            worker1Retry.Reset(true);
                            worker1AfterRegisterSubscriptionConnection.Set();
-                           throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null, RegisterConnectionDurationInTicks = waitedForFreeDuration };
+                           throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST 1") { AppropriateNode = null, RegisterConnectionDurationInTicks = waitedForFreeDuration };
                        }))
                 {
                     subscriptionInterrupt.Reset(true);
@@ -1217,7 +1217,7 @@ namespace SlowTests.Client.Subscriptions
                                // drop subscription
                                worker2Retry ??= new ManualResetEvent(false);
                                subscriptionInterrupt.Set();
-                               throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST") { AppropriateNode = null };
+                               throw new SubscriptionDoesNotBelongToNodeException($"DROPPED BY TEST 2") { AppropriateNode = null };
                            }))
                     {
                         Assert.True(await subscriptionInterrupt.WaitAsync(_reasonableWaitTime));

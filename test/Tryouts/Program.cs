@@ -5,6 +5,7 @@ using FastTests.Blittable;
 using FastTests.Client;
 using RachisTests;
 using SlowTests.Client.Attachments;
+using SlowTests.Client.Subscriptions;
 using SlowTests.Client.TimeSeries.Replication;
 using SlowTests.Issues;
 using SlowTests.MailingList;
@@ -30,9 +31,9 @@ namespace Tryouts
                 try
                 {
                     using (var testOutputHelper = new ConsoleTestOutputHelper())
-                    using (var test = new RavenDB_21173(testOutputHelper))
+                    using (var test = new ConcurrentSubscriptionsTests(testOutputHelper))
                     {
-                        await test.ClusterTransaction_Failover_Shouldnt_Throw_ConcurrencyException();
+                        await test.ResendChangedDocument2();
                     }
                 }
                 catch (Exception e)

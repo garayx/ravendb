@@ -216,28 +216,9 @@ namespace Raven.Server.Documents.TcpHandlers
             AssertSupportedFeatures();
         }
 
-        private async Task NotifyClientAboutSuccess(long registerConnectionDurationInTicks)
+        private async Task NotifyClientAboutSuccess()
         {
-            TcpConnection.DocumentDatabase.ForTestingPurposes?.Subscription_ActionToCallAfterRegisterSubscriptionConnection?.Invoke(registerConnectionDurationInTicks);
-
             _activeConnectionScope = _connectionScope.For(SubscriptionOperationScope.ConnectionActive);
-
-            // refresh subscription data (change vector may have been updated, because in the meanwhile, another subscription could have just completed a batch)
-            SubscriptionState =
-                await TcpConnection.DocumentDatabase.SubscriptionStorage.AssertSubscriptionConnectionDetails(SubscriptionId, _options.SubscriptionName, registerConnectionDurationInTicks,
-                    CancellationTokenSource.Token);
-
-            Subscription = ParseSubscriptionQuery(SubscriptionState.Query);
-
-            // update the state if above data changed
-            await _subscriptionConnectionsState.InitializeAsync(this, afterSubscribe: true);
-
-            CancellationTokenSource.Token.ThrowIfCancellationRequested();
-
-            await TcpConnection.DocumentDatabase.SubscriptionStorage.UpdateClientConnectionTime(SubscriptionState.SubscriptionId,
-                SubscriptionState.SubscriptionName, SubscriptionState.MentorNode);
-
-            await SubscriptionConnectionsState.SendNoopAck();
             await WriteJsonAsync(new DynamicJsonValue
             {
                 [nameof(SubscriptionConnectionServerMessage.Type)] = nameof(SubscriptionConnectionServerMessage.MessageType.ConnectionStatus),
@@ -245,7 +226,7 @@ namespace Raven.Server.Documents.TcpHandlers
             });
         }
 
-        private async Task<(IDisposable DisposeOnDisconnect, long RegisterConnectionDurationInTicks)> SubscribeAsync()
+        private async Task SubscribeAsync()
         {
             var random = new Random();
             var registerConnectionDuration = Stopwatch.StartNew();
@@ -265,9 +246,8 @@ namespace Raven.Server.Documents.TcpHandlers
 
                     try
                     {
-                        var disposeOnce = _subscriptionConnectionsState.RegisterSubscriptionConnection(this);
-                        registerConnectionDuration.Stop();
-                        return (disposeOnce, registerConnectionDuration.ElapsedTicks);
+                        await _subscriptionConnectionsState.RegisterSubscriptionConnectionAsync(this, registerConnectionDuration);
+                        return;
                     }
                     catch (TimeoutException)
                     {
@@ -355,6 +335,7 @@ namespace Raven.Server.Documents.TcpHandlers
 
         public async Task Run(TcpConnectionOptions tcpConnectionOptions, IDisposable subscriptionConnectionInProgress)
         {
+            IDisposable disposeOnDisconnect = default;
             using (tcpConnectionOptions)
             using (subscriptionConnectionInProgress)
             using (this)
@@ -363,7 +344,6 @@ namespace Raven.Server.Documents.TcpHandlers
                 _connectionScope = _lastConnectionStats.CreateScope();
 
                 _pendingConnectionScope = _connectionScope.For(SubscriptionOperationScope.ConnectionPending);
-                IDisposable disposeOnDisconnect = default;
 
                 try
                 {
@@ -375,16 +355,20 @@ namespace Raven.Server.Documents.TcpHandlers
 
                     try
                     {
-                        long registerConnectionDurationInTicks;
                         using (_pendingConnectionScope)
                         {
                             await InitAsync();
-                            _subscriptionConnectionsState = await TcpConnection.DocumentDatabase.SubscriptionStorage.OpenSubscriptionAsync(this);
-                            (disposeOnDisconnect, registerConnectionDurationInTicks) = await SubscribeAsync();
+                            _subscriptionConnectionsState = TcpConnection.DocumentDatabase.SubscriptionStorage.OpenSubscription(this);
+                            disposeOnDisconnect = _subscriptionConnectionsState.GetDisposingAction(this);
+                            await SubscribeAsync();
+
+                            await UpdateClientConnectionTimeAsync();
                         }
 
-                        await NotifyClientAboutSuccess(registerConnectionDurationInTicks);
+                        await NotifyClientAboutSuccess();
                         await ProcessSubscriptionAsync();
+
+
                     }
                     finally
                     {
@@ -418,6 +402,16 @@ namespace Raven.Server.Documents.TcpHandlers
                     disposeOnDisconnect?.Dispose();
                 }
             }
+        }
+
+        private async Task UpdateClientConnectionTimeAsync()
+        {
+            CancellationTokenSource.Token.ThrowIfCancellationRequested();
+
+            await TcpConnection.DocumentDatabase.SubscriptionStorage.UpdateClientConnectionTime(SubscriptionState.SubscriptionId,
+                SubscriptionState.SubscriptionName, SubscriptionState.MentorNode);
+
+            await SubscriptionConnectionsState.SendNoopAck();
         }
 
         private async Task ReportException(Exception e)
