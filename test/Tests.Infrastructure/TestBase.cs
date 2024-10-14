@@ -25,9 +25,11 @@ using Raven.Server.Documents;
 using Raven.Server.Documents.Indexes.Static.NuGet;
 using Raven.Server.Documents.PeriodicBackup;
 using Raven.Server.Documents.PeriodicBackup.Restore;
+using Raven.Server.EventListener;
 using Raven.Server.Rachis;
 using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Context;
+using Raven.Server.TrafficWatch;
 using Raven.Server.Utils;
 using Raven.Server.Utils.Features;
 using Sparrow.Collections;
@@ -558,6 +560,16 @@ namespace FastTests
                 configuration.Server.Name = ServerName;
                 configuration.Server.MaxTimeForTaskToWaitForDatabaseToLoad = new TimeSetting(60, TimeUnit.Seconds);
                 configuration.Licensing.EulaAccepted = true;
+
+                TrafficWatchToLog.Instance.UpdateConfiguration(configuration.TrafficWatch);
+                EventListenerToLog.Instance.UpdateConfiguration(new EventListenerToLog.EventListenerConfiguration
+                {
+                    EventListenerMode = configuration.DebugConfiguration.EventListenerMode,
+                    EventTypes = configuration.DebugConfiguration.EventTypes,
+                    MinimumDurationInMs = configuration.DebugConfiguration.MinimumDuration.GetValue(TimeUnit.Milliseconds),
+                    AllocationsLoggingIntervalInMs = configuration.DebugConfiguration.AllocationsLoggingInterval.GetValue(TimeUnit.Milliseconds),
+                    AllocationsLoggingCount = configuration.DebugConfiguration.AllocationsLoggingCount
+                });
 
                 if (hasRunInMemory == false)
                     configuration.Core.RunInMemory = options.RunInMemory ?? true;
