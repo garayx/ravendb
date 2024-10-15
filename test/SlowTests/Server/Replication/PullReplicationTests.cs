@@ -1,22 +1,32 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using FastTests.Server.Replication;
+using Raven.Client;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Operations.ConnectionStrings;
+using Raven.Client.Documents.Operations.ETL;
 using Raven.Client.Documents.Operations.OngoingTasks;
 using Raven.Client.Documents.Operations.Replication;
 using Raven.Client.Exceptions;
+using Raven.Client.Exceptions.Database;
+using Raven.Client.Extensions;
 using Raven.Client.ServerWide.Commands;
 using Raven.Client.ServerWide.Operations;
+using Raven.Server.Config;
+using Raven.Server.Documents;
 using Raven.Server.Utils;
 using Raven.Tests.Core.Utils.Entities;
 using Sparrow.Json;
 using Sparrow.Server;
+using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
+using static Raven.Server.Web.System.DatabasesDebugHandler;
 
 namespace SlowTests.Server.Replication
 {
@@ -692,20 +702,260 @@ namespace SlowTests.Server.Replication
             }
         }
 
+        [RavenFact(RavenTestCategory.Replication)]
+        public async Task PullReplicationWithIdleShouldWork()
+        {
+            var name = $"pull-replication {GetDatabaseName()}";
+            using (var hubServer = GetNewServer(new ServerCreationOptions
+                   {
+                       CustomSettings = new Dictionary<string, string>
+                       {
+                           [RavenConfiguration.GetKey(x => x.Databases.MaxIdleTime)] = "10",
+                           [RavenConfiguration.GetKey(x => x.Databases.FrequencyToCheckForIdle)] = "3",
+                           [RavenConfiguration.GetKey(x => x.Replication.RetryMaxTimeout)] = "1",
+                           [RavenConfiguration.GetKey(x => x.Core.RunInMemory)] = "false"
+                       }
+                   }))
+            using (var sinkServer = GetNewServer(new ServerCreationOptions
+            {
+                CustomSettings = new Dictionary<string, string>
+                {
+                    [RavenConfiguration.GetKey(x => x.Databases.MaxIdleTime)] = "10",
+                    [RavenConfiguration.GetKey(x => x.Databases.FrequencyToCheckForIdle)] = "3",
+                    [RavenConfiguration.GetKey(x => x.Replication.RetryMaxTimeout)] = "1",
+                    [RavenConfiguration.GetKey(x => x.Core.RunInMemory)] = "false"
+                }
+            }))
+            using (var sink = GetDocumentStore(new Options
+            {
+                Server = sinkServer,
+                ModifyDatabaseName = s => $"Sink_{s}",
+                RunInMemory = false,
+
+            }))
+            using (var hub = GetDocumentStore(new Options
+            {
+                Server = hubServer,
+                ModifyDatabaseName = s => $"Hub_{s}",
+                RunInMemory = false,
+
+            }))
+            {
+                Console.WriteLine("Sink URL: " + sinkServer.WebUrl);
+                Console.WriteLine("Hub URL: " + hubServer.WebUrl);
+
+
+                await hub.Maintenance.ForDatabase(hub.Database).SendAsync(new PutPullReplicationAsHubOperation(name));
+                using (var s2 = hub.OpenSession())
+                {
+                    s2.Store(new User(), "foo/bar");
+                    s2.SaveChanges();
+                }
+
+                await SetupPullReplicationAsync(name, sink, hub);
+                var timeout = 3000;
+                Assert.True(WaitForDocument(sink, "foo/bar", timeout), sink.Identifier);
+
+                var now = DateTime.Now;
+                var nextNow = now + TimeSpan.FromSeconds(60);
+                while (now < nextNow && hubServer.ServerStore.IdleDatabases.Count < 1)
+                {
+                    await Task.Delay(1000);
+                    now = DateTime.Now;
+                }
+
+                Assert.Equal(1, hubServer.ServerStore.IdleDatabases.Count);
+                Assert.Equal(0, sinkServer.ServerStore.IdleDatabases.Count);
+
+                var sinkDb = await GetDatabase(sinkServer, sink.Database);
+
+
+                await WaitAndAssertForValueAsync(() =>
+                {
+                    if (sinkDb.ReplicationLoader.OutgoingFailureInfo.Count == 0)
+                        return false;
+
+                    var outgoingFailureInfos = sinkDb.ReplicationLoader.OutgoingFailureInfo.Values.ToList();
+
+                    if (outgoingFailureInfos.Any(x => x.Errors.Count > 0) == false)
+                        return false;
+
+                    foreach (var failureInfo in outgoingFailureInfos)
+                    {
+                        foreach (var error in failureInfo.Errors)
+                        {
+                            if (error is not DatabaseIdleException idleException)
+                                continue;
+
+                            if (idleException.Message.Contains($"Raven.Client.Exceptions.Database.DatabaseIdleException: Cannot GetRemoteTaskTopology for PullReplicationAsSink connection because database '{hub.Database}' currently is idle."))
+                                return true;
+                        }
+                    }
+
+                    return false;
+                }, true, 30_000, 322);
+
+                using (var s2 = hub.OpenSession())
+                {
+                    s2.Store(new User(){Name = "EGOR"}, "foo/bar/322");
+                    s2.SaveChanges();
+                }
+
+                Assert.True(WaitForDocument(sink, "foo/bar/322", timeout * 5), sink.Identifier);
+            }
+        }
+        // HubToSink|SinkToHub
+        [RavenFact(RavenTestCategory.Replication)]
+        public async Task PullReplicationWithIdleShouldWork2()
+        {
+            var name = $"pull-replication {GetDatabaseName()}";
+
+            var hubSettings = new Dictionary<string, string>
+            {
+                [RavenConfiguration.GetKey(x => x.Databases.MaxIdleTime)] = "10",
+                [RavenConfiguration.GetKey(x => x.Databases.FrequencyToCheckForIdle)] = "3",
+                [RavenConfiguration.GetKey(x => x.Replication.RetryMaxTimeout)] = "1",
+                [RavenConfiguration.GetKey(x => x.Core.RunInMemory)] = "false"
+            };
+            var certificates = Certificates.SetupServerAuthentication(customSettings: hubSettings);
+            using (var server = GetNewServer(new ServerCreationOptions
+            {
+                CustomSettings = hubSettings
+            }))
+            using (var sink = GetDocumentStore(new Options
+            {
+                Server = server,
+                ModifyDatabaseName = s => $"Sink_{s}",
+                RunInMemory = false,
+                ClientCertificate = certificates.ServerCertificate.Value,
+                AdminCertificate = certificates.ServerCertificate.Value
+            }))
+            using (var hub = GetDocumentStore(new Options
+            {
+                Server = server,
+                ModifyDatabaseName = s => $"Hub_{s}",
+                RunInMemory = false,
+                ClientCertificate = certificates.ServerCertificate.Value,
+                AdminCertificate = certificates.ServerCertificate.Value
+            }))
+            {
+                Console.WriteLine("Sink URL: " + server.WebUrl);
+
+
+                await hub.Maintenance.ForDatabase(hub.Database).SendAsync(new PutPullReplicationAsHubOperation(new PullReplicationDefinition(name)
+                {
+                    Name = name,
+                    Mode = PullReplicationMode.SinkToHub | PullReplicationMode.HubToSink
+                }));
+
+
+                await hub.Maintenance.SendAsync(new RegisterReplicationHubAccessOperation(name,
+                    new ReplicationHubAccess
+                    {
+                        Name = name,
+                        CertificateBase64 = Convert.ToBase64String(certificates.ClientCertificate1.Value.Export(X509ContentType.Cert)),
+                    }));
+
+                var conStrName = "PullReplicationAsSink";
+                await sink.Maintenance.SendAsync(new PutConnectionStringOperation<RavenConnectionString>(new RavenConnectionString
+                {
+                    Database = hub.Database,
+                    Name = conStrName,
+                    TopologyDiscoveryUrls = hub.Urls
+                }));
+                await sink.Maintenance.SendAsync(new UpdatePullReplicationAsSinkOperation(new PullReplicationAsSink
+                {
+                    ConnectionStringName = conStrName,
+                    CertificateWithPrivateKey = Convert.ToBase64String(certificates.ClientCertificate1.Value.Export(X509ContentType.Pfx)),
+                    HubName = name,
+                    Mode = PullReplicationMode.HubToSink | PullReplicationMode.SinkToHub
+                }));
+
+                using (var s2 = hub.OpenSession())
+                {
+                    s2.Store(new User(), "foo/bar");
+                    s2.SaveChanges();
+                }
+
+                var timeout = 3000;
+                Assert.True(WaitForDocument(sink, "foo/bar", timeout * 5), sink.Identifier);
+
+                using (var s2 = sink.OpenSession())
+                {
+                    s2.Store(new User(), "foo/bar/228");
+                    s2.SaveChanges();
+                }
+
+                Assert.True(WaitForDocument(hub, "foo/bar/228", timeout * 5), hub.Identifier);
+
+
+                //var now = DateTime.Now;
+                //var nextNow = now + TimeSpan.FromSeconds(60);
+                //while (now < nextNow && server.ServerStore.IdleDatabases.Count < 1)
+                //{
+                //    await Task.Delay(1000);
+                //    now = DateTime.Now;
+                //}
+
+
+                //var sinkDb = await GetDatabase(sinkServer, sink.Database);
+
+
+                await WaitAndAssertForValueAsync(() =>
+                {
+                    var kvp123 = new Dictionary<IdleDatabaseStatistics, int>();
+                    foreach (var databaseKvp in server.ServerStore.DatabasesLandlord.LastRecentlyUsed.ForceEnumerateInThreadSafeManner())
+                    {
+                        var statistics = new IdleDatabaseStatistics
+                        {
+                            Name = databaseKvp.Key.ToString()
+                        };
+
+                        server.ServerStore.CanUnloadDatabase(databaseKvp.Key, databaseKvp.Value, statistics, out _);
+
+                        if (statistics.CanUnload == false)
+                            continue;
+
+                        if (statistics.Explanations.Count > 1)
+                        {
+                            Console.WriteLine($"Database: {statistics.Name} + {string.Join(Environment.NewLine, statistics.Explanations)}{Environment.NewLine}-------");
+                            Console.WriteLine();
+                            continue;
+                        }
+
+                        if (statistics.NumberOfActivePullReplicationAsSinkConnections == 0)
+                            continue;
+
+                        kvp123.Add(statistics, statistics.NumberOfActivePullReplicationAsSinkConnections);
+                    }
+
+                    if (kvp123.Count != 2)
+                        return false;
+
+                    if (kvp123.Any(x => x.Value == 0))
+                        return false;
+
+                    return true;
+                }, true, 75_000, 1000);
+            }
+        }
+
+
+
         //TODO write test for deletion! - make sure replication is stopped after we delete hub!
 
         public static Task<List<ModifyOngoingTaskResult>> SetupPullReplicationAsync(string remoteName, DocumentStore sink, params DocumentStore[] hub)
         {
-            return SetupPullReplicationAsync(remoteName, sink, null, hub);
+            return SetupPullReplicationAsync(remoteName, sink, null, PullReplicationMode.HubToSink, hub);
         }
 
-        public static async Task<List<ModifyOngoingTaskResult>> SetupPullReplicationAsync(string remoteName, DocumentStore sink, X509Certificate2 certificate, params DocumentStore[] hub)
+        public static async Task<List<ModifyOngoingTaskResult>> SetupPullReplicationAsync(string remoteName, DocumentStore sink, X509Certificate2 certificate, PullReplicationMode mode = PullReplicationMode.HubToSink, params DocumentStore[] hub)
         {
             var tasks = new List<Task<ModifyOngoingTaskResult>>();
             var resList = new List<ModifyOngoingTaskResult>();
             foreach (var store in hub)
             {
-                var pull = new PullReplicationAsSink(store.Database, $"ConnectionString-{store.Database}", remoteName) { Url = sink.Urls[0] };
+                var pull = new PullReplicationAsSink(store.Database, $"ConnectionString-{store.Database}", remoteName) { Url = sink.Urls[0], Mode = mode };
                 if (certificate != null)
                 {
                     pull.CertificateWithPrivateKey = Convert.ToBase64String(certificate.Export(X509ContentType.Pfx));

@@ -370,6 +370,9 @@ namespace Raven.Server.Documents.Replication
                             {
                                 lastEtag = DocumentsStorage.GetLastReplicatedEtagFrom(documentsContext, ConnectionInfo.SourceDatabaseId);
                                 lastChangeVector = DocumentsStorage.GetDatabaseChangeVector(documentsContext);
+
+
+                                var cv123 = DocumentsStorage.GetFullDatabaseChangeVector(documentsContext);
                             }
 
                             var status = ChangeVectorUtils.GetConflictStatus(changeVector, lastChangeVector);

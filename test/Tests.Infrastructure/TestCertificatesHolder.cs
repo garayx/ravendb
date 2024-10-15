@@ -178,6 +178,7 @@ namespace FastTests
             _getServerCertificatePath = () =>
             {
                 var path = getTemporaryFileName();
+                Console.WriteLine("ServerCertificatePath:" + parent.ServerCertificatePath);
                 File.Copy(parent.ServerCertificatePath, path, true);
 
                 return path;
