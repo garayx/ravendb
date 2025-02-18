@@ -17,6 +17,7 @@ namespace Raven.Server.Documents.Replication.ReplicationItems
         public LazyStringValue Collection;
         public LazyStringValue Id;
         public DocumentFlags Flags;
+        private Document _document;
 
         public override DynamicJsonValue ToDebugJson()
         {
@@ -39,6 +40,7 @@ namespace Raven.Server.Documents.Replication.ReplicationItems
                 Flags = doc.Flags,
                 TransactionMarker = doc.TransactionMarker,
                 LastModifiedTicks = doc.LastModified.Ticks,
+                _document = doc
             };
 
             return result;
@@ -198,12 +200,20 @@ namespace Raven.Server.Documents.Replication.ReplicationItems
                 Id = Id.Clone(context),
                 Data = Data?.Clone(context),
                 Collection = Collection?.Clone(context),
-                Flags = Flags
+                Flags = Flags,
+                _document = _document
             };
         }
 
         public override void InnerDispose()
         {
+            if (_document != null)
+            {
+                // this DocumentReplicationItem was created from document directly, we need to dispose the document, so it will call ForgetAbout for compressed documents, the data & id will be disposed here as well
+                _document.Dispose();
+                return;
+            }
+
             Data?.Dispose();
             Id?.Dispose();
             Collection?.Dispose();
