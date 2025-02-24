@@ -1108,12 +1108,21 @@ namespace Raven.Server.Utils.Cli
             return true;
         }
 
-        public static (
-            string WorkingSet,
-            string TotalUnmanagedAllocations,
-            string ManagedMemory,
-            string TotalScratchDirty,
-            string TotalMemoryMapped) MemoryStatsWithMemoryMappedInfo()
+        public struct MemoryStats
+        {
+            public long WorkingSetInBytes;
+            public long TotalUnmanagedAllocationsInBytes;
+            public long ManagedMemoryInBytes;
+            public long TotalScratchDirtyInBytes;
+            public long TotalMemoryMappedInBytes;
+            public string WorkingSet;
+            public string TotalUnmanagedAllocations;
+            public string ManagedMemory;
+            public string TotalScratchDirty;
+            public string TotalMemoryMapped;
+        }
+
+        public static MemoryStats MemoryStatsWithMemoryMappedInfo()
         {
             long totalMemoryMapped = 0;
             foreach (var mapping in NativeMemory.FileMapping)
@@ -1124,12 +1133,21 @@ namespace Raven.Server.Utils.Cli
                 }
             }
 
-            return (
-                SizeClient.Humane(MemoryInformation.GetWorkingSetInBytes()),
-                SizeClient.Humane(AbstractLowMemoryMonitor.GetUnmanagedAllocationsInBytes()),
-                SizeClient.Humane(AbstractLowMemoryMonitor.GetManagedMemoryInBytes()),
-                SizeClient.Humane(MemoryInformation.GetTotalScratchAllocatedMemoryInBytes()),
-                SizeClient.Humane(totalMemoryMapped));
+            var stats = new MemoryStats()
+            {
+                WorkingSetInBytes = MemoryInformation.GetWorkingSetInBytes(),
+                TotalUnmanagedAllocationsInBytes = AbstractLowMemoryMonitor.GetUnmanagedAllocationsInBytes(),
+                ManagedMemoryInBytes = AbstractLowMemoryMonitor.GetManagedMemoryInBytes(),
+                TotalScratchDirtyInBytes = MemoryInformation.GetTotalScratchAllocatedMemoryInBytes(),
+                TotalMemoryMappedInBytes = totalMemoryMapped
+            };
+            stats.WorkingSet = SizeClient.Humane(stats.WorkingSetInBytes);
+            stats.TotalUnmanagedAllocations = SizeClient.Humane(stats.TotalUnmanagedAllocationsInBytes);
+            stats.ManagedMemory = SizeClient.Humane(stats.ManagedMemoryInBytes);
+            stats.TotalScratchDirty = SizeClient.Humane(stats.TotalScratchDirtyInBytes);
+            stats.TotalMemoryMapped = SizeClient.Humane(stats.TotalMemoryMappedInBytes);
+
+            return stats;
         }
 
         private static bool CommandImportDir(List<string> args, RavenCli cli)

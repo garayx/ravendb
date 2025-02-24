@@ -482,13 +482,32 @@ namespace Raven.Server
 
             return new RavenCli().Start(server, Console.Out, Console.In, consoleColoring, false);
         }
-
+        public class MemoryMonitoringStats
+        {
+            public long WorkingSetInBytesMin;
+            public long WorkingSetInBytesMax;
+            public long WorkingSetInBytesAvg;
+            public long TotalUnmanagedAllocationsInBytesMin = long.MaxValue;
+            public long TotalUnmanagedAllocationsInBytesMax = long.MinValue;
+            public long TotalUnmanagedAllocationsInBytesAvg = 0;
+            public long ManagedMemoryInBytesMin = long.MaxValue;
+            public long ManagedMemoryInBytesMax = long.MinValue;
+            public long ManagedMemoryInBytesAvg = 0;
+            public long TotalScratchDirtyInBytesMin;
+            public long TotalScratchDirtyInBytesMax;
+            public long TotalScratchDirtyInBytesAvg;
+            public long TotalMemoryMappedInBytesMin;
+            public long TotalMemoryMappedInBytesMax;
+            public long TotalMemoryMappedInBytesAvg;
+        }
         public static void WriteServerStatsAndWaitForEsc(RavenServer server)
         {
             var workingSetText = PlatformDetails.RunningOnPosix == false ? "working set" : "    RSS    ";
             Console.WriteLine("Showing stats, press any key to close...");
             Console.WriteLine($"    {workingSetText}     | native mem      | managed mem     | mmap size          | scratch dirty  | reqs/sec       | docs (all dbs)");
             var i = 0;
+
+            var memStats = new MemoryMonitoringStats();
             while (Console.KeyAvailable == false)
             {
                 var stats = RavenCli.MemoryStatsWithMemoryMappedInfo();
@@ -522,6 +541,8 @@ namespace Raven.Server
 
                 Console.Write($"| {allDocs,14:#,#.#;;0}      ");
 
+                CalculateStats(i, memStats, stats);
+
                 for (int j = 0; j < 5 && Console.KeyAvailable == false; j++)
                 {
                     Thread.Sleep(100);
@@ -531,6 +552,37 @@ namespace Raven.Server
             Console.ReadKey(true);
             Console.WriteLine();
             Console.WriteLine($"Stats halted.");
+            Console.WriteLine($"Memory Statistics:{Environment.NewLine}" +
+                              $"\rnative mem min: {Client.Util.Size.Humane(memStats.TotalUnmanagedAllocationsInBytesMin)}, max: {Client.Util.Size.Humane(memStats.TotalUnmanagedAllocationsInBytesMax)} average: {Client.Util.Size.Humane(memStats.TotalUnmanagedAllocationsInBytesAvg)}{Environment.NewLine}" +
+                              $"\rmanaged mem min: {Client.Util.Size.Humane(memStats.ManagedMemoryInBytesMin)}, max: {Client.Util.Size.Humane(memStats.ManagedMemoryInBytesMax)} average: {Client.Util.Size.Humane(memStats.ManagedMemoryInBytesAvg)}");
+        }
+
+        private static void CalculateStats(int i, MemoryMonitoringStats memStats, RavenCli.MemoryStats stats)
+        {
+            if (stats.TotalUnmanagedAllocationsInBytes < memStats.TotalUnmanagedAllocationsInBytesMin)
+            {
+                memStats.TotalUnmanagedAllocationsInBytesMin = stats.TotalUnmanagedAllocationsInBytes;
+            }
+
+            if (stats.TotalUnmanagedAllocationsInBytes > memStats.TotalUnmanagedAllocationsInBytesMax)
+            {
+                memStats.TotalUnmanagedAllocationsInBytesMax = stats.TotalUnmanagedAllocationsInBytes;
+            }
+
+            memStats.TotalUnmanagedAllocationsInBytesAvg += (stats.TotalUnmanagedAllocationsInBytes - memStats.TotalUnmanagedAllocationsInBytesAvg) / i;
+
+
+            if (stats.ManagedMemoryInBytes < memStats.ManagedMemoryInBytesMin)
+            {
+                memStats.ManagedMemoryInBytesMin = stats.ManagedMemoryInBytes;
+            }
+
+            if (stats.ManagedMemoryInBytes > memStats.ManagedMemoryInBytesMax)
+            {
+                memStats.ManagedMemoryInBytesMax = stats.ManagedMemoryInBytes;
+            }
+
+            memStats.ManagedMemoryInBytesAvg += (stats.ManagedMemoryInBytes - memStats.ManagedMemoryInBytesAvg) / i;
         }
 
         public static void WriteThreadsInfoAndWaitForEsc(RavenServer server, int maxTopThreads, int updateIntervalInMs, double cpuUsageThreshold)
