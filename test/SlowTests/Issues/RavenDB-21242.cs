@@ -1,11 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Raven.Client.Documents;
 using Raven.Client.Documents.Operations;
+using Raven.Client.Documents.Subscriptions;
 using Raven.Client.Exceptions;
 using Raven.Client.ServerWide.Operations;
 using Raven.Server;
 using Raven.Server.ServerWide.Context;
+using SlowTests.Core.Utils.Entities;
+using Sparrow.Server;
 using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
@@ -16,6 +21,158 @@ namespace SlowTests.Issues
     {
         public RavenDB_21242(ITestOutputHelper output) : base(output)
         {
+        }
+
+        [RavenFact(RavenTestCategory.ClientApi)]
+        public async Task ShouldValidateUnusedIdsInSubscription()
+        {
+            var (nodes, leader) = await CreateRaftCluster(3);
+            using var store = GetDocumentStore(new Options()
+            {
+                Server = leader,
+                ReplicationFactor = 3
+            });
+
+            var database = store.Database;
+
+            var re = store.GetRequestExecutor();
+            var mre123 = new AsyncManualResetEvent();
+            re.OnTopologyUpdated += (sender, args) =>
+            {
+                mre123.Set();
+            };
+            Assert.True(await mre123.WaitAsync(TimeSpan.FromSeconds(15)), "no re");
+
+            var storeNode = re.Topology.Nodes.FirstOrDefault(x => x.Url == re.Url);
+            Assert.NotNull(storeNode);
+
+            var storeTag = storeNode.ClusterTag;
+            var newNode = re.Topology.Nodes.FirstOrDefault(x => x.ClusterTag != storeTag);
+            Assert.NotNull(newNode);
+            var processingNode = re.Topology.Nodes.FirstOrDefault(x => x.ClusterTag != storeTag && x.ClusterTag != newNode.ClusterTag);
+            Assert.NotNull(processingNode);
+
+            var subsId = await store.Subscriptions.CreateAsync<User>(new SubscriptionCreationOptions()
+            {
+                MentorNode = processingNode.ClusterTag
+            });
+            await using var subsWorker = store.Subscriptions.GetSubscriptionWorker<User>(new SubscriptionWorkerOptions(subsId)
+            {
+                TimeToWaitBeforeConnectionRetry = TimeSpan.FromMilliseconds(1234)
+            });
+
+            string deletedDbId = string.Empty;
+            string deletedNodeTag = string.Empty;
+            foreach (var node in nodes)
+            {
+                if (node.ServerStore.NodeTag == storeTag)
+                // if (node.ServerStore.NodeTag != storeTag && node.ServerStore.NodeTag != newNode.ClusterTag)
+                {
+                    var dbId = await GetDbId(node, database);
+                    deletedDbId = dbId;
+                    deletedNodeTag = node.ServerStore.NodeTag;
+                    break;
+                }
+            }
+
+            Assert.NotNull(deletedDbId);
+            Assert.NotNull(deletedNodeTag);
+
+            var mre = new AsyncManualResetEvent();
+            var processedItems = new HashSet<string>();
+            subsWorker.AfterAcknowledgment += batch =>
+            {
+                foreach (var item in batch.Items)
+                    processedItems.Add(item.Result.Name);
+
+                mre.Set();
+                return Task.CompletedTask;
+            };
+
+            var batchMre1 = new AsyncManualResetEvent();
+            var batchMre2 = new AsyncManualResetEvent();
+            bool batchMreResult;
+            bool haltProcessing = false;
+            _ = subsWorker.Run(async x =>
+            {
+                if (haltProcessing)
+                {
+                    batchMre1.Set();
+                    batchMreResult = await batchMre2.WaitAsync(TimeSpan.FromSeconds(15));
+                }
+
+
+            });
+
+            var id = "Users/1";
+            var cv = string.Empty;
+
+            using (var session = store.OpenSession())
+            {
+                var user = new User { Name = "E" };
+                session.Store(user, id);
+                session.SaveChanges();
+
+                cv = session.Advanced.GetChangeVectorFor(user);
+            }
+
+            Assert.True(await mre.WaitAsync(TimeSpan.FromSeconds(15)), "no ack");
+
+            var state = await store.Subscriptions.GetSubscriptionStateAsync(subsId);
+
+            Assert.NotEqual(state.ChangeVectorForNextBatchStartingPoint, cv);
+            Assert.Contains(cv, state.ChangeVectorForNextBatchStartingPoint);
+
+            await store.Maintenance.Server.SendAsync(
+                new DeleteDatabasesOperation(store.Database, true, deletedNodeTag, TimeSpan.FromSeconds(30)));
+            nodes.RemoveAll(x => x.ServerStore.NodeTag == deletedNodeTag);
+            Assert.True(await WaitForValueAsync(async () =>
+            {
+                var res = await store.Maintenance.Server.SendAsync(new GetDatabaseRecordOperation(store.Database));
+                return res != null && res.Topology.Count == 2;
+            }, true));
+
+            mre.Reset();
+
+
+            var cv2 = string.Empty;
+            haltProcessing = true;
+            using (var session = store.OpenSession())
+            {
+                var user = session.Load<User>(id);
+                user.Name = "G";
+                session.Store(user, id);
+                session.SaveChanges();
+
+                cv2 = session.Advanced.GetChangeVectorFor(user);
+            }
+
+            // make sure subscription batch checks for mres
+            var cv3 = string.Empty;
+            using (var store2 = new DocumentStore() { Urls = new[] { newNode.Url }, Conventions = { DisableTopologyUpdates = true } })
+            {
+                store2.Initialize();
+                await batchMre1.WaitAsync(TimeSpan.FromSeconds(15));
+                haltProcessing = false;
+                //Change the doc during batch processing 
+                using (var session = store.OpenSession())
+                {
+                    var user = session.Load<User>(id);
+                    user.Name = "O";
+                    session.Store(user, id);
+                    session.SaveChanges();
+
+                    cv3 = session.Advanced.GetChangeVectorFor(user);
+                }
+
+                await WaitForChangeVectorInClusterAsync(nodes, database);
+                batchMre2.Set();
+            }
+
+            Assert.True(await mre.WaitAsync(TimeSpan.FromSeconds(15)), "no ack");
+
+            var docsCount = await WaitForValueAsync(() => processedItems.Count, 3);
+            Assert.Equal(3, docsCount);
         }
 
         [RavenFact(RavenTestCategory.ClientApi)]

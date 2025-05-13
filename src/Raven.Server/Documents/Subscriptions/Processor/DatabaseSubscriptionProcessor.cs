@@ -75,7 +75,8 @@ namespace Raven.Server.Documents.Subscriptions.Processor
 
         protected override SubscriptionBatchItem GetBatchItem(T item)
         {
-            var batchItem = ShouldSend(item, out var reason);
+            SubscriptionBatchItem batchItem = ShouldSend(item, out var reason);
+            Console.WriteLine($"SubscriptionBatchItemStatus: {batchItem.Status}, From:{batchItem.FetchingFrom}, Id: {batchItem.Document.Id} / CV: { batchItem.Document.ChangeVector}, {reason}");
 
             if (batchItem.Status == SubscriptionBatchItemStatus.Send)
             {

@@ -50,11 +50,11 @@ public static class Program
             try
             {
                 using (var testOutputHelper = new ConsoleTestOutputHelper())
-                using (var test = new MultiVectorSearchClientAPI(testOutputHelper))
+                using (var test = new RavenDB_21242(testOutputHelper))
                 {
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
 
-                    test.CanSearchByMultipleVectorsByRavenVector();
+                    await test.ShouldValidateUnusedIdsInSubscription();
                 }
             }
             catch (Exception e)
