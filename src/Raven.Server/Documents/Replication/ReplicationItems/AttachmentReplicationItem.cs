@@ -9,6 +9,7 @@ using Sparrow.Json.Parsing;
 using Sparrow.Server;
 using Sparrow.Server.Utils;
 using Voron;
+using Voron.Data;
 
 namespace Raven.Server.Documents.Replication.ReplicationItems
 {
@@ -172,6 +173,16 @@ namespace Raven.Server.Documents.Replication.ReplicationItems
         }
         public unsafe void WriteStream(Stream stream, byte[] tempBuffer)
         {
+            if (Stream is not VoronStream)
+            {
+                Console.WriteLine($"### Stream is not VoronStream{Environment.NewLine}{Environment.StackTrace}");
+            }
+            if (Stream.CanRead == false)
+            {
+                Console.WriteLine($"### Stream.CanRead == false is not VoronStream{Environment.NewLine}{Environment.StackTrace}");
+            }
+
+
             fixed (byte* pTemp = tempBuffer)
             {
                 int tempBufferPos = 0;
