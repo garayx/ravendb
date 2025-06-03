@@ -1336,6 +1336,7 @@ namespace Raven.Server.Documents.Replication
         internal class TestingStuff
         {
             public Action OnDocumentSenderFetchNewItem;
+            public Action<AttachmentReplicationItem> OnSendingAttachment;
 
             public Action<Dictionary<Slice, AttachmentReplicationItem>> OnMissingAttachmentStream;
 

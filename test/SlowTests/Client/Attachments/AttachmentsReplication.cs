@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using FastTests;
 using FastTests.Server.Replication;
@@ -37,6 +38,130 @@ namespace SlowTests.Client.Attachments
         public AttachmentsReplication(ITestOutputHelper output) : base(output)
         {
         }
+
+
+        [Fact]
+        public async Task TestOfTheTests()
+        {
+            using (var store1 = GetDocumentStore())
+            {
+
+                //using (var context = JsonOperationContext.ShortTermSingleUse())
+                //{
+                //    var configuration = new RevisionsConfiguration
+                //    {
+                //        Default = new RevisionsCollectionConfiguration
+                //        {
+                //            Disabled = false,
+                //            MinimumRevisionsToKeep = 1,
+                //            PurgeOnDelete = true
+                //        }
+                //    };
+
+                //    await Server.ServerStore.ModifyDatabaseRevisions(context,
+                //        store1.Database,
+                //        DocumentConventions.Default.Serialization.DefaultConverter.ToBlittable(configuration,
+                //            context), Guid.NewGuid().ToString());
+                //}
+
+                using (var session = store1.OpenSession())
+                {
+                    session.Store(new User { Name = "Fitzchak " + 0 }, "users/" + 0);
+                    session.SaveChanges();
+                }
+
+                var stream1 = new MemoryStream([3, 2, 2]);
+                store1.Operations.Send(new PutAttachmentOperation("users/" + 0, "file" + 0, stream1, "image/png"));
+                stream1.Position = 0;
+
+
+                using var store2 = GetDocumentStore();
+
+                Console.WriteLine("SRC: " + store1.Urls.First());
+                Console.WriteLine("Dest: " + store2.Urls.First());
+
+                var sourceDb = await Server.ServerStore.DatabasesLandlord.TryGetOrCreateResourceStore(store1.Database);
+                sourceDb.ReplicationLoader.ForTestingPurposesOnly().OnOutgoingReplicationStart = (o) =>
+                {
+                    if (o.Destination.Database == store2.Database)
+                    {
+                        o.ForTestingPurposesOnly().OnSendingAttachment = (attachment) =>
+                        {
+
+
+                            if (attachment.Key.ToString().StartsWith("users/" + 1))
+                            {
+                                Console.WriteLine("MAGIC");
+
+                                //var stream2= new MemoryStream([2,2,8]);
+                                //store1.Operations.Send(new PutAttachmentOperation("users/" + 1, "file" + 1, stream2, "image/png"));
+
+                                store1.Operations.Send(new DeleteAttachmentOperation("users/" + 1, "file" + 1));
+
+                                //using (var session = store1.OpenSession())
+                                //{
+                                //    session.Delete("users/" + 1);
+                                //    session.SaveChanges();
+                                //}
+                            }
+                            else
+                            {
+                                Console.WriteLine("NO MAGIC");
+                            }
+
+
+                        };
+                    }
+                };
+                await SetupReplicationAsync(store1, store2);
+                await EnsureReplicatingAsync(store1, store2);
+
+
+                using (var session = store2.OpenSession())
+                {
+                    session.Delete("users/" + 0);
+                    session.SaveChanges();
+                }
+
+
+
+
+                using (var session = store1.OpenSession())
+                {
+                    session.Store(new User { Name = "Fitzchak " + 1 }, "users/" + 1);
+                    session.SaveChanges();
+                }
+
+                store1.Operations.Send(new PutAttachmentOperation("users/" + 1, "file" + 1, stream1, "image/png"));
+
+
+
+
+                Console.WriteLine("WAIT");
+                Thread.Sleep(int.MaxValue);
+
+
+
+
+                await EnsureReplicatingAsync(store1, store2);
+
+
+
+
+
+
+
+
+
+
+            }
+        }
+
+
+
+
+
+
 
         public static Guid dbId1 = new Guid("00000000-48c4-421e-9466-000000000000");
         public static Guid dbId2 = new Guid("99999999-48c4-421e-9466-000000000000");

@@ -721,7 +721,18 @@ namespace Raven.Server.Documents.Replication
             if (item is AttachmentReplicationItem attachment)
             {
                 if (ShouldSendAttachmentStream(attachment))
+                {
+
+
                     _replicaAttachmentStreams[attachment.Base64Hash] = attachment;
+                }
+                else
+                {
+                    if (_parent.ForTestingPurposes?.OnSendingAttachment != null)
+                    {
+                        _parent.ForTestingPurposes.OnSendingAttachment.Invoke(attachment);
+                    }
+                }
 
                 if (MissingAttachmentsInLastBatch)
                     state.MissingAttachmentBase64Hashes?.Remove(attachment.Base64Hash);
