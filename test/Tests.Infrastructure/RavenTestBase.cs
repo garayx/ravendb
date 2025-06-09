@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Reflection;
@@ -16,16 +17,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Conventions;
+using Raven.Client.Documents.Operations;
 using Raven.Client.Exceptions;
 using Raven.Client.Exceptions.Cluster;
 using Raven.Client.Exceptions.Database;
+using Raven.Client.Http;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using Raven.Client.Util;
 using Raven.Server;
 using Raven.Server.Config;
+using Raven.Server.Documents.Queries;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Collections;
+using Sparrow.Json;
 using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
@@ -220,6 +226,16 @@ namespace FastTests
 
                     store.BeforeDispose += (sender, args) =>
                     {
+                        try
+                        {
+                            var x = store.Operations.Send(new GetMissingAttachmentsOperation());
+                        }
+                        catch (Raven.Client.Exceptions.Database.DatabaseDoesNotExistException e)
+                        {
+                           // expected
+                        }
+
+
                         var realException = Context.GetException();
                         try
                         {
@@ -279,6 +295,29 @@ namespace FastTests
             catch (TimeoutException te)
             {
                 throw new TimeoutException($"{te.Message} {Environment.NewLine} {te.StackTrace}{Environment.NewLine}Servers states:{Environment.NewLine}{Cluster.GetLastStatesFromAllServersOrderedByTime()}");
+            }
+        }
+        public class GetMissingAttachmentsOperation : IOperation<string>
+        {
+
+            public RavenCommand<string> GetCommand(IDocumentStore store, DocumentConventions conventions, JsonOperationContext context, HttpCache cache)
+            {
+                return new GetMissingAttachmentsCommand();
+            }
+
+            public class GetMissingAttachmentsCommand : RavenCommand<string>
+            {
+                public GetMissingAttachmentsCommand()
+                {
+                }
+
+                public override bool IsReadRequest => true;
+
+                public override HttpRequestMessage CreateRequest(JsonOperationContext ctx, ServerNode node, out string url)
+                {
+                    url = $"{node.Url}/databases/{node.Database}/attachments/missing";
+                    return new HttpRequestMessage(HttpMethod.Get, url);
+                }
             }
         }
 
