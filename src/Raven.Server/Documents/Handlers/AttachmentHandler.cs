@@ -6,14 +6,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
-using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Raven.Client;
 using Raven.Client.Documents.Attachments;
 using Raven.Client.Documents.Operations.Attachments;
-using Raven.Client.Exceptions;
+using Raven.Client.Exceptions.Documents.Indexes;
+using Raven.Client.Json.Serialization;
 using Raven.Server.Routing;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Json;
@@ -386,6 +388,114 @@ namespace Raven.Server.Documents.Handlers
                 NoContentStatus();
             }
         }
+
+
+
+        [RavenAction("/databases/*/attachments/missing", "GET", AuthorizationStatus.ValidUser, EndpointType.Write, DisableOnCpuCreditsExhaustion = true)]
+        public async Task GetMissingAttachments()
+        {
+            var start = GetLongQueryString("start", false) ?? 0;
+            var pageSize = GetPageSize();
+
+            var revisionsStorage = Database.DocumentsStorage.RevisionsStorage;
+            using (ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+            using (context.OpenReadTransaction())
+            {
+                var revisions = revisionsStorage.GetRevisionsBinEntries(context, start, pageSize);
+                foreach (var r in revisions)
+                {
+                    if (r.Flags.Contain(DocumentFlags.HasAttachments))
+                    {
+                        var currentAttachmentsInMetadata = AttachmentsStorage.GetAttachmentsFromDocumentMetadata(r.Data).ToList();
+
+                        List<Attachment> currentAttachmentsInTable = Database.DocumentsStorage.AttachmentsStorage.GetAttachmentsForDocument(context, AttachmentType.Revision, r.Id, r.ChangeVector).ToList();
+                        if (currentAttachmentsInMetadata.Count != currentAttachmentsInTable.Count)
+                        {
+                            Debug.Assert(currentAttachmentsInMetadata.Count == currentAttachmentsInTable.Count,
+                                "currentAttachmentsInMetadata.Count == currentAttachmentsInTable.Count");
+
+                            Console.WriteLine($"$$$ currentAttachmentsInMetadata.Count != currentAttachmentsInTable.Count for delete revisions");
+                            foreach (var a in currentAttachmentsInMetadata)
+                            {
+                                AttachmentName attachment = JsonDeserializationClient.AttachmentName(a);
+                                var exists = currentAttachmentsInTable.FirstOrDefault(x => x.Name == attachment.Name && x.Base64Hash.ToString() == attachment.Hash);
+                                if (exists == null)
+                                {
+                                    MissingAttachmentException.ThrowForAttachment(r.Id, attachment.Name, attachment.Hash, AttachmentType.Revision);
+                                }
+                            }
+                        }
+
+                        foreach (var a in currentAttachmentsInMetadata)
+                        {
+                            AttachmentName attachment = JsonDeserializationClient.AttachmentName(a);
+
+
+                            using (Slice.From(context.Allocator, attachment.Hash, out var hashSlice))
+                            {
+                                var count = AttachmentsStorage.GetCountOfAttachmentsForHash(context, hashSlice);
+
+                                if (count == 0)
+                                {
+                                    MissingAttachmentException.ThrowForHash(r.Id, attachment.Name, attachment.Hash, AttachmentType.Revision);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                revisions = Database.DocumentsStorage.RevisionsStorage.GetRevisionsFrom(context, start, pageSize);
+
+                foreach (var r in revisions)
+                {
+                    if (r.Flags.Contain(DocumentFlags.HasAttachments))
+                    {
+                        var currentAttachmentsInMetadata = AttachmentsStorage.GetAttachmentsFromDocumentMetadata(r.Data).ToList();
+
+                        List<Attachment> currentAttachmentsInTable = Database.DocumentsStorage.AttachmentsStorage.GetAttachmentsForDocument(context, AttachmentType.Revision, r.Id, r.ChangeVector).ToList();
+                        if (currentAttachmentsInMetadata.Count != currentAttachmentsInTable.Count)
+                        {
+                            Debug.Assert(currentAttachmentsInMetadata.Count == currentAttachmentsInTable.Count,
+                                "currentAttachmentsInMetadata.Count == currentAttachmentsInTable.Count");
+
+                            Console.WriteLine($"$$$ currentAttachmentsInMetadata.Count != currentAttachmentsInTable.Count for revisions");
+
+                            foreach (var a in currentAttachmentsInMetadata)
+                            {
+                                AttachmentName attachment = JsonDeserializationClient.AttachmentName(a);
+                                var exists = currentAttachmentsInTable.FirstOrDefault(x => x.Name == attachment.Name && x.Base64Hash.ToString() == attachment.Hash);
+                                if (exists == null)
+                                {
+                                    MissingAttachmentException.ThrowForAttachment(r.Id, attachment.Name, attachment.Hash, AttachmentType.Revision);
+                                }
+                            }
+                        }
+
+                        foreach (var a in currentAttachmentsInMetadata)
+                        {
+                            AttachmentName attachment = JsonDeserializationClient.AttachmentName(a);
+
+
+                            using (Slice.From(context.Allocator, attachment.Hash, out var hashSlice))
+                            {
+                                var count = AttachmentsStorage.GetCountOfAttachmentsForHash(context, hashSlice);
+
+                                if (count == 0)
+                                {
+                                    MissingAttachmentException.ThrowForHash(r.Id, attachment.Name, attachment.Hash, AttachmentType.Revision);
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+
+
+
+
+
 
         public class MergedPutAttachmentCommand : TransactionOperationsMerger.MergedTransactionCommand
         {
