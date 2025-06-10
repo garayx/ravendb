@@ -22,6 +22,7 @@ using Raven.Client.Documents.Operations;
 using Raven.Client.Exceptions;
 using Raven.Client.Exceptions.Cluster;
 using Raven.Client.Exceptions.Database;
+using Raven.Client.Exceptions.Documents.Indexes;
 using Raven.Client.Http;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
@@ -228,13 +229,33 @@ namespace FastTests
                     {
                         try
                         {
-                            var x = store.Operations.Send(new GetMissingAttachmentsOperation());
-                        }
-                        catch (Raven.Client.Exceptions.Database.DatabaseDoesNotExistException e)
-                        {
-                           // expected
-                        }
+                            var missingAttachments = store.Operations.Send(new GetMissingAttachmentsOperation());
 
+                            if (missingAttachments.Results.Any())
+                            {
+                                var sb = new StringBuilder();
+                                sb.AppendLine($"There are missing attachments in database '{name}' on server '{serverToUse.ServerStore.NodeTag}'.");
+                                foreach (var kvp in missingAttachments.Results)
+                                {
+                                    sb.AppendLine($"Collection: {kvp.Key}");
+                                    foreach (var attachment in kvp.Value)
+                                    {
+                                        sb.AppendLine($"Attachment: {attachment.Name}, Hash: {attachment.Hash}");
+                                    }
+                                }
+
+                                throw new MissingAttachmentException(sb.ToString());
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            if (e is MissingAttachmentException)
+                            {
+                                throw;
+                            }
+
+                            // expected
+                        }
 
                         var realException = Context.GetException();
                         try
@@ -297,15 +318,15 @@ namespace FastTests
                 throw new TimeoutException($"{te.Message} {Environment.NewLine} {te.StackTrace}{Environment.NewLine}Servers states:{Environment.NewLine}{Cluster.GetLastStatesFromAllServersOrderedByTime()}");
             }
         }
-        public class GetMissingAttachmentsOperation : IOperation<string>
+        public class GetMissingAttachmentsOperation : IOperation<MissingAttachmentsResult>
         {
 
-            public RavenCommand<string> GetCommand(IDocumentStore store, DocumentConventions conventions, JsonOperationContext context, HttpCache cache)
+            public RavenCommand<MissingAttachmentsResult> GetCommand(IDocumentStore store, DocumentConventions conventions, JsonOperationContext context, HttpCache cache)
             {
                 return new GetMissingAttachmentsCommand();
             }
 
-            public class GetMissingAttachmentsCommand : RavenCommand<string>
+            public class GetMissingAttachmentsCommand : RavenCommand<MissingAttachmentsResult>
             {
                 public GetMissingAttachmentsCommand()
                 {
@@ -318,7 +339,63 @@ namespace FastTests
                     url = $"{node.Url}/databases/{node.Database}/attachments/missing";
                     return new HttpRequestMessage(HttpMethod.Get, url);
                 }
+
+                public override void SetResponse(JsonOperationContext context, BlittableJsonReaderObject response, bool fromCache)
+                {
+                    if (response == null)
+                    {
+                        Result = null;
+                        return;
+                    }
+                    var deserialize = JsonDeserializationBase.GenerateJsonDeserializationRoutine<MissingAttachmentsResult>();
+                    Result = deserialize.Invoke(response);
+                }
             }
+        }
+
+        public class MissingAttachmentsResult
+        {
+            public Dictionary<string, List<MissingAttachmentInfo>> Results { get; set; }
+
+            public static MissingAttachmentsResult FromBlittable(BlittableJsonReaderObject response)
+            {
+                var result = new MissingAttachmentsResult
+                {
+                    Results = new Dictionary<string, List<MissingAttachmentInfo>>()
+                };
+
+                if (response.TryGet("Results", out BlittableJsonReaderArray resultsArray) && resultsArray != null)
+                {
+                    foreach (BlittableJsonReaderObject item in resultsArray)
+                    {
+                        foreach (var property in item.GetPropertyNames())
+                        {
+                            if (item.TryGet(property, out BlittableJsonReaderArray attachmentsArray) && attachmentsArray != null)
+                            {
+                                var attachments = new List<MissingAttachmentInfo>();
+                                foreach (BlittableJsonReaderObject attObj in attachmentsArray)
+                                {
+                                    var info = new MissingAttachmentInfo
+                                    {
+                                        Name = attObj.TryGet("Name", out string name) ? name : null,
+                                        Hash = attObj.TryGet("Hash", out string hash) ? hash : null
+                                    };
+                                    attachments.Add(info);
+                                }
+                                result.Results[property] = attachments;
+                            }
+                        }
+                    }
+                }
+
+                return result;
+            }
+        }
+
+        public class MissingAttachmentInfo
+        {
+            public string Name { get; set; }
+            public string Hash { get; set; }
         }
 
         private static void CheckIfDatabaseExists(RavenServer server, string name)
