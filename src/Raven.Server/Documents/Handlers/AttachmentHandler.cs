@@ -14,6 +14,7 @@ using Raven.Client;
 using Raven.Client.Documents.Attachments;
 using Raven.Client.Documents.Operations.Attachments;
 using Raven.Server.Routing;
+using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Json;
 using Voron;
@@ -389,99 +390,178 @@ namespace Raven.Server.Documents.Handlers
         [RavenAction("/databases/*/attachments/missing", "GET", AuthorizationStatus.ValidUser, EndpointType.Write, DisableOnCpuCreditsExhaustion = true)]
         public async Task GetMissingAttachments()
         {
+            var types = new List<AttachmentType>(2);
+            var typeString = GetStringQueryString("type", false);
+            var collection = GetStringQueryString("collection", true);
+            if (string.IsNullOrEmpty(typeString) == false)
+            {
+                if (Enum.TryParse(typeString, true, out AttachmentType type) == false)
+                {
+                    throw new ArgumentException($"Query string '{typeString}' was not recognized as valid type");
+                }
+
+                types.Add(type);
+            }
+            else
+            {
+                types.Add(AttachmentType.Document);
+                types.Add(AttachmentType.Revision);
+            }
+
+            if (string.IsNullOrEmpty(collection) == false)
+            {
+                if (collection.Equals(Constants.Documents.Collections.AllDocumentsCollection, StringComparison.OrdinalIgnoreCase) == false)
+                {
+                    if (Database.DocumentsStorage.GetCollection(collection, true) == null)
+                        throw new ArgumentException($"Query string '{collection}' was not recognized as valid collection name");
+                }
+            }
+
             var start = GetLongQueryString("start", false) ?? 0;
             var pageSize = GetPageSize();
 
-            var revisionsStorage = Database.DocumentsStorage.RevisionsStorage;
             using (var token = CreateHttpRequestBoundOperationToken())
             using (ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
             using (context.OpenReadTransaction())
             await using (var writer = new AsyncBlittableJsonTextWriter(context, ResponseBodyStream()))
             {
                 writer.WriteStartObject();
-                writer.WritePropertyName("Results");
-                writer.WriteStartObject();
 
-                bool firstRevision = true;
-                var deserializationRoutine = JsonDeserializationBase.GenerateJsonDeserializationRoutine<AttachmentName>();
-                // Helper local function to process revisions and write missing attachments
-                void WriteMissingAttachmentsForRevisions(IEnumerable<Document> revisions)
+                var deserializationRoutine = JsonDeserializationBase.GenerateJsonDeserializationRoutine<MissingAttachmentInfo>();
+                if (types.Contains(AttachmentType.Revision))
                 {
-                    foreach (var r in revisions)
-                    {
-                        token.ThrowIfCancellationRequested();
-                        if (r.Flags.Contain(DocumentFlags.HasAttachments))
-                        {
-                            var currentAttachmentsInMetadata = AttachmentsStorage.GetAttachmentsFromDocumentMetadata(r.Data).ToList();
-                            var currentAttachmentsInTable = Database.DocumentsStorage.AttachmentsStorage.GetAttachmentsForDocument(context, AttachmentType.Revision, r.Id, r.ChangeVector).ToList();
-
-                            // Find missing attachments by name/hash
-                            var missing = new List<AttachmentName>();
-                            foreach (var a in currentAttachmentsInMetadata)
-                            {
-                                AttachmentName attachment = deserializationRoutine(a);
-                                var exists = currentAttachmentsInTable.FirstOrDefault(x => x.Name == attachment.Name && x.Base64Hash.ToString() == attachment.Hash);
-                                if (exists == null)
-                                {
-                                 //   attachment.MissingType = "AttachmentTable";
-                                    missing.Add(attachment);
-                                }
-                            }
-
-                            // Also check for missing hashes in storage
-                            foreach (var a in currentAttachmentsInMetadata)
-                            {
-                                AttachmentName attachment = deserializationRoutine(a);
-                                using (Slice.From(context.Allocator, attachment.Hash, out var hashSlice))
-                                {
-                                    var count = AttachmentsStorage.GetCountOfAttachmentsForHash(context, hashSlice);
-                                    if (count == 0)
-                                    {
-                                   //     attachment.MissingType = "AttachmentHash";
-                                        missing.Add(attachment);
-                                    }
-                                }
-                            }
-
-                            if (missing.Count > 0)
-                            {
-                                if (!firstRevision)
-                                    writer.WriteComma();
-                                firstRevision = false;
-
-                                writer.WritePropertyName(r.Id);
-                                writer.WriteStartArray();
-                                bool firstAttachment = true;
-                                foreach (var att in missing)
-                                {
-                                    if (!firstAttachment)
-                                        writer.WriteComma();
-                                    firstAttachment = false;
-
-                                    writer.WriteStartObject();
-                                    writer.WritePropertyName("Name");
-                                    writer.WriteString(att.Name);
-                                    writer.WriteComma();
-                                    writer.WritePropertyName("Hash");
-                                    writer.WriteString(att.Hash);
-                                    writer.WriteEndObject();
-                                }
-                                writer.WriteEndArray();
-                            }
-                        }
-                    }
+                    writer.WritePropertyName("Revisions");
+                    writer.WriteStartObject();
+                    WriteMissingAttachments(Database.DocumentsStorage.RevisionsStorage.GetRevisionsFrom(context, start, pageSize), token, context, deserializationRoutine, writer, AttachmentType.Revision);
+                    writer.WriteEndObject();
                 }
 
-                var revisionsBin = revisionsStorage.GetRevisionsBinEntries(context, start, pageSize);
-                WriteMissingAttachmentsForRevisions(revisionsBin);
+                if (types.Contains(AttachmentType.Document))
+                {
+                    writer.WriteComma();
+                    writer.WritePropertyName("Documents");
+                    writer.WriteStartObject();
+                    if (collection != Constants.Documents.Collections.AllDocumentsCollection)
+                    {
+                        // we are looking for attachments in a specific collection
+                        WriteMissingAttachments(Database.DocumentsStorage.GetDocumentsFrom(
+                            context,
+                            collection,
+                            0,
+                            0,
+                            pageSize), token, context, deserializationRoutine, writer, AttachmentType.Document);
+                    }
+                    else
+                    {
+                        // we are looking for attachments in all collections
+                        WriteMissingAttachments(Database.DocumentsStorage.GetDocumentsFrom(
+                            context,
+                            0,
+                            start,
+                            pageSize), token, context, deserializationRoutine, writer, AttachmentType.Document);
+                    }
+                    writer.WriteEndObject();
+                }
 
-                var revisions = Database.DocumentsStorage.RevisionsStorage.GetRevisionsFrom(context, start, pageSize);
-                WriteMissingAttachmentsForRevisions(revisions);
-
-                writer.WriteEndObject();
                 writer.WriteEndObject();
                 await writer.FlushAsync(Database.DatabaseShutdown);
             }
+        }
+
+        private void WriteMissingAttachments(IEnumerable<Document> revisions, OperationCancelToken token, DocumentsOperationContext context,
+            Func<BlittableJsonReaderObject, MissingAttachmentInfo> deserializationRoutine, AsyncBlittableJsonTextWriter writer, AttachmentType attachmentType)
+        {
+            bool firstRevision = true;
+            foreach (var r in revisions)
+            {
+                token.ThrowIfCancellationRequested();
+                if (r.Flags.Contain(DocumentFlags.HasAttachments))
+                {
+                    var currentAttachmentsInMetadata = AttachmentsStorage.GetAttachmentsFromDocumentMetadata(r.Data).ToList();
+                    var currentAttachmentsInTable = Database.DocumentsStorage.AttachmentsStorage.GetAttachmentsForDocument(context, AttachmentType.Revision, r.Id, r.ChangeVector).ToList();
+
+                    // Find missing attachments by name/hash
+                    var missing = new List<MissingAttachmentInfo>();
+                    foreach (var a in currentAttachmentsInMetadata)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        MissingAttachmentInfo attachment = deserializationRoutine(a);
+                        var exists = currentAttachmentsInTable.FirstOrDefault(x => x.Name == attachment.Name && x.Base64Hash.ToString() == attachment.Hash);
+                        if (exists == null)
+                        {
+                            attachment.MissingType = MissingType.Table;
+                            attachment.AttachmentType = attachmentType;
+                            missing.Add(attachment);
+                        }
+                    }
+
+                    // Also check for missing hashes in storage
+                    foreach (var a in currentAttachmentsInMetadata)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        MissingAttachmentInfo attachment = deserializationRoutine(a);
+                        using (Slice.From(context.Allocator, attachment.Hash, out var hashSlice))
+                        {
+                            var count = AttachmentsStorage.GetCountOfAttachmentsForHash(context, hashSlice);
+                            if (count == 0)
+                            {
+                                attachment.MissingType = MissingType.Hash;
+                                attachment.AttachmentType = attachmentType;
+
+                                missing.Add(attachment);
+                            }
+                        }
+                    }
+
+                    if (missing.Count > 0)
+                    {
+                        if (!firstRevision)
+                            writer.WriteComma();
+                        firstRevision = false;
+
+                        writer.WritePropertyName(r.Id);
+                        writer.WriteStartArray();
+                        bool firstAttachment = true;
+                        foreach (var att in missing)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            if (!firstAttachment)
+                                writer.WriteComma();
+                            firstAttachment = false;
+
+                            writer.WriteStartObject();
+                            writer.WritePropertyName(nameof(MissingAttachmentInfo.Name));
+                            writer.WriteString(att.Name);
+                            writer.WriteComma();
+                            writer.WritePropertyName(nameof(MissingAttachmentInfo.Hash));
+                            writer.WriteString(att.Hash);
+                            writer.WriteComma();
+                            writer.WritePropertyName(nameof(MissingAttachmentInfo.MissingType));
+                            writer.WriteString(att.MissingType.ToString());
+                            writer.WriteComma();
+                            writer.WritePropertyName(nameof(MissingAttachmentInfo.AttachmentType));
+                            writer.WriteString(att.AttachmentType.ToString());
+                            writer.WriteEndObject();
+                        }
+                        writer.WriteEndArray();
+                    }
+                }
+            }
+        }
+
+        public class MissingAttachmentInfo
+        {
+            public string Name { get; set; }
+            public string Hash { get; set; }
+            public MissingType MissingType { get; set; }
+            public AttachmentType AttachmentType { get; set; }
+        }
+
+        public enum MissingType
+        {
+            None,
+            Table,
+            Hash
         }
 
         public class MergedPutAttachmentCommand : TransactionOperationsMerger.MergedTransactionCommand

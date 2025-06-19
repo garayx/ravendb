@@ -1260,11 +1260,7 @@ namespace RachisTests.DatabaseCluster
             var (_, leader) = await CreateRaftCluster(3);
             var result = await CreateDatabaseInCluster(databaseName, 1, leader.WebUrl);
 
-            using (var store = new DocumentStore
-            {
-                Database = databaseName,
-                Urls = new[] { leader.WebUrl }
-            }.Initialize())
+            using (var store = GetDocumentStore2(new[] { leader.WebUrl }, databaseName))
             {
                 using (var commands = store.Commands())
                 {
@@ -1408,35 +1404,11 @@ namespace RachisTests.DatabaseCluster
 
             await CreateDatabaseInCluster(database, 3, cluster.Leader.WebUrl);
 
-            using var store1 = new DocumentStore
-            {
-                Database = database,
-                Urls = new[] { cluster.Nodes[0].WebUrl },
-                Conventions = new DocumentConventions
-                {
-                    DisableTopologyUpdates = true
-                }
-            }.Initialize();
+            using var store1 = GetDocumentStore2(new[] { cluster.Nodes[0].WebUrl }, database, conventions: new DocumentConventions { DisableTopologyUpdates = true });
 
-            using var store2 = new DocumentStore
-            {
-                Database = database,
-                Urls = new[] { cluster.Nodes[1].WebUrl },
-                Conventions = new DocumentConventions
-                {
-                    DisableTopologyUpdates = true
-                }
-            }.Initialize();
+            using var store2 = GetDocumentStore2(new[] { cluster.Nodes[1].WebUrl }, database, conventions: new DocumentConventions { DisableTopologyUpdates = true });
 
-            using var store3 = new DocumentStore
-            {
-                Database = database,
-                Urls = new[] { cluster.Nodes[2].WebUrl },
-                Conventions = new DocumentConventions
-                {
-                    DisableTopologyUpdates = true
-                }
-            }.Initialize();
+            using var store3 = GetDocumentStore2(new[] { cluster.Nodes[2].WebUrl }, database, conventions: new DocumentConventions { DisableTopologyUpdates = true });
 
             using (var session = store1.OpenAsyncSession())
             {

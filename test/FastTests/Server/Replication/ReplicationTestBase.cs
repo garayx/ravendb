@@ -4,11 +4,16 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Nest;
+using Raven.Client;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Commands;
+using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Operations.Attachments;
 using Raven.Client.Documents.Operations.ConnectionStrings;
@@ -17,11 +22,13 @@ using Raven.Client.Documents.Operations.OngoingTasks;
 using Raven.Client.Documents.Operations.Replication;
 using Raven.Client.Documents.Replication;
 using Raven.Client.Exceptions;
+using Raven.Client.Exceptions.Documents.Indexes;
 using Raven.Client.Http;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using Raven.Server;
 using Raven.Server.Documents;
+using Raven.Server.Monitoring.Snmp.Objects.Database;
 using Raven.Server.Web;
 using Raven.Server.Web.System;
 using Sparrow.Json;
@@ -29,6 +36,7 @@ using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
+using static Raven.Server.Documents.Handlers.AttachmentHandler;
 
 namespace FastTests.Server.Replication
 {
@@ -37,6 +45,70 @@ namespace FastTests.Server.Replication
         public ReplicationTestBase(ITestOutputHelper output) : base(output)
         {
         }
+
+
+        protected DocumentStore GetDocumentStore2(string[] urls, string database, X509Certificate2 certificate = null, DocumentConventions conventions = null)
+        {
+            var store = new DocumentStore()
+            {
+                Urls = urls,
+                Database = database,
+            };
+            if (certificate != null)
+            {
+                store.Certificate = certificate;
+            }
+            if (conventions != null)
+            {
+                store.Conventions = conventions;
+            }
+
+            store.BeforeDispose += (sender, args) =>
+            {
+                try
+                {
+                    var missingAttachments = store.Operations.Send(new GetMissingAttachmentsOperation(Constants.Documents.Collections.AllDocumentsCollection));
+                    if (missingAttachments.Documents.Count != 0 || missingAttachments.Revisions.Count != 0)
+                    {
+                        var sb = new StringBuilder();
+                        string missingAttachmentsInfo = missingAttachments.Documents.Count != 0 && missingAttachments.Revisions.Count != 0 ? "Documents and Revisions"
+                            : missingAttachments.Documents.Count != 0 ? "Documents" : "Revisions";
+                        sb.AppendLine($"There are missing attachments for {missingAttachmentsInfo} in database '{database}' with custom created store.");
+                        foreach (var kvp in missingAttachments.Documents)
+                        {
+                            sb.AppendLine($"Collection: {kvp.Key}");
+                            foreach (MissingAttachmentInfo attachment in kvp.Value)
+                            {
+                                sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
+                            }
+                        }
+                        foreach (var kvp in missingAttachments.Revisions)
+                        {
+                            sb.AppendLine($"Collection: {kvp.Key}");
+                            foreach (MissingAttachmentInfo attachment in kvp.Value)
+                            {
+                                sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
+                            }
+                        }
+                        throw new MissingAttachmentException(sb.ToString());
+                    }
+      
+                }
+                catch (Exception e)
+                {
+                    if (e is MissingAttachmentException)
+                    {
+                        throw;
+                    }
+
+                    // expected
+                }
+            };
+            store.Initialize();
+            return store;
+        }
+
+
 
         public class BrokenReplication
         {

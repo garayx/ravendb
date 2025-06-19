@@ -17,6 +17,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Attachments;
 using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Exceptions;
@@ -29,6 +30,7 @@ using Raven.Client.ServerWide.Operations;
 using Raven.Client.Util;
 using Raven.Server;
 using Raven.Server.Config;
+using Raven.Server.Documents.Handlers;
 using Raven.Server.Documents.Queries;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Collections;
@@ -37,6 +39,7 @@ using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
+using static Raven.Server.Documents.Handlers.AttachmentHandler;
 
 namespace FastTests
 {
@@ -229,21 +232,30 @@ namespace FastTests
                     {
                         try
                         {
-                            var missingAttachments = store.Operations.Send(new GetMissingAttachmentsOperation());
+                            var missingAttachments = store.Operations.Send(new GetMissingAttachmentsOperation(Constants.Documents.Collections.AllDocumentsCollection));
 
-                            if (missingAttachments.Results.Any())
+                            if (missingAttachments.Documents.Count != 0 || missingAttachments.Revisions.Count != 0)
                             {
                                 var sb = new StringBuilder();
-                                sb.AppendLine($"There are missing attachments in database '{name}' on server '{serverToUse.ServerStore.NodeTag}'.");
-                                foreach (var kvp in missingAttachments.Results)
+                                string missingAttachmentsInfo = missingAttachments.Documents.Count != 0 && missingAttachments.Revisions.Count != 0 ? "Documents and Revisions"
+                                    : missingAttachments.Documents.Count != 0 ? "Documents" : "Revisions";
+                                sb.AppendLine($"There are missing attachments for {missingAttachmentsInfo} in database '{name}' on server '{serverToUse.ServerStore.NodeTag}'.");
+                                foreach (var kvp in missingAttachments.Documents)
                                 {
                                     sb.AppendLine($"Collection: {kvp.Key}");
-                                    foreach (var attachment in kvp.Value)
+                                    foreach (MissingAttachmentInfo attachment in kvp.Value)
                                     {
-                                        sb.AppendLine($"Attachment: {attachment.Name}, Hash: {attachment.Hash}");
+                                        sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
                                     }
                                 }
-
+                                foreach (var kvp in missingAttachments.Revisions)
+                                {
+                                    sb.AppendLine($"Collection: {kvp.Key}");
+                                    foreach (MissingAttachmentInfo attachment in kvp.Value)
+                                    {
+                                        sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
+                                    }
+                                }
                                 throw new MissingAttachmentException(sb.ToString());
                             }
                         }
@@ -318,25 +330,36 @@ namespace FastTests
                 throw new TimeoutException($"{te.Message} {Environment.NewLine} {te.StackTrace}{Environment.NewLine}Servers states:{Environment.NewLine}{Cluster.GetLastStatesFromAllServersOrderedByTime()}");
             }
         }
+
         public class GetMissingAttachmentsOperation : IOperation<MissingAttachmentsResult>
         {
+            private readonly string _collection;
 
+            public GetMissingAttachmentsOperation(string collection)
+            {
+                if(string.IsNullOrWhiteSpace(collection))
+                    throw new ArgumentException("Collection name cannot be null or empty.", nameof(collection));
+                _collection = collection;
+            }
             public RavenCommand<MissingAttachmentsResult> GetCommand(IDocumentStore store, DocumentConventions conventions, JsonOperationContext context, HttpCache cache)
             {
-                return new GetMissingAttachmentsCommand();
+                return new GetMissingAttachmentsCommand(_collection);
             }
 
             public class GetMissingAttachmentsCommand : RavenCommand<MissingAttachmentsResult>
             {
-                public GetMissingAttachmentsCommand()
+                private readonly string _collection;
+
+                public GetMissingAttachmentsCommand(string collection)
                 {
+                    _collection = collection;
                 }
 
                 public override bool IsReadRequest => true;
 
                 public override HttpRequestMessage CreateRequest(JsonOperationContext ctx, ServerNode node, out string url)
                 {
-                    url = $"{node.Url}/databases/{node.Database}/attachments/missing";
+                    url = $"{node.Url}/databases/{node.Database}/attachments/missing?collection={Uri.EscapeDataString(_collection)}";
                     return new HttpRequestMessage(HttpMethod.Get, url);
                 }
 
@@ -355,16 +378,18 @@ namespace FastTests
 
         public class MissingAttachmentsResult
         {
-            public Dictionary<string, List<MissingAttachmentInfo>> Results { get; set; }
+            public Dictionary<string, List<MissingAttachmentInfo>> Revisions { get; set; }
+            public Dictionary<string, List<MissingAttachmentInfo>> Documents { get; set; }
 
             public static MissingAttachmentsResult FromBlittable(BlittableJsonReaderObject response)
             {
                 var result = new MissingAttachmentsResult
                 {
-                    Results = new Dictionary<string, List<MissingAttachmentInfo>>()
+                    Revisions = new Dictionary<string, List<MissingAttachmentInfo>>(),
+                    Documents = new Dictionary<string, List<MissingAttachmentInfo>>()
                 };
 
-                if (response.TryGet("Results", out BlittableJsonReaderArray resultsArray) && resultsArray != null)
+                if (response.TryGet("Revisions", out BlittableJsonReaderArray resultsArray) && resultsArray != null)
                 {
                     foreach (BlittableJsonReaderObject item in resultsArray)
                     {
@@ -377,12 +402,40 @@ namespace FastTests
                                 {
                                     var info = new MissingAttachmentInfo
                                     {
-                                        Name = attObj.TryGet("Name", out string name) ? name : null,
-                                        Hash = attObj.TryGet("Hash", out string hash) ? hash : null
+                                        Name = attObj.TryGet(nameof(MissingAttachmentInfo.Name), out string name) ? name : null,
+                                        Hash = attObj.TryGet(nameof(MissingAttachmentInfo.Hash), out string hash) ? hash : null,
+                                        MissingType = attObj.TryGet(nameof(MissingAttachmentInfo.MissingType), out int missingType) ? (MissingType)missingType : default,
+                                        AttachmentType = attObj.TryGet(nameof(MissingAttachmentInfo.AttachmentType), out int attachmentType) ? (AttachmentType)attachmentType : default
                                     };
                                     attachments.Add(info);
                                 }
-                                result.Results[property] = attachments;
+                                result.Revisions[property] = attachments;
+                            }
+                        }
+                    }
+                }
+
+                if (response.TryGet("Documents", out BlittableJsonReaderArray resultsArray2) && resultsArray2 != null)
+                {
+                    foreach (BlittableJsonReaderObject item in resultsArray2)
+                    {
+                        foreach (var property in item.GetPropertyNames())
+                        {
+                            if (item.TryGet(property, out BlittableJsonReaderArray attachmentsArray) && attachmentsArray != null)
+                            {
+                                var attachments = new List<MissingAttachmentInfo>();
+                                foreach (BlittableJsonReaderObject attObj in attachmentsArray)
+                                {
+                                    var info = new MissingAttachmentInfo
+                                    {
+                                        Name = attObj.TryGet(nameof(MissingAttachmentInfo.Name), out string name) ? name : null,
+                                        Hash = attObj.TryGet(nameof(MissingAttachmentInfo.Hash), out string hash) ? hash : null,
+                                        MissingType = attObj.TryGet(nameof(MissingAttachmentInfo.MissingType), out int missingType) ? (MissingType)missingType : default,
+                                        AttachmentType = attObj.TryGet(nameof(MissingAttachmentInfo.AttachmentType), out int attachmentType) ? (AttachmentType)attachmentType : default
+                                    };
+                                    attachments.Add(info);
+                                }
+                                result.Documents[property] = attachments;
                             }
                         }
                     }
@@ -390,12 +443,6 @@ namespace FastTests
 
                 return result;
             }
-        }
-
-        public class MissingAttachmentInfo
-        {
-            public string Name { get; set; }
-            public string Hash { get; set; }
         }
 
         private static void CheckIfDatabaseExists(RavenServer server, string name)
