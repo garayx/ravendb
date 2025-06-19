@@ -478,7 +478,7 @@ namespace Raven.Server.Documents.Handlers
                 if (r.Flags.Contain(DocumentFlags.HasAttachments))
                 {
                     var currentAttachmentsInMetadata = AttachmentsStorage.GetAttachmentsFromDocumentMetadata(r.Data).ToList();
-                    var currentAttachmentsInTable = Database.DocumentsStorage.AttachmentsStorage.GetAttachmentsForDocument(context, AttachmentType.Revision, r.Id, r.ChangeVector).ToList();
+                    var currentAttachmentsInTable = Database.DocumentsStorage.AttachmentsStorage.GetAttachmentsForDocument(context, attachmentType, r.Id, r.ChangeVector).ToList();
 
                     // Find missing attachments by name/hash
                     var missing = new List<MissingAttachmentInfo>();
