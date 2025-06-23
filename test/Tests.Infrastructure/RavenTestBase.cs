@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Reflection;
@@ -17,24 +16,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client;
 using Raven.Client.Documents;
-using Raven.Client.Documents.Attachments;
-using Raven.Client.Documents.Conventions;
-using Raven.Client.Documents.Operations;
 using Raven.Client.Exceptions;
 using Raven.Client.Exceptions.Cluster;
 using Raven.Client.Exceptions.Database;
 using Raven.Client.Exceptions.Documents.Indexes;
-using Raven.Client.Http;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using Raven.Client.Util;
 using Raven.Server;
 using Raven.Server.Config;
-using Raven.Server.Documents.Handlers;
-using Raven.Server.Documents.Queries;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Collections;
-using Sparrow.Json;
 using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
@@ -230,44 +222,7 @@ namespace FastTests
 
                     store.BeforeDispose += (sender, args) =>
                     {
-                        try
-                        {
-                            var missingAttachments = store.Operations.Send(new GetMissingAttachmentsOperation(Constants.Documents.Collections.AllDocumentsCollection));
-
-                            if (missingAttachments.Documents.Count != 0 || missingAttachments.Revisions.Count != 0)
-                            {
-                                var sb = new StringBuilder();
-                                string missingAttachmentsInfo = missingAttachments.Documents.Count != 0 && missingAttachments.Revisions.Count != 0 ? "Documents and Revisions"
-                                    : missingAttachments.Documents.Count != 0 ? "Documents" : "Revisions";
-                                sb.AppendLine($"There are missing attachments for {missingAttachmentsInfo} in database '{name}' on server '{serverToUse.ServerStore.NodeTag}'.");
-                                foreach (var kvp in missingAttachments.Documents)
-                                {
-                                    sb.AppendLine($"Collection: {kvp.Key}");
-                                    foreach (MissingAttachmentInfo attachment in kvp.Value)
-                                    {
-                                        sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
-                                    }
-                                }
-                                foreach (var kvp in missingAttachments.Revisions)
-                                {
-                                    sb.AppendLine($"Collection: {kvp.Key}");
-                                    foreach (MissingAttachmentInfo attachment in kvp.Value)
-                                    {
-                                        sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
-                                    }
-                                }
-                                throw new MissingAttachmentException(sb.ToString());
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            if (e is MissingAttachmentException)
-                            {
-                                throw;
-                            }
-
-                            // expected
-                        }
+                        CheckForMissingAttachmentsAndThrowIfNeeded(store, name, serverToUse, caller);
 
                         var realException = Context.GetException();
                         try
@@ -331,117 +286,56 @@ namespace FastTests
             }
         }
 
-        public class GetMissingAttachmentsOperation : IOperation<MissingAttachmentsResult>
+        private static readonly List<string> TestsToSkipForMissingAttachments =
+        [
+            "Can_Get_Missing_attachments",
+            "Can_push_via_filtered_replication" //TODO: remove when RavenDB-24415 is fixed
+        ];
+
+        private static void CheckForMissingAttachmentsAndThrowIfNeeded(DocumentStore store, string name, RavenServer serverToUse, string caller)
         {
-            private readonly string _collection;
-
-            public GetMissingAttachmentsOperation(string collection)
+            if (TestsToSkipForMissingAttachments.Contains(caller))
             {
-                if(string.IsNullOrWhiteSpace(collection))
-                    throw new ArgumentException("Collection name cannot be null or empty.", nameof(collection));
-                _collection = collection;
-            }
-            public RavenCommand<MissingAttachmentsResult> GetCommand(IDocumentStore store, DocumentConventions conventions, JsonOperationContext context, HttpCache cache)
-            {
-                return new GetMissingAttachmentsCommand(_collection);
+                return;
             }
 
-            public class GetMissingAttachmentsCommand : RavenCommand<MissingAttachmentsResult>
+            try
             {
-                private readonly string _collection;
+                var missingAttachments = store.Operations.Send(new GetMissingAttachmentsOperation(Constants.Documents.Collections.AllDocumentsCollection));
 
-                public GetMissingAttachmentsCommand(string collection)
+                if (missingAttachments.Documents.Count != 0 || missingAttachments.Revisions.Count != 0)
                 {
-                    _collection = collection;
-                }
-
-                public override bool IsReadRequest => true;
-
-                public override HttpRequestMessage CreateRequest(JsonOperationContext ctx, ServerNode node, out string url)
-                {
-                    url = $"{node.Url}/databases/{node.Database}/attachments/missing?collection={Uri.EscapeDataString(_collection)}";
-                    return new HttpRequestMessage(HttpMethod.Get, url);
-                }
-
-                public override void SetResponse(JsonOperationContext context, BlittableJsonReaderObject response, bool fromCache)
-                {
-                    if (response == null)
+                    var sb = new StringBuilder();
+                    string missingAttachmentsInfo = missingAttachments.Documents.Count != 0 && missingAttachments.Revisions.Count != 0 ? "Documents and Revisions"
+                        : missingAttachments.Documents.Count != 0 ? "Documents" : "Revisions";
+                    sb.AppendLine($"There are missing attachments for {missingAttachmentsInfo} in database '{name}' on server '{serverToUse.ServerStore.NodeTag}'.");
+                    foreach (var kvp in missingAttachments.Documents)
                     {
-                        Result = null;
-                        return;
-                    }
-                    var deserialize = JsonDeserializationBase.GenerateJsonDeserializationRoutine<MissingAttachmentsResult>();
-                    Result = deserialize.Invoke(response);
-                }
-            }
-        }
-
-        public class MissingAttachmentsResult
-        {
-            public Dictionary<string, List<MissingAttachmentInfo>> Revisions { get; set; }
-            public Dictionary<string, List<MissingAttachmentInfo>> Documents { get; set; }
-
-            public static MissingAttachmentsResult FromBlittable(BlittableJsonReaderObject response)
-            {
-                var result = new MissingAttachmentsResult
-                {
-                    Revisions = new Dictionary<string, List<MissingAttachmentInfo>>(),
-                    Documents = new Dictionary<string, List<MissingAttachmentInfo>>()
-                };
-
-                if (response.TryGet("Revisions", out BlittableJsonReaderArray resultsArray) && resultsArray != null)
-                {
-                    foreach (BlittableJsonReaderObject item in resultsArray)
-                    {
-                        foreach (var property in item.GetPropertyNames())
+                        sb.AppendLine($"Collection: {kvp.Key}");
+                        foreach (MissingAttachmentInfo attachment in kvp.Value)
                         {
-                            if (item.TryGet(property, out BlittableJsonReaderArray attachmentsArray) && attachmentsArray != null)
-                            {
-                                var attachments = new List<MissingAttachmentInfo>();
-                                foreach (BlittableJsonReaderObject attObj in attachmentsArray)
-                                {
-                                    var info = new MissingAttachmentInfo
-                                    {
-                                        Name = attObj.TryGet(nameof(MissingAttachmentInfo.Name), out string name) ? name : null,
-                                        Hash = attObj.TryGet(nameof(MissingAttachmentInfo.Hash), out string hash) ? hash : null,
-                                        MissingType = attObj.TryGet(nameof(MissingAttachmentInfo.MissingType), out int missingType) ? (MissingType)missingType : default,
-                                        AttachmentType = attObj.TryGet(nameof(MissingAttachmentInfo.AttachmentType), out int attachmentType) ? (AttachmentType)attachmentType : default
-                                    };
-                                    attachments.Add(info);
-                                }
-                                result.Revisions[property] = attachments;
-                            }
+                            sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
                         }
                     }
-                }
-
-                if (response.TryGet("Documents", out BlittableJsonReaderArray resultsArray2) && resultsArray2 != null)
-                {
-                    foreach (BlittableJsonReaderObject item in resultsArray2)
+                    foreach (var kvp in missingAttachments.Revisions)
                     {
-                        foreach (var property in item.GetPropertyNames())
+                        sb.AppendLine($"Collection: {kvp.Key}");
+                        foreach (MissingAttachmentInfo attachment in kvp.Value)
                         {
-                            if (item.TryGet(property, out BlittableJsonReaderArray attachmentsArray) && attachmentsArray != null)
-                            {
-                                var attachments = new List<MissingAttachmentInfo>();
-                                foreach (BlittableJsonReaderObject attObj in attachmentsArray)
-                                {
-                                    var info = new MissingAttachmentInfo
-                                    {
-                                        Name = attObj.TryGet(nameof(MissingAttachmentInfo.Name), out string name) ? name : null,
-                                        Hash = attObj.TryGet(nameof(MissingAttachmentInfo.Hash), out string hash) ? hash : null,
-                                        MissingType = attObj.TryGet(nameof(MissingAttachmentInfo.MissingType), out int missingType) ? (MissingType)missingType : default,
-                                        AttachmentType = attObj.TryGet(nameof(MissingAttachmentInfo.AttachmentType), out int attachmentType) ? (AttachmentType)attachmentType : default
-                                    };
-                                    attachments.Add(info);
-                                }
-                                result.Documents[property] = attachments;
-                            }
+                            sb.AppendLine($"Name: {attachment.Name}, Hash: {attachment.Hash}, MissingType: {attachment.MissingType}, AttachmentType: {attachment.AttachmentType}");
                         }
                     }
+                    throw new MissingAttachmentException(sb.ToString());
+                }
+            }
+            catch (Exception e)
+            {
+                if (e is MissingAttachmentException)
+                {
+                    throw;
                 }
 
-                return result;
+                // expected
             }
         }
 

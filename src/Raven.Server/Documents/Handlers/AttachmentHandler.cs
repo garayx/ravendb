@@ -387,7 +387,7 @@ namespace Raven.Server.Documents.Handlers
             }
         }
 
-        [RavenAction("/databases/*/attachments/missing", "GET", AuthorizationStatus.ValidUser, EndpointType.Write, DisableOnCpuCreditsExhaustion = true)]
+        [RavenAction("/databases/*/debug/attachments/missing", "GET", AuthorizationStatus.ValidUser, EndpointType.Read, DisableOnCpuCreditsExhaustion = true)]
         public async Task GetMissingAttachments()
         {
             var types = new List<AttachmentType>(2);
