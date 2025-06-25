@@ -6,8 +6,8 @@ namespace Tests.Infrastructure
     {
         public static string TestIsMissingCloudCredentialEnvironmentVariable(bool envVariableMissing, string environmentVariable, string parsingError, BackupSettings settings)
         {
-            if (RavenTestHelper.SkipIntegrationTests)
-                return RavenTestHelper.SkipIntegrationMessage;
+            //if (RavenTestHelper.SkipIntegrationTests)
+            //    return RavenTestHelper.SkipIntegrationMessage;
 
             if (RavenTestHelper.IsRunningOnCI)
                 return null;

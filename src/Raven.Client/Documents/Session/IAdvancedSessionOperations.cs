@@ -23,7 +23,7 @@ namespace Raven.Client.Documents.Session
         ///     Access the lazy operations
         /// </summary>
         ILazySessionOperations Lazily { get; }
-        
+
         /// <summary>
         ///     Access the attachments operations
         /// </summary>
@@ -33,7 +33,7 @@ namespace Raven.Client.Documents.Session
         ///     Access the revisions operations
         /// </summary>
         IRevisionsSessionOperations Revisions { get; }
-        
+
         /// <summary>
         ///     Access cluster transaction operations
         /// </summary>

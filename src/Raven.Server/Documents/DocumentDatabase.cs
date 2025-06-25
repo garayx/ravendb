@@ -297,6 +297,8 @@ namespace Raven.Server.Documents
 
         public DataArchivist DataArchivist { get; private set; }
 
+        public RetireAttachmentsSender RetireAttachmentsSender { get; private set; }
+
         public TimeSeriesPolicyRunner TimeSeriesPolicyRunner { get; private set; }
 
         public PeriodicBackupRunner PeriodicBackupRunner { get; private set; }
@@ -1806,6 +1808,7 @@ namespace Raven.Server.Documents
             DataArchivist = DataArchivist.LoadConfiguration(this, record, DataArchivist);
             TimeSeriesPolicyRunner = TimeSeriesPolicyRunner.LoadConfigurations(this, record, TimeSeriesPolicyRunner);
             UpdateCompressionConfigurationFromDatabaseRecord(record);
+            UpdateRetiredAttachmentsFromDatabaseRecord(record);
         }
 
         public void InitializeCompressionFromDatabaseRecord(DatabaseRecord record)
@@ -1931,6 +1934,11 @@ namespace Raven.Server.Documents
 
             _documentsCompression = record.DocumentsCompression;
             _compressedCollections = new HashSet<string>(record.DocumentsCompression.Collections, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void UpdateRetiredAttachmentsFromDatabaseRecord(DatabaseRecord record)
+        {
+            RetireAttachmentsSender = DocumentsStorage.AttachmentsStorage.RetiredAttachmentsStorage.UpdateRetiredAttachmentsFromDatabaseRecord(record, RetireAttachmentsSender);
         }
 
         private Lazy<RequestExecutor> CreateRequestExecutor() =>
