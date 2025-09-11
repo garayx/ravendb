@@ -4,12 +4,13 @@ using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Tests.Infrastructure;
-using Raven.Server.Utils;
-using Xunit;
 using FastTests;
 using Raven.Client.Documents.Operations.AI;
+using Raven.Server.Utils;
 using SlowTests.Server.Documents.AI;
+using SlowTests.Server.Documents.Attachments;
+using Tests.Infrastructure;
+using Xunit;
 
 namespace Tryouts;
 
@@ -29,15 +30,14 @@ public static class Program
         for (int i = 0; i < 1; i++)
         {
             Console.WriteLine($"Starting to run {i}");
-            
+            TryRemoveDatabasesFolder();
             try
             {
                 using (var testOutputHelper = new ConsoleTestOutputHelper())
-                using (var test = new ChatCompletionClientTests(testOutputHelper))
+                using (var test = new OpenOldRawDataTests(testOutputHelper))
                 {
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
-                    var p = GetGenAiConfig(RavenAiIntegration.OpenAi);
-                    await test.GenAiClientSanityTest(p.Options, p.Configuration);
+                    await test.Can_Open_v71_Data();
                 }
             }
             catch (Exception e)
