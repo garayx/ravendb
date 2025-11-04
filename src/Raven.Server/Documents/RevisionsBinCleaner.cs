@@ -53,7 +53,7 @@ namespace Raven.Server.Documents
                 cleaner.Start();
 
                 if (cleaner.Logger.IsInfoEnabled)
-                    cleaner.Logger.Info($"Executed revisions-bin cleanup on {database.Name} started");
+                    cleaner.Logger.Info("Executed revisions-bin cleanup on {database.Name} started", database.Name);
 
                 return cleaner;
             }
@@ -86,7 +86,7 @@ namespace Raven.Server.Documents
                 CancellationToken.IsCancellationRequested)
             {
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"Executed revisions-bin cleanup on {_documentDatabase.Name}, 0 revisions were deleted, finished on etag 0");
+                    Logger.Info("Executed revisions-bin cleanup on {_documentDatabase.Name}, 0 revisions were deleted, finished on etag 0", _documentDatabase.Name);
                 return totalDeletedEntries;
             }
 

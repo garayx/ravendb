@@ -1068,7 +1068,7 @@ namespace Raven.Server.Documents
                 AddToInitLog(LogLevel.Info, "Finish database initialization");
                 DeleteDatabaseCachedInfo(documentDatabase.Name, throwOnError: false);
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Started database {config.ResourceName} in {sp.ElapsedMilliseconds:#,#;;0}ms");
+                    _logger.Info("Started database {config.ResourceName} in {sp.ElapsedMilliseconds:#,#;;0}ms", config.ResourceName, sp.ElapsedMilliseconds);
 
                 OnDatabaseLoaded(config.ResourceName);
 

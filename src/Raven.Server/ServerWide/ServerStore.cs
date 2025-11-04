@@ -1371,7 +1371,7 @@ namespace Raven.Server.ServerWide
                 {
                     //`indexPerDatabase` was collected from the previous transaction. The database can be excluded in the meantime. 
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Could not reschedule the wakeup timer for idle database '{db}', because there is no backup task with id '{taskId}'.");
+                        Logger.Info("Could not reschedule the wakeup timer for idle database '{db}', because there is no backup task with id '{taskId}'.", db, taskId);
                     return;
                 }
             }
@@ -1408,7 +1408,7 @@ namespace Raven.Server.ServerWide
             DatabasesLandlord.RescheduleNextIdleDatabaseActivity(db, nextIdleDatabaseActivity);
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Rescheduling the wakeup timer for idle database '{db}', because backup task '{backupConfig.Name}' with id '{taskId}' which belongs to node '{Engine.Tag}', new timer is set to: '{nextIdleDatabaseActivity.DateTime}', with dueTime: {nextIdleDatabaseActivity.DueTime} ms.");
+                Logger.Info("Rescheduling the wakeup timer for idle database '{db}', because backup task '{backupConfig.Name}' with id '{taskId}' which belongs to node '{Engine.Tag}', new timer is set to: '{nextIdleDatabaseActivity.DateTime}', with dueTime: {nextIdleDatabaseActivity.DueTime} ms.", db, backupConfig.Name, taskId, Engine.Tag, nextIdleDatabaseActivity.DateTime, nextIdleDatabaseActivity.DueTime);
 
         }
 
@@ -1464,7 +1464,7 @@ namespace Raven.Server.ServerWide
                         {
                             // I already replaced it, but not all nodes did
                             if (Logger.IsInfoEnabled)
-                                Logger.Info($"The server certificate was successfully replaced in {replaced} nodes out of {nodesInCluster}.");
+                                Logger.Info("The server certificate was successfully replaced in {replaced} nodes out of {nodesInCluster}.", replaced, nodesInCluster);
 
                             return;
                         }
@@ -1641,7 +1641,7 @@ namespace Raven.Server.ServerWide
 
                         var certPath = Path.Combine(AppContext.BaseDirectory, Configuration.Security.CertificatePath);
                         if (Logger.IsInfoEnabled)
-                            Logger.Info($"Writing the new certificate to {certPath}");
+                            Logger.Info("Writing the new certificate to {certPath}", certPath);
 
                         try
                         {
@@ -1686,7 +1686,7 @@ namespace Raven.Server.ServerWide
                     // and now we have to replace the cert in the running server...
 
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Replacing the certificate used by the server to: {newClusterCertificate.Thumbprint} ({newClusterCertificate.SubjectName.Name})");
+                        Logger.Info("Replacing the certificate used by the server to: {newClusterCertificate.Thumbprint} ({newClusterCertificate.SubjectName.Name})", newClusterCertificate.Thumbprint, newClusterCertificate.SubjectName.Name);
 
                     Server.SetCertificate(newClusterCertificate, bytesToSave, Configuration.Security.CertificatePassword);
 
@@ -1701,7 +1701,7 @@ namespace Raven.Server.ServerWide
                         NotificationSeverity.Success));
 
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"The server certificate was successfully replaced on node {NodeTag}.");
+                        Logger.Info("The server certificate was successfully replaced on node {NodeTag}.", NodeTag);
 
                     if (ClusterCommandsVersionManager.ClusterCommandsVersions.TryGetValue(nameof(ConfirmServerCertificateReplacedCommand), out var commandVersion) == false)
                         throw new InvalidOperationException($"Failed to get the command version of '{nameof(ConfirmServerCertificateReplacedCommand)}'.");
@@ -3409,7 +3409,7 @@ namespace Raven.Server.ServerWide
             var result = await SendToLeaderAsync(command);
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Updating license id: {license.Id}");
+                Logger.Info("Updating license id: {license.Id}", license.Id);
 
             await Cluster.WaitForIndexNotification(result.Index);
         }

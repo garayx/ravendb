@@ -351,7 +351,7 @@ namespace Raven.Server.Documents.Replication
                     try
                     {
                         if (_logger.IsInfoEnabled)
-                            _logger.Info($"Resetting {repl.ConnectionInfo} for {hub} on {certThumbprint} because replication configuration changed. Will be reconnected.");
+                            _logger.Info("Resetting {repl.ConnectionInfo} for {hub} on {certThumbprint} because replication configuration changed. Will be reconnected.", repl.ConnectionInfo, hub, certThumbprint);
                         repl.Dispose();
                         _incoming.TryRemove(key, out _);
                     }
@@ -904,7 +904,7 @@ namespace Raven.Server.Documents.Replication
                 }
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Stopping replication to {instance.Destination.FromString()}");
+                    _logger.Info("Stopping replication to {instance.Destination.FromString()}", instance.Destination.FromString());
 
                 instance.Failed -= OnOutgoingSendingFailed;
                 instance.SuccessfulTwoWaysCommunication -= OnOutgoingSendingSucceeded;
@@ -1369,7 +1369,7 @@ namespace Raven.Server.Documents.Replication
             foreach (var instance in outgoingChanged)
             {
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Stopping replication to {instance.Destination.FromString()}");
+                    _logger.Info("Stopping replication to {instance.Destination.FromString()}", instance.Destination.FromString());
 
                 instance.Failed -= OnOutgoingSendingFailed;
                 instance.SuccessfulTwoWaysCommunication -= OnOutgoingSendingSucceeded;

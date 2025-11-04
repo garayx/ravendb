@@ -94,7 +94,7 @@ namespace Raven.Server.Documents.PeriodicBackup
             }
 
             if (logger.IsInfoEnabled)
-                logger.Info($"Starting backup task '{backupName}'");
+                logger.Info("Starting backup task '{backupName}'", backupName);
         }
 
         public void FinishBackup(string databaseName, string backupName, PeriodicBackupStatus backupStatus, TimeSpan? elapsed, RavenLogger logger)

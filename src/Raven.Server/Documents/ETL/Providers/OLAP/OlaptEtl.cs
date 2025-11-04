@@ -147,7 +147,7 @@ namespace Raven.Server.Documents.ETL.Providers.OLAP
                 var reason = $"Stopping the batch because it has already processed max number of extracted documents : {stats.NumberOfExtractedItems[EtlItemType.Document]}";
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"[{Name}] {reason}");
+                    Logger.Info("[{Name}] {reason}", Name, reason);
 
                 stats.RecordBatchTransformationCompleteReason(reason);
 
@@ -267,7 +267,7 @@ namespace Raven.Server.Documents.ETL.Providers.OLAP
             _timer?.Dispose();
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"OLAP ETL '{Name}' : Next run is in {nextRun.TimeSpan.TotalMinutes} minutes.");
+                Logger.Info("OLAP ETL '{Name}' : Next run is in {nextRun.TimeSpan.TotalMinutes} minutes.", Name, nextRun.TimeSpan.TotalMinutes);
 
             var timer = new Timer(_ => _waitForChanges.Set(), state: nextRun, dueTime: nextRun.TimeSpan, period: Timeout.InfiniteTimeSpan);
 

@@ -33,7 +33,7 @@ namespace Raven.Server.Extensions
                 var result = SetProcessWorkingSetSizeEx(process.Handle, minWorkingSetInBytes, minWorkingSetInBytes, flags);
                 if (result == false)
                 {
-                    logger.Info($"Failed to set max working set to {ramInGb}, error code: {Marshal.GetLastWin32Error()}");
+                    logger.Info("Failed to set max working set to {ramInGb}, error code: {Marshal.GetLastWin32Error()}", ramInGb, Marshal.GetLastWin32Error());
                 }
 
                 return;
@@ -54,7 +54,7 @@ namespace Raven.Server.Extensions
             {
                 if (Syscall.mkdir(basePath, (ushort)FilePermissions.S_IRWXU) == -1)
                 {
-                    logger.Info($"Failed to create directory path: {basePath}, error code: {Marshal.GetLastWin32Error()}");
+                    logger.Info("Failed to create directory path: {basePath}, error code: {Marshal.GetLastWin32Error()}", basePath, Marshal.GetLastWin32Error());
                     return;
                 }
             }
@@ -74,7 +74,7 @@ namespace Raven.Server.Extensions
             var fd = Syscall.open(path, OpenFlags.O_WRONLY, FilePermissions.S_IWUSR);
             if (fd == -1)
             {
-                logger.Info($"Failed to open path: {path}");
+                logger.Info("Failed to open path: {path}", path);
                 return false;
             }
 
@@ -88,7 +88,7 @@ namespace Raven.Server.Extensions
                     {
                         // -1 or 0 is error when not regular file, 
                         // and this is a case of non-regular file
-                        logger.Info($"Failed to write to path: {path}, value: {str}");
+                        logger.Info("Failed to write to path: {path}, value: {str}", path, str);
                         Syscall.close(fd);
                         return false;
                     }
@@ -97,7 +97,7 @@ namespace Raven.Server.Extensions
 
                 if (Syscall.close(fd) == -1)
                 {
-                    logger.Info($"Failed to close: {path}");
+                    logger.Info("Failed to close: {path}", path);
                     return false;
                 }
             }

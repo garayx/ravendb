@@ -81,7 +81,7 @@ public sealed class LetsEncryptSimulationHelper
                                     .Use(httpsConnectionMiddleware.OnConnectionAsync);
                             });
                             if (Logger.IsInfoEnabled)
-                                Logger.Info($"List of ip addresses for node '{nodeTag}' is empty. WebHost listening to {defaultIp}");
+                                Logger.Info("List of ip addresses for node '{nodeTag}' is empty. WebHost listening to {defaultIp}", nodeTag, defaultIp);
                         }
 
                         foreach (var address in addresses)

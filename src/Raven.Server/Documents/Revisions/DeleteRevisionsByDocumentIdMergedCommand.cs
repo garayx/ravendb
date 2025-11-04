@@ -50,7 +50,7 @@ public partial class RevisionsStorage
                     if (collectionName == null)
                     {
                         if (revisionsStorage._logger.IsInfoEnabled)
-                            revisionsStorage._logger.Info($"Tried to delete revisions for '{id}' but no revisions found.");
+                            revisionsStorage._logger.Info("Tried to delete revisions for '{id}' but no revisions found.", id);
                         continue;
                     }
 

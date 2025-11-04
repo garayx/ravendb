@@ -541,7 +541,7 @@ namespace Raven.Server.Documents.ETL
                 var reason = $"Stopping the batch after {stats.Duration} because the CPU credits balance is almost completely used";
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"[{Name}] {reason}");
+                    Logger.Info("[{Name}] {reason}", Name, reason);
 
                 stats.RecordBatchTransformationCompleteReason(reason);
 
@@ -558,7 +558,7 @@ namespace Raven.Server.Documents.ETL
                 var reason = $"Stopping the batch after {stats.Duration} due to extract and transform processing timeout";
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"[{Name}] {reason}");
+                    Logger.Info("[{Name}] {reason}", Name, reason);
 
                 stats.RecordBatchTransformationCompleteReason(reason);
 
@@ -570,7 +570,7 @@ namespace Raven.Server.Documents.ETL
                 var reason = $"The batch was stopped after processing {batchSize:#,#;;0} items because of low memory";
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"[{Name}] {reason}");
+                    Logger.Info("[{Name}] {reason}", Name, reason);
 
                 stats.RecordBatchTransformationCompleteReason(reason);
                 return false;
@@ -596,7 +596,7 @@ namespace Raven.Server.Documents.ETL
                     }
 
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"[{Name}] {reason}");
+                        Logger.Info("[{Name}] {reason}", Name, reason);
 
                     stats.RecordBatchTransformationCompleteReason(reason);
 
@@ -613,7 +613,7 @@ namespace Raven.Server.Documents.ETL
                 var reason = $"Stopping the batch because maximum batch size limit was reached ({stats.BatchSize})";
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"[{Name}] {reason}");
+                    Logger.Info("[{Name}] {reason}", Name, reason);
 
                 stats.RecordBatchTransformationCompleteReason(reason);
 
@@ -631,7 +631,7 @@ namespace Raven.Server.Documents.ETL
                 var reason = $"Stopping the batch because it has already processed max number of items ({string.Join(',', stats.NumberOfExtractedItems.Select(x => $"{x.Key} - {x.Value:#,#;;0}"))})";
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"[{Name}] {reason}");
+                    Logger.Info("[{Name}] {reason}", Name, reason);
 
                 stats.RecordBatchTransformationCompleteReason(reason);
 
@@ -701,7 +701,7 @@ namespace Raven.Server.Documents.ETL
             }, null, ThreadNames.ForEtlProcess(threadName, Tag, Name));
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Starting {Tag} process: '{Name}'. Reason: {reason}");
+                Logger.Info("Starting {Tag} process: '{Name}'. Reason: {reason}", Tag, Name, reason);
 
         }
 

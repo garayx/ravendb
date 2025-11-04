@@ -101,7 +101,7 @@ namespace Raven.Client.Documents.Subscriptions
                         if (await _subscriptionTask.WaitWithTimeout(TimeSpan.FromSeconds(60)).ConfigureAwait(false) == false)
                         {
                             if (_logger.IsInfoEnabled)
-                                _logger.Info($"Subscription worker for '{SubscriptionName}' wasn't done after 60 seconds, cannot hold subscription disposal any longer.");
+                                _logger.Info("Subscription worker for '{SubscriptionName}' wasn't done after 60 seconds, cannot hold subscription disposal any longer.", SubscriptionName);
                         }
                     }
                     catch (Exception)
@@ -797,7 +797,7 @@ namespace Raven.Client.Documents.Subscriptions
                     CloseTcpClient();
                     if (_logger.IsInfoEnabled)
                     {
-                        _logger.Info($"Subscription '{_options.SubscriptionName}'. Connecting to server...");
+                        _logger.Info("Subscription '{_options.SubscriptionName}'. Connecting to server...", _options.SubscriptionName);
                     }
 
                     await ProcessSubscriptionAsync().ConfigureAwait(false);

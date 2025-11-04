@@ -133,7 +133,7 @@ namespace Raven.Server.Documents.Sharding.Handlers
                         catch
                         {
                             if (Logger.IsInfoEnabled)
-                                Logger.Info($"Failed to write Attachment stream {FromToString}");
+                                Logger.Info("Failed to write Attachment stream {FromToString}", FromToString);
 
                             throw;
                         }

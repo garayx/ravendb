@@ -240,7 +240,7 @@ namespace Raven.Server.Documents.Sharding
             DevelopmentHelper.ShardingToDo(DevelopmentHelper.TeamMember.Karmel, DevelopmentHelper.Severity.Normal, "RavenDB-19086 needs an ExceptionAggregator like DocumentDatabase");
 
             if (_logger.IsInfoEnabled)
-                _logger.Info($"Disposing {nameof(ShardedDatabaseContext)} of {DatabaseName}.");
+                _logger.Info("Disposing {nameof(ShardedDatabaseContext)} of {DatabaseName}.", nameof(ShardedDatabaseContext), DatabaseName);
 
             _databaseShutdown.Cancel();
 

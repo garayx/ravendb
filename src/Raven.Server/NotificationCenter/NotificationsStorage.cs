@@ -252,7 +252,7 @@ namespace Raven.Server.NotificationCenter
             }
 
             if (deleteResult && _logger.IsInfoEnabled)
-                _logger.Info($"Deleted notification '{id}'.");
+                _logger.Info("Deleted notification '{id}'.", id);
             return deleteResult;
         }
 

@@ -127,7 +127,7 @@ public sealed class GenAiTask : EtlProcess<GenAiItem, GenAiScriptResult, GenAiCo
             var reason = $"Stopping the batch because it has already processed enough items: {stats.NumberOfExtractedItems[EtlItemType.Document]}";
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"[{Name}] {reason}");
+                Logger.Info("[{Name}] {reason}", Name, reason);
 
             stats.RecordBatchTransformationCompleteReason(reason);
 

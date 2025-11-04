@@ -392,7 +392,7 @@ namespace Raven.Server
                 }
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"Initialized Server... {WebUrl}");
+                    Logger.Info("Initialized Server... {WebUrl}", WebUrl);
 
                 ServerStore.TriggerDatabases();
 
@@ -1051,7 +1051,7 @@ namespace Raven.Server
                     httpMessageHandler.SslProtocols = TcpUtils.SupportedSslProtocols;
 
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"When setting the certificate, validating that the server can authenticate with itself using {url}.");
+                        Logger.Info("When setting the certificate, validating that the server can authenticate with itself using {url}.", url);
 
                     // Using the client certificate generated from the server certificate to test if we can talk to ourselves
                     httpMessageHandler.ClientCertificates.Add(certificateCertificate);
@@ -1064,7 +1064,7 @@ namespace Raven.Server
                         await client.GetAsync("/setup/alive");
                     }
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Successful connection to {url}.");
+                        Logger.Info("Successful connection to {url}.", url);
                 }
             }
             catch (Exception e)
@@ -1101,7 +1101,7 @@ namespace Raven.Server
                             }
 
                             if (Logger.IsInfoEnabled)
-                                Logger.Info($"Successful connection with RemoteCertificateValidationCallback to {url}.");
+                                Logger.Info("Successful connection with RemoteCertificateValidationCallback to {url}.", url);
                         }
                     }
                 }
@@ -1265,7 +1265,7 @@ namespace Raven.Server
                 if (Logger.IsInfoEnabled)
                 {
                     var source = Configuration.Core.SetupMode == SetupMode.LetsEncrypt ? "Let's Encrypt" : $"executable configured by ({RavenConfiguration.GetKey(x => x.Security.CertificateRenewExec)})";
-                    Logger.Info($"Got new certificate from {source}. Starting certificate replication.");
+                    Logger.Info("Got new certificate from {source}. Starting certificate replication.", source);
                 }
 
                 // password here is null since we do not use a password with let's encrypt / RefreshViaExecutable
@@ -1465,14 +1465,14 @@ namespace Raven.Server
                 {
                     if (Logger.IsInfoEnabled)
                     {
-                        Logger.Info($"The new certificate matches the current one. No further steps needed. {Certificate.ServerCertificate.GetBasicCertificateInfo()}");
+                        Logger.Info("The new certificate matches the current one. No further steps needed. {Certificate.ServerCertificate.GetBasicCertificateInfo()}", Certificate.ServerCertificate.GetBasicCertificateInfo());
                     }
                     return;
                 }
 
                 if (Logger.IsInfoEnabled)
                 {
-                    Logger.Info($"Starting certificate replication. current:'{Certificate.ServerCertificate.GetBasicCertificateInfo()}', new:'{newCertificate.GetBasicCertificateInfo()}'");
+                    Logger.Info("Starting certificate replication. current:'{Certificate.ServerCertificate.GetBasicCertificateInfo()}', new:'{newCertificate.GetBasicCertificateInfo()}'", Certificate.ServerCertificate.GetBasicCertificateInfo(), newCertificate.GetBasicCertificateInfo());
                 }
 
                 // During replacement of a cluster certificate, we must have both the new and the old server certificates registered in the server store.
@@ -2164,7 +2164,7 @@ namespace Raven.Server
                 foreach (var ipAddress in GetListenIpAddresses(host))
                 {
                     if (Configuration.Core.TcpServerUrls != null && Logger.IsInfoEnabled)
-                        Logger.Info($"RavenDB TCP is configured to use {string.Join(", ", Configuration.Core.TcpServerUrls)} and bind to {ipAddress} at {port}");
+                        Logger.Info("RavenDB TCP is configured to use {string.Join(", ", Configuration.Core.TcpServerUrls)} and bind to {ipAddress} at {port}", ipAddress, port);
 
                     var listener = new TcpListener(ipAddress, status.Port != 0 ? status.Port : port);
 

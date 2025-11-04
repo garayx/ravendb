@@ -102,7 +102,7 @@ public class RachisLogIndexNotifications : AbstractRaftIndexNotifications<Recent
             void LogFailureToSetTaskResult()
             {
                 if (Log.IsInfoEnabled)
-                    Log.Info($"Failed to set result of task with index {index}");
+                    Log.Info("Failed to set result of task with index {index}", index);
             }
         }
 

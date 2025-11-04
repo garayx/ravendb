@@ -290,7 +290,7 @@ public abstract class RelationalDatabaseWriterBase<TRelationalConnectionString, 
     protected virtual void HandleSlowSql(long elapsedMilliseconds, string stmt)
     {
         if (Logger.IsInfoEnabled)
-            Logger.Info($"[{_etlName}] Slow SQL detected. Execution took: {elapsedMilliseconds:#,#;;0}ms, statement: {stmt}");
+            Logger.Info("[{_etlName}] Slow SQL detected. Execution took: {elapsedMilliseconds:#,#;;0}ms, statement: {stmt}", _etlName, stmt);
 
         _statistics.RecordSlowSql(new SlowSqlStatementInfo { Date = SystemTime.UtcNow, Duration = elapsedMilliseconds, Statement = stmt });
     }

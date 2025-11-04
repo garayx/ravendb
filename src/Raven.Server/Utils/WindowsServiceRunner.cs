@@ -57,7 +57,7 @@ namespace Raven.Server.Utils
         public void Start(string[] startupArguments, ServiceStoppedCallback serviceStoppedCallback)
         {
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Starting RavenDB Windows Service: {ServiceName}.");
+                Logger.Info("Starting RavenDB Windows Service: {ServiceName}.", ServiceName);
 
             _serviceStoppedCallback = serviceStoppedCallback;
 
@@ -89,7 +89,7 @@ namespace Raven.Server.Utils
         public void Restart()
         {
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Restarting RavenDB Windows Service: {ServiceName}.");
+                Logger.Info("Restarting RavenDB Windows Service: {ServiceName}.", ServiceName);
 
             _ravenServer.Dispose();
             var configuration = RavenConfiguration.CreateForServer(null, CommandLineSwitches.CustomConfigPath);
@@ -108,7 +108,7 @@ namespace Raven.Server.Utils
         {
             if (Logger.IsInfoEnabled)
             {
-                Logger.Info($"Stopping RavenDB Windows Service: {ServiceName}.");
+                Logger.Info("Stopping RavenDB Windows Service: {ServiceName}.", ServiceName);
 
                 Thread.Sleep(3000);
             }

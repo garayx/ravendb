@@ -118,7 +118,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 });
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportSuccess(S3Name)} bucket named: {settings.BucketName}, with key: {key}");
+                    _logger.Info("{ReportSuccess(S3Name)} bucket named: {settings.BucketName}, with key: {key}", ReportSuccess(S3Name), settings.BucketName, key);
 
                 if (_retentionPolicyParameters == null)
                     return;
@@ -135,7 +135,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 var key = CombinePathAndKey(settings.RemoteFolderName ?? _settings.DatabaseName);
                 var archiveId = client.UploadArchive(stream, key);
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportSuccess(GlacierName)}, archive ID: {archiveId}");
+                    _logger.Info("{ReportSuccess(GlacierName)}, archive ID: {archiveId}", ReportSuccess(GlacierName), archiveId);
 
                 if (_retentionPolicyParameters == null)
                     return;
@@ -152,7 +152,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 client.UploadFile(_settings.FolderName, _settings.FileName, stream);
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportSuccess(FtpName)} server");
+                    _logger.Info("{ReportSuccess(FtpName)} server", ReportSuccess(FtpName));
 
                 if (_retentionPolicyParameters == null)
                     return;
@@ -173,7 +173,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 });
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportSuccess(AzureName)} container: {settings.StorageContainer}, with key: {key}");
+                    _logger.Info("{ReportSuccess(AzureName)} container: {settings.StorageContainer}, with key: {key}", ReportSuccess(AzureName), settings.StorageContainer, key);
 
                 if (_retentionPolicyParameters == null)
                     return;
@@ -194,7 +194,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 });
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportSuccess(GoogleCloudName)} storage bucket: {settings.BucketName}");
+                    _logger.Info("{ReportSuccess(GoogleCloudName)} storage bucket: {settings.BucketName}", ReportSuccess(GoogleCloudName), settings.BucketName);
 
                 if (_retentionPolicyParameters == null)
                     return;
@@ -212,7 +212,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 client.DeleteObject(key);
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportDeletion(S3Name)} bucket named: {settings.BucketName}, with key: {key}");
+                    _logger.Info("{ReportDeletion(S3Name)} bucket named: {settings.BucketName}, with key: {key}", ReportDeletion(S3Name), settings.BucketName, key);
             }
         }
 
@@ -224,7 +224,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 client.DeleteBlobs(new List<string> { key });
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportDeletion(AzureName)} container: {settings.StorageContainer}, with key: {key}");
+                    _logger.Info("{ReportDeletion(AzureName)} container: {settings.StorageContainer}, with key: {key}", ReportDeletion(AzureName), settings.StorageContainer, key);
             }
         }
 
@@ -236,7 +236,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 client.DeleteObject(key);
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{ReportDeletion(GoogleCloudName)} storage bucket: {settings.BucketName}");
+                    _logger.Info("{ReportDeletion(GoogleCloudName)} storage bucket: {settings.BucketName}", ReportDeletion(GoogleCloudName), settings.BucketName);
             }
         }
 

@@ -170,7 +170,7 @@ namespace Raven.Server.Documents.Indexes.Persistence.Lucene
             ~IndexSearcherHoldingState()
             {
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"IndexSearcherHoldingState wasn't properly disposed. Usage count: {Usage}, tx id: {AsOfTxId}, should dispose: {ShouldDispose.IsRaised()}");
+                    _logger.Info("IndexSearcherHoldingState wasn't properly disposed. Usage count: {Usage}, tx id: {AsOfTxId}, should dispose: {ShouldDispose.IsRaised()}", Usage, AsOfTxId, ShouldDispose.IsRaised());
 
                 Dispose();
             }

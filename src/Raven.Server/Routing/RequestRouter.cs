@@ -411,7 +411,7 @@ namespace Raven.Server.Routing
 
                             if (RequestLogger.IsInfoEnabled && sp != null)
                             {
-                                RequestLogger.Info($"Took {sp} to wait for cluster transaction {index} (connId: {context.Connection.Id})");
+                                RequestLogger.Info("Took {sp} to wait for cluster transaction {index} (connId: {context.Connection.Id})", sp, index, context.Connection.Id);
                             }
                         }
 

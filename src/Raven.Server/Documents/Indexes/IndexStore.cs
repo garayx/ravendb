@@ -164,7 +164,7 @@ namespace Raven.Server.Documents.Indexes
                         var sp = Stopwatch.StartNew();
 
                         if (Logger.IsInfoEnabled)
-                            Logger.Info($"Starting {newIndexesToStart.Count} new index{(newIndexesToStart.Count > 1 ? "es" : string.Empty)}");
+                            Logger.Info("Starting {newIndexesToStart.Count} new index{suffix}", newIndexesToStart.Count, newIndexesToStart.Count > 1 ? "es" : string.Empty);
 
                         ExecuteForIndexes(newIndexesToStart, index =>
                         {
@@ -1958,7 +1958,7 @@ namespace Raven.Server.Documents.Indexes
                 {
                     await Delete.TryDeleteIndexIfExistsAsync(indexName, $"{raftRequestId}/{indexName}");
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Deleted index '{indexName}' because it is surpassed.");
+                        Logger.Info("Deleted index '{indexName}' because it is surpassed.", indexName);
                 }
                 catch (Exception e)
                 {

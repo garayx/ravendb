@@ -146,7 +146,7 @@ namespace Raven.Server.Documents.Replication
             if (!hasScript || scriptResolver == null)
             {
                 if (_log.IsInfoEnabled)
-                    _log.Info($"Script not found to resolve the {collection} collection");
+                    _log.Info("Script not found to resolve the {collection} collection", collection);
                 return false;
             }
 

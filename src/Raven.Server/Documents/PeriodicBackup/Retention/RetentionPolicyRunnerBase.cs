@@ -109,7 +109,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Retention
             catch (NotSupportedException)
             {
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"Retention Policy for {Name} isn't currently supported");
+                    Logger.Info("Retention Policy for {Name} isn't currently supported", Name);
             }
             catch (OperationCanceledException)
             {
@@ -138,7 +138,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Retention
                 if (folderDetails.BackupTimeAsString == null)
                 {
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Failed to get backup date time for folder: {folder}");
+                        Logger.Info("Failed to get backup date time for folder: {folder}", folder);
                     continue;
                 }
 
@@ -150,7 +150,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Retention
                         out var backupTime) == false)
                 {
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Failed to parse backup date time for folder: {folder}");
+                        Logger.Info("Failed to parse backup date time for folder: {folder}", folder);
                     continue;
                 }
 

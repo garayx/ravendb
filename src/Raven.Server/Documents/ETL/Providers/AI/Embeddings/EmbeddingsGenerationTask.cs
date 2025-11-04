@@ -116,7 +116,7 @@ public sealed class EmbeddingsGenerationTask : EtlProcess<EmbeddingsGenerationIt
             var reason = $"Stopping the batch because it has already processed max number of extracted documents : {stats.NumberOfExtractedItems[EtlItemType.Document]}";
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"[{Name}] {reason}");
+                Logger.Info("[{Name}] {reason}", Name, reason);
 
             stats.RecordBatchTransformationCompleteReason(reason);
 

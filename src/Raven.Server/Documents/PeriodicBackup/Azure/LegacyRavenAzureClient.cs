@@ -280,7 +280,7 @@ namespace Raven.Server.Documents.PeriodicBackup.Azure
 
             retryCount++;
             if (_logger?.IsInfoEnabled == true)
-                _logger.Info($"Trying to send the request again. Retries count: '{retryCount}', Container: '{_containerName}'.");
+                _logger.Info("Trying to send the request again. Retries count: '{retryCount}', Container: '{_containerName}'.", retryCount, _containerName);
 
             // restore the stream position before retrying
             baseStream.Position = position;

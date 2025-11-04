@@ -63,7 +63,7 @@ public abstract class AbstractNotificationCenter : NotificationsBase
             if (_configuration.Notifications.ShouldFilterOut(notification))
             {
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Filtered out notification. Id: '{notification.Id}', Title: '{notification.Title}', message: '{notification.Message}'");
+                    _logger.Info("Filtered out notification. Id: '{notification.Id}', Title: '{notification.Title}', message: '{notification.Message}'", notification.Id, notification.Title, notification.Message);
                 return;
             }
 

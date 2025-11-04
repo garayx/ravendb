@@ -116,7 +116,7 @@ namespace Raven.Server.Documents.PeriodicBackup
             _backupTimer?.Dispose();
 
             if (_logger.IsInfoEnabled)
-                _logger.Info($"Next {(nextBackup.IsFull ? "full" : "incremental")} backup is in {nextBackup.TimeSpan.TotalMinutes} minutes.");
+                _logger.Info("Next {0} backup is in {nextBackup.TimeSpan.TotalMinutes} minutes.", (nextBackup.IsFull ? "full" : "incremental"), nextBackup.TimeSpan.TotalMinutes);
 
             var timer = nextBackup.TimeSpan < _periodicBackupRunner.MaxTimerTimeout
                 ? new Timer(_periodicBackupRunner.TimerCallback, nextBackup, nextBackup.TimeSpan, Timeout.InfiniteTimeSpan)

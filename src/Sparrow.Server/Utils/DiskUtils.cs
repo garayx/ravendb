@@ -166,7 +166,7 @@ namespace Sparrow.Server.Utils
                 if (Logger.IsInfoEnabled)
                 {
                     var error = Marshal.GetLastWin32Error();
-                    Logger.Info($"Failed to the handle for path: {path}, error: {error}");
+                    Logger.Info("Failed to the handle for path: {path}, error: {error}", path, error);
                 }
 
                 return path;
@@ -198,7 +198,7 @@ namespace Sparrow.Server.Utils
                             if (Logger.IsInfoEnabled)
                             {
                                 var error = Marshal.GetLastWin32Error();
-                                Logger.Info($"Failed to get the final path name by handle, error: {error}");
+                                Logger.Info("Failed to get the final path name by handle, error: {error}", error);
                             }
 
                             outputPath = null;

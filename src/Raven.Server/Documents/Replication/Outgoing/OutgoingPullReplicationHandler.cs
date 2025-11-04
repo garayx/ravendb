@@ -78,7 +78,7 @@ namespace Raven.Server.Documents.Replication.Outgoing
 
             AddReplicationPulse(ReplicationPulseDirection.OutgoingInitiate);
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Start pull replication as hub {FromToString}");
+                Logger.Info("Start pull replication as hub {FromToString}", FromToString);
 
             using (_replicationScope)
             using (_stream)

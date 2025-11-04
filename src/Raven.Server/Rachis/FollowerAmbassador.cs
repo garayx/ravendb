@@ -583,7 +583,7 @@ namespace Raven.Server.Rachis
                     _engine.GetLastCommitIndex(context, out long index, out long term);
                     if (_engine.Log.IsInfoEnabled)
                     {
-                        _engine.Log.Info($"{ToString()}: sending snapshot to {_tag} with index={index} term={term}");
+                        _engine.Log.Info("{ToString()}: sending snapshot to {_tag} with index={index} term={term}", ToString(), _tag, index, term);
                     }
 
                     // we make sure that we routinely update LastReplyFromFollower here

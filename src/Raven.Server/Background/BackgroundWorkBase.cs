@@ -77,7 +77,7 @@ namespace Raven.Server.Background
                     var result = _currentTask.Wait(waitTimeout);
 
                     if (result == false && Logger.IsInfoEnabled) 
-                        Logger.Info($"Background worker didn't manage to stop its task within {waitTimeout}");
+                        Logger.Info("Background worker didn't manage to stop its task within {waitTimeout}", waitTimeout);
                 }
             }
             catch (AggregateException e)

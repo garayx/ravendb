@@ -47,7 +47,7 @@ namespace Sparrow.Server
                 Debug.Assert(_lockTaken);
                 if (_logger.IsInfoEnabled)
                 {
-                    _logger.Info($"Contention on lock {_name} from {caller} : {line} for {sp.ElapsedMilliseconds:#,#;;0} ms");
+                    _logger.Info("Contention on lock {_name} from {caller} : {line} for {sp.ElapsedMilliseconds:#,#;;0} ms", _name, caller, line);
                 }
             }
             return new Release(this);

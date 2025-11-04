@@ -369,7 +369,7 @@ namespace Raven.Server.Utils
                         // if we can't reset it, better just kill it
                         if (Logger.IsInfoEnabled)
                         {
-                            Logger.Info($"Unable to set this thread priority to normal, since we don't want its priority of {currentPriority}, we'll let it exit");
+                            Logger.Info("Unable to set this thread priority to normal, since we don't want its priority of {currentPriority}, we'll let it exit", currentPriority);
                         }
 
                         return false;

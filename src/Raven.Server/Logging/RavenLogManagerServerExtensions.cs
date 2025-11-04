@@ -381,7 +381,7 @@ internal static class RavenLogManagerServerExtensions
         LogManager.ReconfigExistingLoggers(purgeObsoleteLoggers: true);
 
         if (Logger.IsInfoEnabled)
-            Logger.Info($"Logging to '{configuration.Logs.Path}' set to [{minLevel}, {minLevel.ToNLogMaxLogLevel()}] level.");
+            Logger.Info("Logging to '{configuration.Logs.Path}' set to [{minLevel}, {minLevel.ToNLogMaxLogLevel()}] level.", configuration.Logs.Path, minLevel, minLevel.ToNLogMaxLogLevel());
 
 #if !RVN
         static bool TryGetLegacyLogLevel(RavenConfiguration configuration, out Sparrow.Logging.LogLevel legacyMinLevel)
@@ -440,7 +440,7 @@ internal static class RavenLogManagerServerExtensions
             LogManager.ReconfigExistingLoggers(purgeObsoleteLoggers: true);
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Logging configured from '{configuration.Logs.ConfigPath}' configuration file and set to [{DefaultRule.Levels.FirstOrDefault() ?? LogLevel.Off}, {DefaultRule.Levels.LastOrDefault() ?? LogLevel.Off}] level.");
+                Logger.Info("Logging configured from '{configuration.Logs.ConfigPath}' configuration file and set to [{DefaultRule.Levels.FirstOrDefault() ?? LogLevel.Off}, {DefaultRule.Levels.LastOrDefault() ?? LogLevel.Off}] level.", configuration.Logs.ConfigPath);
 
             return true;
         }

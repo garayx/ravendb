@@ -169,7 +169,7 @@ namespace Sparrow.LowMemory
                 _lastLohCompactionRequest = now;
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Forcing LOH compaction during next blocking generation 2 GC. LOH size after last GC: {lohSizeAfter} (threshold: {threshold})");
+                    _logger.Info("Forcing LOH compaction during next blocking generation 2 GC. LOH size after last GC: {lohSizeAfter} (threshold: {threshold})", lohSizeAfter, threshold);
             }
         }
 #endif

@@ -47,7 +47,7 @@ public sealed class FollowerApplyCommand : MergedTransactionCommand<ClusterOpera
                 {
                     if (_engine.Log.IsInfoEnabled)
                     {
-                        _engine.Log.Info($"Topology changed to {lastTopology}");
+                        _engine.Log.Info("Topology changed to {lastTopology}", lastTopology);
                     }
 
                     var topology = JsonDeserializationRachis<ClusterTopology>.Deserialize(lastTopology);

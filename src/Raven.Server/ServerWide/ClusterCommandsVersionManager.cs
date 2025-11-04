@@ -251,7 +251,7 @@ namespace Raven.Server.ServerWide
             OnClusterVersionChange?.Invoke(null, new ClusterVersionChangeEventArgs(previousVersion, version));
             
             if (Log.IsInfoEnabled) 
-                Log.Info($"Cluster version was changed from {previousVersion} to {version}");
+                Log.Info("Cluster version was changed from {previousVersion} to {version}", previousVersion, version);
         }
 
         public int GetClusterMinimalVersion(List<int> versions, int? maximalVersion)
@@ -261,7 +261,7 @@ namespace Raven.Server.ServerWide
             {
                 if (Log.IsInfoEnabled)
                 {
-                    Log.Info($"Cluster version was clamped from {minVersion} to {maximalVersion.Value}");
+                    Log.Info("Cluster version was clamped from {minVersion} to {maximalVersion.Value}", minVersion, maximalVersion.Value);
                 }
                 return maximalVersion.Value;
             }

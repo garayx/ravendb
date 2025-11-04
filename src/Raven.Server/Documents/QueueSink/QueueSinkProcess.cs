@@ -390,7 +390,7 @@ public abstract class QueueSinkProcess : IDisposable, ILowMemoryHandler
         }, null, ThreadNames.ForQueueSinkProcess(threadName, Tag, Name));
 
         if (Logger.IsInfoEnabled)
-            Logger.Info($"Starting {Tag} process: '{Name}'.");
+            Logger.Info("Starting {Tag} process: '{Name}'.", Tag, Name);
 
     }
 
@@ -523,7 +523,7 @@ public abstract class QueueSinkProcess : IDisposable, ILowMemoryHandler
             var reason = $"Stopping the batch after {stats.Duration} because the CPU credits balance is almost completely used";
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"[{Name}] {reason}");
+                Logger.Info("[{Name}] {reason}", Name, reason);
 
             stats.RecordPullCompleteReason(reason);
 
@@ -535,7 +535,7 @@ public abstract class QueueSinkProcess : IDisposable, ILowMemoryHandler
             var reason = $"The batch was stopped after processing {batchSize:#,#;;0} items because of low memory";
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"[{Name}] {reason}");
+                Logger.Info("[{Name}] {reason}", Name, reason);
 
             stats.RecordPullCompleteReason(reason);
             return false;
@@ -561,7 +561,7 @@ public abstract class QueueSinkProcess : IDisposable, ILowMemoryHandler
                 }
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"[{Name}] {reason}");
+                    Logger.Info("[{Name}] {reason}", Name, reason);
 
                 stats.RecordPullCompleteReason(reason);
 
@@ -578,7 +578,7 @@ public abstract class QueueSinkProcess : IDisposable, ILowMemoryHandler
             var reason = $"Stopping the batch because maximum batch size limit was reached ({batchSize})";
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"[{Name}] {reason}");
+                Logger.Info("[{Name}] {reason}", Name, reason);
 
             stats.RecordPullCompleteReason(reason);
 

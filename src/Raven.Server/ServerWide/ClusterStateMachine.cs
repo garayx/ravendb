@@ -1264,7 +1264,7 @@ namespace Raven.Server.ServerWide
                     UpdateValue(index, items, key, key, certInstallation);
 
                     if (_parent.Log.IsInfoEnabled)
-                        _parent.Log.Info($"Confirming that certificate replacement has happened. Old certificate thumbprint: '{oldThumbprint}'. New certificate thumbprint: '{thumbprint}'.");
+                        _parent.Log.Info("Confirming that certificate replacement has happened. Old certificate thumbprint: '{oldThumbprint}'. New certificate thumbprint: '{thumbprint}'.", oldThumbprint, thumbprint);
 
                     // this will trigger the deletion of the new and old server certs from the cluster
                     NotifyValueChanged(context, nameof(ConfirmServerCertificateReplacedCommand), index);
@@ -3030,7 +3030,7 @@ namespace Raven.Server.ServerWide
 
             if (_parent.Log.IsInfoEnabled)
             {
-                _parent.Log.Info($"Squeezing databases, new tag is {newTag}, old tag is {oldTag}.");
+                _parent.Log.Info("Squeezing databases, new tag is {newTag}, old tag is {oldTag}.", newTag, oldTag);
 
                 if (toShrink.Count > 0)
                     _parent.Log.Info($"Databases to shrink: {string.Join(',', toShrink.Select(r => r.DatabaseName))}");

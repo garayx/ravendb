@@ -124,7 +124,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                     if (_logger.IsInfoEnabled)
                     {
                         var type = backupDetails.IsFull ? "full" : "incremental";
-                        _logger.Info($"Canceling the {type} backup task '{backupDetails.TaskId}' after the {nameof(TimerCallback)}.");
+                        _logger.Info("Canceling the {type} backup task '{backupDetails.TaskId}' after the {nameof(TimerCallback)}.", type, backupDetails.TaskId, nameof(TimerCallback));
                     }
 
                     return;
@@ -153,7 +153,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                     if (_logger.IsInfoEnabled)
                     {
                         var type = backupDetails.IsFull ? "full" : "incremental";
-                        _logger.Info($"Canceling the {type} backup task '{backupDetails.TaskId}' after the {nameof(LongPeriodTimerCallback)}.");
+                        _logger.Info("Canceling the {type} backup task '{backupDetails.TaskId}' after the {nameof(LongPeriodTimerCallback)}.", type, backupDetails.TaskId, nameof(LongPeriodTimerCallback));
                     }
                     return;
                 }
@@ -186,7 +186,7 @@ namespace Raven.Server.Documents.PeriodicBackup
             catch (BackupDelayException e)
             {
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Backup task will be retried in {(int)e.DelayPeriod.TotalSeconds} seconds, Reason: {e.Message}");
+                    _logger.Info("Backup task will be retried in {(int)e.DelayPeriod.TotalSeconds} seconds, Reason: {e.Message}", (int)e.DelayPeriod.TotalSeconds, e.Message);
 
                 // we'll retry in one minute
                 var backupTaskDetails = new NextBackup
@@ -753,7 +753,7 @@ namespace Raven.Server.Documents.PeriodicBackup
                 if (taskState == TaskStatus.ActiveByCurrentNode)
                 {
                     if (_logger.IsInfoEnabled)
-                        _logger.Info($"New backup task '{taskId}' state is '{taskState}', will arrange a new backup timer.");
+                        _logger.Info("New backup task '{taskId}' state is '{taskState}', will arrange a new backup timer.", taskId, taskState);
 
                     var backupStatus = GetMostUpdatedLocalBackupStatus(taskId, inMemoryBackupStatus: null);
                     var nextBackup = GetNextBackupDetails(newConfiguration, backupStatus);

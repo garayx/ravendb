@@ -52,7 +52,7 @@ namespace Raven.Server.Documents.Replication.Senders
                 if (Log.IsInfoEnabled)
                 {
                     string key = validator.GetItemInformation(item);
-                    Log.Info($"Will skip sending {key} ({item.Type}) because it was not allowed according to the incoming .");
+                    Log.Info("Will skip sending {key} ({item.Type}) because it was not allowed according to the incoming .", key, item.Type);
                 }
 
                 return true;

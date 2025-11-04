@@ -79,7 +79,7 @@ namespace Raven.Server.Rachis
                         {
                             if (_engine.Log.IsInfoEnabled)
                             {
-                                _engine.Log.Info($"{ToString()}: Snapshot was requested, so we close this follower.");
+                                _engine.Log.Info("{ToString()}: Snapshot was requested, so we close this follower.", ToString());
                             }
                             return;
                         }
@@ -197,7 +197,7 @@ namespace Raven.Server.Rachis
                     {
                         if (_engine.Log.IsInfoEnabled)
                         {
-                            _engine.Log.Info($"{ToString()}: Got a request to become candidate from the leader.");
+                            _engine.Log.Info("{ToString()}: Got a request to become candidate from the leader.", ToString());
                         }
                         _engine.SwitchToCandidateState("Was asked to do so by my leader", forced: true);
                         return;
@@ -224,7 +224,7 @@ namespace Raven.Server.Rachis
                     {
                         if (_engine.Log.IsInfoEnabled)
                         {
-                            _engine.Log.Info($"{ToString()}: Took a long time to complete the cycle with {entries.Count} entries: {sp.Elapsed}");
+                            _engine.Log.Info("{ToString()}: Took a long time to complete the cycle with {entries.Count} entries: {sp.Elapsed}", ToString(), entries.Count, sp.Elapsed);
                         }
                     }
 
@@ -363,7 +363,7 @@ namespace Raven.Server.Rachis
             {
                 if (_engine.Log.IsInfoEnabled)
                 {
-                    _engine.Log.Info($"{ToString()}: Request snapshot by the admin");
+                    _engine.Log.Info("{ToString()}: Request snapshot by the admin", ToString());
                 }
                 _connection.Send(context, new LogLengthNegotiationResponse
                 {
@@ -590,7 +590,7 @@ namespace Raven.Server.Rachis
                     {
                         if (_engine.Log.IsInfoEnabled)
                         {
-                            _engine.Log.Info($"{ToString()}: leader first entry = {negotiation.PrevLogIndex} is the one we need (our last is {lastIndex})");
+                            _engine.Log.Info("{ToString()}: leader first entry = {negotiation.PrevLogIndex} is the one we need (our last is {lastIndex})", ToString(), negotiation.PrevLogIndex, lastIndex);
                         }
 
                         connection.Send(context, new LogLengthNegotiationResponse
@@ -609,7 +609,7 @@ namespace Raven.Server.Rachis
                     {
                         if (_engine.Log.IsInfoEnabled)
                         {
-                            _engine.Log.Info($"{ToString()}: Got a truncated response from the leader will request all entries");
+                            _engine.Log.Info("{ToString()}: Got a truncated response from the leader will request all entries", ToString());
                         }
 
                         RequestAllEntries(context, connection, "We have entries that are already truncated at the leader, will ask for full snapshot");
@@ -688,7 +688,7 @@ namespace Raven.Server.Rachis
                     {
                         if (_engine.Log.IsInfoEnabled)
                         {
-                            _engine.Log.Info($"{ToString()}: found divergence at the first leader entry");
+                            _engine.Log.Info("{ToString()}: found divergence at the first leader entry", ToString());
                         }
 
                         // leader's first entry is the next we need 

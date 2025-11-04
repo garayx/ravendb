@@ -104,7 +104,7 @@ namespace Raven.Server.Utils.Cpu
                 // shouldn't happen
                 if (Logger.IsInfoEnabled)
                 {
-                    Logger.Info($"ProcessCpuUsage == {currentInfo.ActiveCores}, OS: {RuntimeInformation.OSDescription}");
+                    Logger.Info("ProcessCpuUsage == {currentInfo.ActiveCores}, OS: {RuntimeInformation.OSDescription}", currentInfo.ActiveCores, RuntimeInformation.OSDescription);
                 }
 
                 return LastCpuUsage?.ProcessCpuUsage ?? 0;
@@ -119,7 +119,7 @@ namespace Raven.Server.Utils.Cpu
             // shouldn't happen
             if (processCpuUsage < 0 && Logger.IsInfoEnabled)
             {
-                Logger.Info($"processCpuUsage == {processCpuUsage}, OS: {RuntimeInformation.OSDescription}");
+                Logger.Info("processCpuUsage == {processCpuUsage}, OS: {RuntimeInformation.OSDescription}", processCpuUsage, RuntimeInformation.OSDescription);
             }
 
             // final value will be between 0 and 100%.

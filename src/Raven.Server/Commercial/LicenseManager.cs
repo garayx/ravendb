@@ -739,7 +739,7 @@ namespace Raven.Server.Commercial
                     {
                         // ReSharper disable once MethodHasAsyncOverload
                         var configurationKey = RavenConfiguration.GetKey(x => x.Licensing.DisableAutoUpdate);
-                        Logger.Info($"Skipping updating of the license from string or path or from api.ravendb.net because '{configurationKey}' was set to true");
+                        Logger.Info("Skipping updating of the license from string or path or from api.ravendb.net because '{configurationKey}' was set to true", configurationKey);
                     }
 
                     return (null, false);
@@ -755,7 +755,7 @@ namespace Raven.Server.Commercial
                     {
                         // ReSharper disable once MethodHasAsyncOverload
                         var configurationKey = RavenConfiguration.GetKey(x => x.Licensing.DisableAutoUpdateFromApi);
-                        Logger.Info($"Skipping updating of the license from api.ravendb.net because '{configurationKey}' was set to true");
+                        Logger.Info("Skipping updating of the license from api.ravendb.net because '{configurationKey}' was set to true", configurationKey);
                     }
                     return (null, false);
                 }
@@ -2042,7 +2042,7 @@ namespace Raven.Server.Commercial
                 if (_skipLeasingErrorsLogging == false && Logger.IsInfoEnabled)
                 {
                     var configurationKey = RavenConfiguration.GetKey(x => x.Licensing.DisableLicenseSupportCheck);
-                    Logger.Info($"Skipping checking the license support options because '{configurationKey}' is set to true");
+                    Logger.Info("Skipping checking the license support options because '{configurationKey}' is set to true", configurationKey);
                 }
                 return GetDefaultLicenseSupportInfo();
             }

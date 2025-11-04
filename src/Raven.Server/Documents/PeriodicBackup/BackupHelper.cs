@@ -20,7 +20,7 @@ namespace Raven.Server.Documents.PeriodicBackup
             if (destinationDriveInfo == null)
             {
                 if (logger.IsInfoEnabled)
-                    logger.Info($"Couldn't find the disk space info for path: {directoryPath}");
+                    logger.Info("Couldn't find the disk space info for path: {directoryPath}", directoryPath);
 
                 return;
             }

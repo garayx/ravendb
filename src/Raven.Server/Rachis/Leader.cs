@@ -132,7 +132,7 @@ namespace Raven.Server.Rachis
             var nextLeader = _voters.Values.OrderByDescending(x => x.FollowerMatchIndex).ThenByDescending(x => x.LastReplyFromFollower).First();
             if (_engine.Log.IsInfoEnabled)
             {
-                _engine.Log.Info($"Stepping as down as leader and will ask {nextLeader} to become the next leader");
+                _engine.Log.Info("Stepping as down as leader and will ask {nextLeader} to become the next leader", nextLeader);
             }
             nextLeader.ForceElectionsNow = true;
             var old = Interlocked.Exchange(ref _newEntriesArrived, new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously));
@@ -240,7 +240,7 @@ namespace Raven.Server.Rachis
                     _engine.AppendStateDisposable(this, ambassador);
                     if (_engine.Log.IsInfoEnabled)
                     {
-                        _engine.Log.Info($"{ToString()}: starting ambassador for promotable {promotable.Key} {promotable.Value}");
+                        _engine.Log.Info("{ToString()}: starting ambassador for promotable {promotable.Key} {promotable.Value}", ToString(), promotable.Key, promotable.Value);
                     }
                     ambassador.Start();
                 }
@@ -262,7 +262,7 @@ namespace Raven.Server.Rachis
                     _engine.AppendStateDisposable(this, ambassador);
                     if (_engine.Log.IsInfoEnabled)
                     {
-                        _engine.Log.Info($"{ToString()}: starting ambassador for watcher {nonVoter.Key} {nonVoter.Value}");
+                        _engine.Log.Info("{ToString()}: starting ambassador for watcher {nonVoter.Key} {nonVoter.Value}", ToString(), nonVoter.Key, nonVoter.Value);
                     }
                     ambassador.Start();
                 }
@@ -339,7 +339,7 @@ namespace Raven.Server.Rachis
                             case 3: // shutdown requested
                                 if (_engine.Log.IsInfoEnabled && _voters.Count != 0)
                                 {
-                                    _engine.Log.Info($"{ToString()}: shutting down");
+                                    _engine.Log.Info("{ToString()}: shutting down", ToString());
                                 }
                                 _running.Lower();
                                 return;
@@ -462,7 +462,7 @@ namespace Raven.Server.Rachis
 
             if (_engine.Log.IsInfoEnabled && _voters.Count != 0)
             {
-                _engine.Log.Info($"{ToString()}:VoteOfNoConfidence{Environment.NewLine} {sb}");
+                _engine.Log.Info("{ToString()}:VoteOfNoConfidence{Environment.NewLine} {sb}", ToString(), Environment.NewLine, sb);
             }
             throw new TimeoutException(
                 "Too long has passed since we got a confirmation from the majority of the cluster that this node is still the leader." +
@@ -720,7 +720,7 @@ namespace Raven.Server.Rachis
                     }
                     if (_engine.Log.IsInfoEnabled)
                     {
-                        _engine.Log.Info($"Start disposing leader {_engine.Tag} of term {Term}.");
+                        _engine.Log.Info("Start disposing leader {_engine.Tag} of term {Term}.", _engine.Tag, Term);
                     }
                     _running.Lower();
                     _shutdownRequested.Set();

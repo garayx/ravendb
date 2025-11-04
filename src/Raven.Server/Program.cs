@@ -422,7 +422,7 @@ namespace Raven.Server
             ThreadPool.SetMinThreads(effectiveMinWorkerThreads, effectiveMinCompletionPortThreads);
 
             if ((configuration.Server.ThreadPoolMinWorkerThreads != null || configuration.Server.ThreadPoolMinCompletionPortThreads != null) && Logger.IsInfoEnabled)
-                Logger.Info($"Thread Pool configuration was modified by calling {nameof(ThreadPool.SetMinThreads)}. Current values: workerThreads - {effectiveMinWorkerThreads}, completionPortThreads - {effectiveMinCompletionPortThreads}.");
+                Logger.Info("Thread Pool configuration was modified by calling {nameof(ThreadPool.SetMinThreads)}. Current values: workerThreads - {effectiveMinWorkerThreads}, completionPortThreads - {effectiveMinCompletionPortThreads}.", nameof(ThreadPool.SetMinThreads), effectiveMinWorkerThreads, effectiveMinCompletionPortThreads);
 
 
             if (configuration.Server.ThreadPoolMaxWorkerThreads != null || configuration.Server.ThreadPoolMaxCompletionPortThreads != null)
@@ -435,7 +435,7 @@ namespace Raven.Server
                 ThreadPool.SetMaxThreads(effectiveMaxWorkerThreads, effectiveMaxCompletionPortThreads);
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"Thread Pool configuration was modified by calling {nameof(ThreadPool.SetMaxThreads)}. Current values: workerThreads - {effectiveMaxWorkerThreads}, completionPortThreads - {effectiveMaxCompletionPortThreads}.");
+                    Logger.Info("Thread Pool configuration was modified by calling {nameof(ThreadPool.SetMaxThreads)}. Current values: workerThreads - {effectiveMaxWorkerThreads}, completionPortThreads - {effectiveMaxCompletionPortThreads}.", nameof(ThreadPool.SetMaxThreads), effectiveMaxWorkerThreads, effectiveMaxCompletionPortThreads);
 
             }
         }

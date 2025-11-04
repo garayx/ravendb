@@ -208,7 +208,7 @@ namespace Raven.Server.Documents.TimeSeries
                     }
 
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Found {currentPolicies.Count} policies in collection '{collection}': ({string.Join(',', currentPolicies)})");
+                        Logger.Info("Found {currentPolicies.Count} policies in collection '{collection}': ({string.Join(',', currentPolicies)})", currentPolicies.Count, collection);
 
                     foreach (var policy in policies)
                     {
@@ -220,7 +220,7 @@ namespace Raven.Server.Documents.TimeSeries
                             continue;
 
                         if (Logger.IsInfoEnabled)
-                            Logger.Info($"Adding new policy '{policy.Policy.Name}' for collection '{collection}'");
+                            Logger.Info("Adding new policy '{policy.Policy.Name}' for collection '{collection}'", policy.Policy.Name, collection);
 
                         await AddNewPolicy(collectionName, prev, policy.Policy);
                     }
@@ -254,7 +254,7 @@ namespace Raven.Server.Documents.TimeSeries
                 await _database.TxMerger.Enqueue(cmd);
 
                 if (Logger.IsInfoEnabled)
-                    Logger.Info($"New policy '{policy.Name}' marked {cmd.Marked} time-series");
+                    Logger.Info("New policy '{policy.Name}' marked {cmd.Marked} time-series", policy.Name, cmd.Marked);
 
                 if (cmd.Marked < TimeSeriesRollups.AddedNewRollupPoliciesCommand.BatchSize)
                     break;

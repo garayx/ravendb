@@ -670,7 +670,7 @@ namespace Raven.Server.Documents.Revisions
                 if (collectionName == null)
                 {
                     if (_logger.IsInfoEnabled)
-                        _logger.Info($"Tried to delete all revisions for '{id}' but no revisions found.");
+                        _logger.Info("Tried to delete all revisions for '{id}' but no revisions found.", id);
                     return 0;
                 }
 
@@ -1687,7 +1687,7 @@ namespace Raven.Server.Documents.Revisions
                 var currentCollection = _documentsStorage.ExtractCollectionName(context, revision.Data);
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Expected revision '{revision.Id}' with change vector '{revision.ChangeVector}' from table '{table.Name}' but revision is of collection '{currentCollection.Name}'");
+                    _logger.Info("Expected revision '{revision.Id}' with change vector '{revision.ChangeVector}' from table '{table.Name}' but revision is of collection '{currentCollection.Name}'", revision.Id, revision.ChangeVector, table.Name, currentCollection.Name);
 
                 table = EnsureRevisionTableCreated(context.Transaction.InnerTransaction, currentCollection);
 
@@ -2119,7 +2119,7 @@ namespace Raven.Server.Documents.Revisions
                 if (collectionName == null)
                 {
                     if (_logger.IsInfoEnabled)
-                        _logger.Info($"Tried to delete all revisions for '{id}' but no revisions found.");
+                        _logger.Info("Tried to delete all revisions for '{id}' but no revisions found.", id);
                     return;
                 }
 
@@ -2211,7 +2211,7 @@ namespace Raven.Server.Documents.Revisions
                 if (collectionName == null)
                 {
                     if (_logger.IsInfoEnabled)
-                        _logger.Info($"Tried to delete revisions for '{id}' but no revisions found.");
+                        _logger.Info("Tried to delete revisions for '{id}' but no revisions found.", id);
                     return 0;
                 }
 
@@ -2260,7 +2260,7 @@ namespace Raven.Server.Documents.Revisions
                 if (collectionName == null)
                 {
                     if (_logger.IsInfoEnabled)
-                        _logger.Info($"Tried to delete revisions for '{id}' but no collection was found.");
+                        _logger.Info("Tried to delete revisions for '{id}' but no collection was found.", id);
                     return false;
                 }
 

@@ -224,7 +224,7 @@ namespace Raven.Server.Commercial
         public static async Task<X509Certificate2> RefreshLetsEncryptTask(SetupInfo setupInfo, ServerStore serverStore, CancellationToken token)
         {
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Getting challenge(s) from Let's Encrypt. Using e-mail: {setupInfo.Email}.");
+                Logger.Info("Getting challenge(s) from Let's Encrypt. Using e-mail: {setupInfo.Email}.", setupInfo.Email);
 
             var acmeClient = new LetsEncryptClient(serverStore.Configuration.Core.AcmeUrl);
             var acmeProfile = serverStore.Configuration.Core.AcmeProfile;
@@ -237,7 +237,7 @@ namespace Raven.Server.Commercial
             var challengeResult = await LetsEncryptSetupUtils.InitialLetsEncryptChallenge(setupInfo, acmeClient, acmeProfile, token);
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Updating DNS record(s) and challenge(s) in {setupInfo.Domain.ToLower()}.{setupInfo.RootDomain.ToLower()}.");
+                Logger.Info("Updating DNS record(s) and challenge(s) in {setupInfo.Domain.ToLower()}.{setupInfo.RootDomain.ToLower()}.", setupInfo.Domain.ToLower(), setupInfo.RootDomain.ToLower());
 
             try
             {
@@ -252,7 +252,7 @@ namespace Raven.Server.Commercial
             }
 
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Successfully updated DNS record(s) and challenge(s) in {setupInfo.Domain.ToLower()}.{setupInfo.RootDomain.ToLower()}");
+                Logger.Info("Successfully updated DNS record(s) and challenge(s) in {setupInfo.Domain.ToLower()}.{setupInfo.RootDomain.ToLower()}", setupInfo.Domain.ToLower(), setupInfo.RootDomain.ToLower());
 
             var cert = await CertificateUtils.CompleteAuthorizationAndGetCertificate(
                 new CompleteAuthorizationAndGetCertificateParameters

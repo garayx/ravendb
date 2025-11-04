@@ -500,7 +500,7 @@ internal static class BackupUtils
         {
             // cluster is down
             if (parameters.Logger.IsInfoEnabled)
-                parameters.Logger.Info($"Could not find the responsible node for backup task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}'.");
+                parameters.Logger.Info("Could not find the responsible node for backup task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}'.", parameters.Configuration.TaskId, parameters.DatabaseName);
 
             if (parameters.IsIdle == false)
             {
@@ -516,7 +516,7 @@ internal static class BackupUtils
         {
             // not responsible for this backup task
             if (parameters.Logger.IsInfoEnabled)
-                parameters.Logger.Info($"Current server '{parameters.ServerStore.NodeTag}' is not responsible node for backup task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}'. Backup Task responsible node is '{responsibleNodeTag}'.");
+                parameters.Logger.Info("Current server '{parameters.ServerStore.NodeTag}' is not responsible node for backup task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}'. Backup Task responsible node is '{responsibleNodeTag}'.", parameters.ServerStore.NodeTag, parameters.Configuration.TaskId, parameters.DatabaseName, responsibleNodeTag);
 
             return null;
         }
@@ -531,7 +531,7 @@ internal static class BackupUtils
                 // if we never backed up the db then we want to do it now. returning the time now will prevent the unloading
 
                 if (parameters.Logger.IsInfoEnabled)
-                    parameters.Logger.Info($"Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' is never backed up yet.");
+                    parameters.Logger.Info("Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' is never backed up yet.", parameters.Configuration.TaskId, parameters.DatabaseName);
 
                 return new IdleDatabaseActivity(IdleDatabaseActivityType.WakeUpDatabase, DateTime.UtcNow);
             }
@@ -560,7 +560,7 @@ internal static class BackupUtils
         {
             // this backup is delayed
             if (parameters.Logger.IsInfoEnabled)
-                parameters.Logger.Info($"Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' is delayed.");
+                parameters.Logger.Info("Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' is delayed.", parameters.Configuration.TaskId, parameters.DatabaseName);
             return new IdleDatabaseActivity(IdleDatabaseActivityType.WakeUpDatabase, DateTime.UtcNow);
         }
 
@@ -569,14 +569,14 @@ internal static class BackupUtils
             // we have changes since last backup
             var type = nextBackup.IsFull ? "full" : "incremental";
             if (parameters.Logger.IsInfoEnabled)
-                parameters.Logger.Info($"Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' have changes since last backup. Wakeup timer will be set to the next {type} backup at '{nextBackup.DateTime}'.");
+                parameters.Logger.Info("Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' have changes since last backup. Wakeup timer will be set to the next {type} backup at '{nextBackup.DateTime}'.", parameters.Configuration.TaskId, parameters.DatabaseName, type, nextBackup.DateTime);
             return new IdleDatabaseActivity(IdleDatabaseActivityType.WakeUpDatabase, nextBackup.DateTime);
         }
 
         if (nextBackup.IsFull)
         {
             if (parameters.Logger.IsInfoEnabled)
-                parameters.Logger.Info($"Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' doesn't have changes since last backup. Wakeup timer will be set to the next full backup at '{nextBackup.DateTime}'.");
+                parameters.Logger.Info("Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' doesn't have changes since last backup. Wakeup timer will be set to the next full backup at '{nextBackup.DateTime}'.", parameters.Configuration.TaskId, parameters.DatabaseName, nextBackup.DateTime);
             return new IdleDatabaseActivity(IdleDatabaseActivityType.WakeUpDatabase, nextBackup.DateTime);
         }
 
@@ -593,13 +593,13 @@ internal static class BackupUtils
         if (nextFullBackup < nowUtc)
         {
             if (parameters.Logger.IsInfoEnabled)
-                parameters.Logger.Info($"Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' doesn't have changes since last backup but has delayed backup.");
+                parameters.Logger.Info("Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' doesn't have changes since last backup but has delayed backup.", parameters.Configuration.TaskId, parameters.DatabaseName);
             // this backup is delayed
             return new IdleDatabaseActivity(IdleDatabaseActivityType.WakeUpDatabase, DateTime.UtcNow);
         }
 
         if (parameters.Logger.IsInfoEnabled)
-            parameters.Logger.Info($"Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' doesn't have changes since last backup. Wakeup timer set to next full backup at {nextFullBackup}, and will skip the incremental backups.");
+            parameters.Logger.Info("Backup Task '{parameters.Configuration.TaskId}' of database '{parameters.DatabaseName}' doesn't have changes since last backup. Wakeup timer set to next full backup at {nextFullBackup}, and will skip the incremental backups.", parameters.Configuration.TaskId, parameters.DatabaseName, nextFullBackup);
 
         return new IdleDatabaseActivity(IdleDatabaseActivityType.UpdateBackupStatusOnly, nextBackup.DateTime, parameters.Configuration.TaskId, parameters.LastEtag);
     }
@@ -635,7 +635,7 @@ internal static class BackupUtils
             });
 
             if (logger.IsInfoEnabled)
-                logger.Info($"Periodic backup status with task id {status.TaskId} was updated");
+                logger.Info("Periodic backup status with task id {status.TaskId} was updated", status.TaskId);
         }
         catch (Exception e)
         {

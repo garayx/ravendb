@@ -120,7 +120,7 @@ namespace Raven.Server.Https
 
             // Can have exit code 0 (success) but still get errors. We log the errors anyway.
             if (log.IsInfoEnabled)
-                log.Info($"Executing '{_server.Configuration.Security.CertificateValidationExec} {args}' took {sw.ElapsedMilliseconds:#,#;;0} ms. Exit code: {process.ExitCode}{Environment.NewLine}Output: {output}{Environment.NewLine}Errors: {errors}{Environment.NewLine}");
+                log.Info("Executing '{_server.Configuration.Security.CertificateValidationExec} {args}' took {sw.ElapsedMilliseconds:#,#;;0} ms. Exit code: {process.ExitCode}{Environment.NewLine}Output: {output}{Environment.NewLine}Errors: {errors}{Environment.NewLine}", _server.Configuration.Security.CertificateValidationExec, args, process.ExitCode, Environment.NewLine, output, Environment.NewLine, errors, Environment.NewLine);
 
             if (process.ExitCode != 0)
             {

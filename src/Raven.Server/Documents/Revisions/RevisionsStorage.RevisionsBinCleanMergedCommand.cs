@@ -49,7 +49,7 @@ public partial class RevisionsStorage
                     if (collectionName == null)
                     {
                         if (_isFirst && revisionsStorage._logger.IsInfoEnabled)
-                            revisionsStorage._logger.Info($"Tried to delete revisions for '{id}' but no revisions found.");
+                            revisionsStorage._logger.Info("Tried to delete revisions for '{id}' but no revisions found.", id);
                     }
                     else
                     {

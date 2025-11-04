@@ -58,7 +58,7 @@ namespace Raven.Server.Documents.Subscriptions
             var (etag, _) = await _serverStore.SendToLeaderAsync(command);
 
             if (_logger.IsInfoEnabled)
-                _logger.Info($"New Subscription with index {etag} was created");
+                _logger.Info("New Subscription with index {etag} was created", etag);
 
             await _db.RachisLogIndexNotifications.WaitForIndexNotification(etag, _serverStore.Engine.OperationTimeout);
 
@@ -95,7 +95,7 @@ namespace Raven.Server.Documents.Subscriptions
             await serverStore.Cluster.WaitForIndexNotification(etag, serverStore.Engine.OperationTimeout);
             if (logger.IsInfoEnabled)
             {
-                logger.Info($"Subscription with name {name} was deleted");
+                logger.Info("Subscription with name {name} was deleted", name);
             }
         }
 

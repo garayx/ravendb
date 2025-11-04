@@ -117,7 +117,7 @@ public abstract class SubscriptionBatchBase<T>
 
             if (_logger.IsInfoEnabled)
             {
-                _logger.Info($"Got {id} (change vector: [{changeVector}], size {curDoc.Size}");
+                _logger.Info("Got {id} (change vector: [{changeVector}], size {curDoc.Size}", id, changeVector, curDoc.Size);
             }
 
             var instance = default(T);

@@ -324,7 +324,7 @@ namespace Raven.Client.Http
                     }
 #endif
                     if (Logger.IsInfoEnabled)
-                        Logger.Info($"Url returned from the cache with etag: {changeVector}. {url}.");
+                        Logger.Info("Url returned from the cache with etag: {changeVector}. {url}.", changeVector, url);
 
                     return releaser;
                 }

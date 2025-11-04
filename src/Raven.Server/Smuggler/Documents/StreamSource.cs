@@ -319,7 +319,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (sorters.TryGet(sorterName, out BlittableJsonReaderObject sorter) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the sorters {sorterName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the sorters {sorterName} from smuggler file. Skipping.", sorterName);
 
                                 continue;
                             }
@@ -346,7 +346,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (analyzers.TryGet(analyzerName, out BlittableJsonReaderObject analyzer) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the analyzer {analyzerName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the analyzer {analyzerName} from smuggler file. Skipping.", analyzerName);
 
                                 continue;
                             }
@@ -518,7 +518,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (ravenConnectionStrings.TryGet(connectionName, out BlittableJsonReaderObject connection) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the RavenDB connection string {connectionName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the RavenDB connection string {connectionName} from smuggler file. Skipping.", connectionName);
 
                                 continue;
                             }
@@ -544,7 +544,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (aiConnectionStrings.TryGet(connectionName, out BlittableJsonReaderObject connection) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the AI connection string {connectionName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the AI connection string {connectionName} from smuggler file. Skipping.", connectionName);
 
                                 continue;
                             }
@@ -590,7 +590,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (sqlConnectionStrings.TryGet(connectionName, out BlittableJsonReaderObject connection) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the SQL connection string {connectionName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the SQL connection string {connectionName} from smuggler file. Skipping.", connectionName);
 
                                 continue;
                             }
@@ -618,7 +618,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (snowflakeConnectionStrings.TryGet(connectionName, out BlittableJsonReaderObject connection) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the Snowflake connection string {connectionName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the Snowflake connection string {connectionName} from smuggler file. Skipping.", connectionName);
 
                                 continue;
                             }
@@ -690,7 +690,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (olapConnectionStrings.TryGet(connectionName, out BlittableJsonReaderObject connection) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the OLAP connection string {connectionName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the OLAP connection string {connectionName} from smuggler file. Skipping.", connectionName);
 
                                 continue;
                             }
@@ -735,7 +735,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (elasticConnectionStrings.TryGet(connectionName, out BlittableJsonReaderObject connection) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the Elastic Search connection string {connectionName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the Elastic Search connection string {connectionName} from smuggler file. Skipping.", connectionName);
 
                                 continue;
                             }
@@ -780,7 +780,7 @@ namespace Raven.Server.Smuggler.Documents
                             if (queueConnectionStrings.TryGet(connectionName, out BlittableJsonReaderObject connection) == false)
                             {
                                 if (_log.IsInfoEnabled)
-                                    _log.Info($"Wasn't able to import the Queue connection string {connectionName} from smuggler file. Skipping.");
+                                    _log.Info("Wasn't able to import the Queue connection string {connectionName} from smuggler file. Skipping.", connectionName);
 
                                 continue;
                             }

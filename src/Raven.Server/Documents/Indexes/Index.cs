@@ -2780,7 +2780,7 @@ namespace Raven.Server.Documents.Indexes
                     return;
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Changing priority for '{Name}' from '{Definition.Priority}' to '{priority}'.");
+                    _logger.Info("Changing priority for '{Name}' from '{Definition.Priority}' to '{priority}'.", Name, Definition.Priority, priority);
 
                 var oldPriority = Definition.Priority;
 
@@ -4949,7 +4949,7 @@ namespace Raven.Server.Documents.Indexes
                     break;
 
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"{Name} is still waiting for other indexes to complete their batches because there is a {reason} condition in action...");
+                    _logger.Info("{Name} is still waiting for other indexes to complete their batches because there is a {reason} condition in action...", Name, reason);
             }
         }
 

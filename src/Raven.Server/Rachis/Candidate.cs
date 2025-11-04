@@ -220,7 +220,7 @@ namespace Raven.Server.Rachis
         {
             if (_engine.Log.IsInfoEnabled)
             {
-                _engine.Log.Info($"{ToString()}: {message}");
+                _engine.Log.Info("{ToString()}: {message}", ToString(), message);
             }
             _engine.SetNewState(RachisState.Passive, this, _engine.CurrentTerm, message);
         }

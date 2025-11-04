@@ -476,7 +476,7 @@ namespace Raven.Server.Documents
             NonPersistentDocumentFlags nonPersistentFlags = NonPersistentDocumentFlags.None)
         {
             if (_logger.IsInfoEnabled)
-                _logger.Info($"Adding conflict to {id} (Incoming change vector {incomingChangeVector})");
+                _logger.Info("Adding conflict to {id} (Incoming change vector {incomingChangeVector})", id, incomingChangeVector);
 
             var tx = context.Transaction.InnerTransaction;
             var conflictsTable = tx.OpenTable(ConflictsSchema, ConflictsSlice);

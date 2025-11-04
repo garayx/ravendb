@@ -1378,7 +1378,7 @@ namespace Voron.Recovery
 
                 _timeSeriesWritten = true;
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Found time-series segment with document Id={item.DocId} and time-series={item.Name}");
+                    _logger.Info("Found time-series segment with document Id={item.DocId} and time-series={item.Name}", item.DocId, item.Name);
 
                 _lastRecoveredDocumentKey = item.DocId;
 
@@ -1441,7 +1441,7 @@ namespace Voron.Recovery
 
                 _counterWritten = true;
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Found counter item with document Id={counterGroup.DocumentId} and counter values={counterGroup.Values}");
+                    _logger.Info("Found counter item with document Id={counterGroup.DocumentId} and counter values={counterGroup.Values}", counterGroup.DocumentId, counterGroup.Values);
 
                 _lastRecoveredDocumentKey = counterGroup.DocumentId;
 
@@ -1526,7 +1526,7 @@ namespace Voron.Recovery
                 _documentWritten = true;
                 _numberOfDocumentsRetrieved++;
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Found document with key={document.Id}");
+                    _logger.Info("Found document with key={document.Id}", document.Id);
                 _lastRecoveredDocumentKey = document.Id;
 
                 HandleDocumentAttachments(document);
@@ -1641,7 +1641,7 @@ namespace Voron.Recovery
                 _revisionWritten = true;
                 _numberOfDocumentsRetrieved++;
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Found revision document with key={revision.Id}");
+                    _logger.Info("Found revision document with key={revision.Id}", revision.Id);
                 _lastRecoveredDocumentKey = revision.Id;
                 return true;
             }
@@ -1688,7 +1688,7 @@ namespace Voron.Recovery
                 _conflictWritten = true;
                 _numberOfDocumentsRetrieved++;
                 if (_logger.IsInfoEnabled)
-                    _logger.Info($"Found conflict document with key={conflict.Id}");
+                    _logger.Info("Found conflict document with key={conflict.Id}", conflict.Id);
                 _lastRecoveredDocumentKey = conflict.Id;
                 return true;
             }

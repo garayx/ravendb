@@ -420,7 +420,7 @@ namespace Raven.Server.Documents.Handlers.Debugging
 
             var id = Guid.NewGuid();
             if (Logger.IsInfoEnabled)
-                Logger.Info($"Creating Debug Package '{id}' for '{databaseName ?? "Server"}'.");
+                Logger.Info("Creating Debug Package '{id}' for '{databaseName}'.", id, databaseName ?? "Server");
 
             foreach (var route in routes)
             {

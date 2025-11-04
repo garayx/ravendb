@@ -221,7 +221,7 @@ namespace Raven.Server.Documents.TimeSeries
                     };
 
                     if (_logger.IsInfoEnabled)
-                        _logger.Info($"{state} is prepared.");
+                        _logger.Info("{state} is prepared.", state);
 
                     states.Add(state);
                     take--;
@@ -277,7 +277,7 @@ namespace Raven.Server.Documents.TimeSeries
                         retained++;
 
                     if (logger.IsInfoEnabled)
-                        logger.Info($"{request} was executed (successfully: {done})");
+                        logger.Info("{request} was executed (successfully: {done})", request, done);
 
                     if (context.CanContinueTransaction == false)
                         break;

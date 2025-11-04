@@ -74,7 +74,7 @@ public sealed class FollowerReadAndCommitSnapshotCommand : MergedTransactionComm
                     $"The snapshot installation had failed because the last included index {_snapshot.LastIncludedIndex} in term {_snapshot.LastIncludedTerm} doesn't match the last entry {lastEntryIndex}";
                 if (_engine.Log.IsInfoEnabled)
                 {
-                    _engine.Log.Info($"{ToString()}: {message}");
+                    _engine.Log.Info("{ToString()}: {message}", ToString(), message);
                 }
 
                 throw new InvalidOperationException(message);
@@ -87,7 +87,7 @@ public sealed class FollowerReadAndCommitSnapshotCommand : MergedTransactionComm
             const string message = "Expected to get topology on snapshot";
             if (_engine.Log.IsInfoEnabled)
             {
-                _engine.Log.Info($"{ToString()}: {message}");
+                _engine.Log.Info("{ToString()}: {message}", ToString(), message);
             }
 
             throw new InvalidOperationException(message);
