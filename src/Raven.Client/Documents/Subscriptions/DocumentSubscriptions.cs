@@ -172,7 +172,8 @@ namespace Raven.Client.Documents.Subscriptions
                         JavascriptConversionExtensions.NullCoalescingSupport.Instance,
                         JavascriptConversionExtensions.NestedConditionalSupport.Instance,
                         JavascriptConversionExtensions.StringSupport.Instance,
-                        new JavascriptConversionExtensions.IdentityPropertySupport(conventions)
+                        new JavascriptConversionExtensions.IdentityPropertySupport(conventions),
+                        JavascriptConversionExtensions.MetadataSupport.Instance
                     ));
 
                 queryBuilder
