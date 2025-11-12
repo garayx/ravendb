@@ -442,7 +442,7 @@ namespace Raven.Server.Utils
             out (AsymmetricAlgorithm PrivateKey, AsymmetricAlgorithm PublicKey) keyPair,
             out X500DistinguishedName name,
             StringBuilder log = null,
-            bool generateNewKeyPair = false)
+            bool generateNewKeyPair = true)
         {
             log?.AppendLine("CreateCertificateAuthorityCertificate:");
 
