@@ -34,12 +34,41 @@ namespace Raven.Client.Documents.Commands.Batches
         }
     }
 
+    internal class SingleNodeBatchWithTrackingCommand : SingleNodeBatchCommand
+    {
+        private readonly BatchTrackChangesCommandData _trackChangesCommand;
+
+        public SingleNodeBatchWithTrackingCommand(DocumentConventions conventions, JsonOperationContext context, IList<ICommandData> commands, BatchTrackChangesCommandData trackChangesCommand, 
+            BatchOptions options = null, TransactionMode mode = TransactionMode.SingleNode) : base(conventions, context, commands, options, mode)
+        {
+            _trackChangesCommand = trackChangesCommand;
+        }
+
+        protected override IList<ICommandData> Initialize(IList<ICommandData> commands)
+        {
+            if (_trackChangesCommand == null) 
+                return base.Initialize(commands);
+
+            var cmds = new List<ICommandData>{ _trackChangesCommand };
+            foreach (var command in commands)
+            {
+                InitializeInternal(command);
+                cmds.Add(command);
+            }
+
+            _commandsAsJson = new BlittableJsonReaderObject[cmds.Count];
+
+            return cmds;
+
+        }
+    }
+
     public class SingleNodeBatchCommand : RavenCommand<BatchCommandResult>, IDisposable
     {
-        private BlittableJsonReaderObject[] _commandsAsJson;
+        protected BlittableJsonReaderObject[] _commandsAsJson;
         private bool? _supportsAtomicWrites;
-        private readonly List<Stream> _attachmentStreams;
-        private readonly HashSet<Stream> _uniqueAttachmentStreams;
+        private List<Stream> _attachmentStreams;
+        private HashSet<Stream> _uniqueAttachmentStreams;
         private readonly DocumentConventions _conventions;
         private readonly IList<ICommandData> _commands;
         private readonly BatchOptions _options;
@@ -48,40 +77,54 @@ namespace Raven.Client.Documents.Commands.Batches
         public SingleNodeBatchCommand(DocumentConventions conventions, JsonOperationContext context, IList<ICommandData> commands, BatchOptions options = null, TransactionMode mode = TransactionMode.SingleNode)
         {
             _conventions = conventions ?? throw new ArgumentNullException(nameof(conventions));
-            _commands = commands ?? throw new ArgumentNullException(nameof(commands));
             _options = options;
             _mode = mode;
-
-            _commandsAsJson = new BlittableJsonReaderObject[_commands.Count];
-            foreach (var command in commands)
-            {
-                if (command is PutAttachmentCommandData putAttachmentCommandData)
-                {
-                    if (_attachmentStreams == null)
-                    {
-                        _attachmentStreams = new List<Stream>();
-                        _uniqueAttachmentStreams = new HashSet<Stream>();
-                    }
-
-                    var stream = putAttachmentCommandData.Stream;
-                    PutAttachmentCommandHelper.ValidateStream(stream);
-                    if (_uniqueAttachmentStreams.Add(stream) == false)
-                        PutAttachmentCommandHelper.ThrowStreamWasAlreadyUsed();
-                    _attachmentStreams.Add(stream);
-                }
-            }
+            _commands = commands ?? throw new ArgumentNullException(nameof(commands));
 
             Timeout = options?.RequestTimeout;
         }
 
+        protected virtual IList<ICommandData> Initialize(IList<ICommandData> commands)
+        {
+            _commandsAsJson = new BlittableJsonReaderObject[commands.Count];
+            foreach (var command in commands)
+            {
+                InitializeInternal(command);
+            }
+
+            return commands;
+        }
+
+        protected void InitializeInternal(ICommandData command)
+        {
+            if (command is PutAttachmentCommandData putAttachmentCommandData)
+            {
+                if (_attachmentStreams == null)
+                {
+                    _attachmentStreams = new List<Stream>();
+                    _uniqueAttachmentStreams = new HashSet<Stream>();
+                }
+
+                var stream = putAttachmentCommandData.Stream;
+                PutAttachmentCommandHelper.ValidateStream(stream);
+                if (_uniqueAttachmentStreams.Add(stream) == false)
+                    PutAttachmentCommandHelper.ThrowStreamWasAlreadyUsed();
+                _attachmentStreams.Add(stream);
+            }
+        }
+
         public override HttpRequestMessage CreateRequest(JsonOperationContext ctx, ServerNode node, out string url)
         {
+            //TODO: egor the best would be to combine the loop in Initialize with if (_supportsAtomicWrites == null)
+            var commands = Initialize(_commands);
+
             if (_supportsAtomicWrites == null)
             {
                 _supportsAtomicWrites = node.SupportsAtomicClusterWrites;
-                for (var i = 0; i < _commands.Count; i++)
+
+                for (var i = 0; i < commands.Count; i++)
                 {
-                    var command = _commands[i];
+                    var command = commands[i];
 
                     var json = command.ToJson(_conventions, ctx);
 

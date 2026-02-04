@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using FastTests.Voron.Util;
+using Raven.Client.Documents.Session;
 using Raven.Server.Utils;
 using SlowTests.Corax;
 using SlowTests.Issues;
@@ -30,13 +31,38 @@ public static class Program
 
             try
             {
+                //using (var testOutputHelper = new ConsoleTestOutputHelper())
+                //using (var test = new RavenDB_25154(testOutputHelper))
+                //{
+                //    DebuggerAttachedTimeout.DisableLongTimespan = true;
+                //    test.ShouldThrowConcurrencyException_WhenTrackedEntityWasChangedInBackgroundSession((Action<IDocumentSession>)RavenDB_25154.ModifyEgorInSession);
+                //}
+
+
+
+                //using (var testOutputHelper = new ConsoleTestOutputHelper())
+                //using (var test = new RavenDB_25154(testOutputHelper))
+                //{
+                //    DebuggerAttachedTimeout.DisableLongTimespan = true;
+                //    test.ShouldThrowConcurrencyException_WhenTrackedEntityDeletedByIdButThenWasEditedInBackgroundSession();
+                //}
+
+                //using (var testOutputHelper = new ConsoleTestOutputHelper())
+                //using (var test = new RavenDB_25154(testOutputHelper))
+                //{
+                //    DebuggerAttachedTimeout.DisableLongTimespan = true;
+                //    test.ShouldThrowConcurrencyException_WhenTrackedEntityIncludedBySessionButThenWasEditedInBackgroundSession((Action<IDocumentSession>)RavenDB_25154.ModifyEgorInSession);
+                //}
+
                 using (var testOutputHelper = new ConsoleTestOutputHelper())
-                using (var test = new RavenDB_21273(testOutputHelper))
+                using (var test = new RavenDB_25154(testOutputHelper))
                 {
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
-                    //test.CanRoundTripSmallContainer("GreaterThan42B");
-                    await test.ExceptionWhenImportingDelayedExternalReplicationWithProLicense();
+                    test.ShouldThrowConcurrencyException_WhenNonExistsEntityIncludedBySessionButThenWasEditedInBackgroundSession();
                 }
+
+
+                //
             }
             catch (Exception e)
             {
