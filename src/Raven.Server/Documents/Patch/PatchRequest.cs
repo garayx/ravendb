@@ -22,6 +22,7 @@ namespace Raven.Server.Documents.Patch
         SnowflakeEtl,
         EmbeddingsGeneration,
         GenAi
+        , CdcSink
     }
 
     /// <summary>

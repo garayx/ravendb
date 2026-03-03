@@ -188,6 +188,13 @@ namespace Raven.Server.Web.System
                 await processor.ExecuteAsync();
         }
 
+        [RavenAction("/databases/*/admin/cdc-sink", "PUT", AuthorizationStatus.DatabaseAdmin)]
+        public async Task AddCdcSink()
+        {
+            using (var processor = new OngoingTasksHandlerProcessorForAddCdcSink(this))
+                await processor.ExecuteAsync();
+        }
+
         internal static OngoingTaskState GetEtlTaskState<T>(EtlConfiguration<T> config) where T : ConnectionString
         {
             var taskState = OngoingTaskState.Enabled;

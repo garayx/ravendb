@@ -72,6 +72,7 @@ using Size = Raven.Client.Util.Size;
 using System.Diagnostics.CodeAnalysis;
 using Raven.Client.Documents.Operations.SchemaValidation;
 using Raven.Server.Documents.AI.Embeddings;
+using Raven.Server.Documents.CDC;
 using Raven.Server.Documents.SchemaValidation;
 using Sparrow.Server.Logging;
 using Sparrow.Server.Utils;
@@ -208,6 +209,7 @@ namespace Raven.Server.Documents
                 _hasClusterTransaction = new ManualResetEventSlim(false);
                 CountersRepairTask = new CountersRepairTask(this, DatabaseShutdown);
                 QueueSinkLoader = new QueueSinkLoader(this, serverStore);
+                CdcSinkLoader = new CdcSinkLoader(this, serverStore);
                 _proxyRequestExecutor = CreateRequestExecutor();
                 _serverStore.Server.ServerCertificateChanged += OnCertificateChange;
             }
@@ -342,6 +344,8 @@ namespace Raven.Server.Documents
 
         public QueueSinkLoader QueueSinkLoader { get; private set; }
 
+        public CdcSinkLoader CdcSinkLoader { get; private set; }
+
         public readonly ConcurrentSet<TcpConnectionOptions> RunningTcpConnections = new ConcurrentSet<TcpConnectionOptions>();
 
         public readonly DateTime StartTime;
@@ -460,6 +464,7 @@ namespace Raven.Server.Documents
 
                 _addToInitLog(LogLevel.Debug, "Initializing Queue Sinks");
                 QueueSinkLoader.Initialize(record);
+                CdcSinkLoader.Initialize(record);
 
                 InitializeAndStartDocumentsMigration();
 
@@ -1107,6 +1112,12 @@ namespace Raven.Server.Documents
             });
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposed QueueSinkLoader");
 
+            ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposing CdcSinkLoader");
+            exceptionAggregator.Execute(() =>
+            {
+                CdcSinkLoader?.Dispose();
+            });
+            ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposed CdcSinkLoader");
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposing AI Integrations");
             exceptionAggregator.Execute(() =>
             {
@@ -1761,6 +1772,7 @@ namespace Raven.Server.Documents
             }
 
             QueueSinkLoader?.HandleDatabaseRecordChange(record);
+            CdcSinkLoader?.HandleDatabaseRecordChange(record);
 
             OnDatabaseRecordChanged(record);
         }

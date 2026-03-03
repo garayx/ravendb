@@ -71,6 +71,7 @@ using Raven.Server.Rachis.Remote;
 using Raven.Server.ServerWide.BackgroundTasks;
 using Raven.Server.ServerWide.Commands;
 using Raven.Server.ServerWide.Commands.AI;
+using Raven.Server.ServerWide.Commands.CDC;
 using Raven.Server.ServerWide.Commands.ConnectionStrings;
 using Raven.Server.ServerWide.Commands.ETL;
 using Raven.Server.ServerWide.Commands.PeriodicBackup;
@@ -2360,6 +2361,55 @@ namespace Raven.Server.ServerWide
             return await SendToLeaderAsync(command);
         }
 
+        public async Task<(long, object)> AddCdcSink(TransactionOperationContext context,
+            string databaseName, BlittableJsonReaderObject cdcSinkConfiguration, string raftRequestId)
+        {
+            UpdateDatabaseCommand command;
+
+            using (ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
+            using (ctx.OpenReadTransaction())
+            using (var rawRecord = Cluster.ReadRawDatabaseRecord(ctx, databaseName))
+            {
+                var cdcSink = JsonDeserializationCluster.CdcSinkConfiguration(cdcSinkConfiguration);
+                cdcSink.Validate(out var CdcSinkErr, validateName: false, validateConnection: false);
+
+                var cdcConnectionString = rawRecord.CdcConnectionStrings;
+                var validateConnectionString = cdcConnectionString != null && cdcConnectionString.TryGetValue(cdcSink.ConnectionStringName, out _);
+
+                if (validateConnectionString == false)
+                    CdcSinkErr.Add($"Could not find connection string named '{cdcSink.ConnectionStringName}'. Please supply an existing connection string.");
+
+                ThrowInvalidCdcSinkConfigurationIfNecessary(cdcSinkConfiguration, CdcSinkErr);
+                command = new AddCdcSinkCommand(cdcSink, databaseName, raftRequestId);
+            }
+
+            return await SendToLeaderAsync(command);
+        }
+
+        public async Task<(long, object)> UpdateCdcSink(TransactionOperationContext context, string databaseName,
+            long id, BlittableJsonReaderObject CdcSinkConfiguration, string raftRequestId)
+        {
+            UpdateDatabaseCommand command;
+            using (ContextPool.AllocateOperationContext(out TransactionOperationContext ctx))
+            using (ctx.OpenReadTransaction())
+            using (var rawRecord = Cluster.ReadRawDatabaseRecord(ctx, databaseName))
+            {
+                var CdcSink = JsonDeserializationCluster.CdcSinkConfiguration(CdcSinkConfiguration);
+                CdcSink.Validate(out var CdcSinkErr, validateName: false, validateConnection: false);
+
+                var CdcConnectionString = rawRecord.CdcConnectionStrings;
+                var result = CdcConnectionString != null && CdcConnectionString.TryGetValue(CdcSink.ConnectionStringName, out _);
+
+                if (result == false)
+                    CdcSinkErr.Add($"Could not find connection string named '{CdcSink.ConnectionStringName}'. Please supply an existing connection string.");
+
+                ThrowInvalidCdcSinkConfigurationIfNecessary(CdcSinkConfiguration, CdcSinkErr);
+                command = new UpdateCdcSinkCommand(id, CdcSink, databaseName, raftRequestId);
+            }
+
+            return await SendToLeaderAsync(command);
+        }
+
         private void ThrowInvalidConfigurationIfNecessary(BlittableJsonReaderObject etlConfiguration, IReadOnlyCollection<string> errors)
         {
             if (errors.Count <= 0)
@@ -2409,6 +2459,30 @@ namespace Raven.Server.ServerWide
 
             sb.AppendLine("Configuration:");
             sb.AppendLine(queueSinkConfiguration.ToString());
+
+            throw new InvalidOperationException(sb.ToString());
+        }
+
+        private void ThrowInvalidCdcSinkConfigurationIfNecessary(BlittableJsonReaderObject cdcSinkConfiguration,
+            IReadOnlyCollection<string> errors)
+        {
+            if (errors.Count <= 0)
+                return;
+
+            var sb = new StringBuilder();
+            sb
+                .AppendLine("Invalid Cdc Sink configuration.")
+                .AppendLine("Errors:");
+
+            foreach (var err in errors)
+            {
+                sb
+                    .Append("- ")
+                    .AppendLine(err);
+            }
+
+            sb.AppendLine("Configuration:");
+            sb.AppendLine(cdcSinkConfiguration.ToString());
 
             throw new InvalidOperationException(sb.ToString());
         }
@@ -2560,6 +2634,13 @@ namespace Raven.Server.ServerWide
             return SendToLeaderAsync(command);
         }
 
+        public Task<(long, object)> RemoveCdcSinkProcessState(TransactionOperationContext context, string databaseName, string configurationName, string scriptName, string raftRequestId)
+        {
+            var command = new RemoveCdcSinkProcessStateCommand(databaseName, configurationName, scriptName, raftRequestId);
+
+            return SendToLeaderAsync(command);
+        }
+
         public Task<(long, object)> ModifyDatabaseRevisions(JsonOperationContext context, string name, BlittableJsonReaderObject configurationJson, string raftRequestId)
         {
             var editRevisions = new EditRevisionsConfigurationCommand(JsonDeserializationCluster.RevisionsConfiguration(configurationJson), name, raftRequestId);
@@ -2605,6 +2686,9 @@ namespace Raven.Server.ServerWide
                     break;
                 case ConnectionStringType.Queue:
                     command = new PutQueueConnectionStringCommand(JsonDeserializationCluster.QueueConnectionString(connectionString), databaseName, raftRequestId);
+                    break;
+                case ConnectionStringType.Cdc:
+                    command = new PutCdcConnectionStringCommand(JsonDeserializationCluster.CdcConnectionString(connectionString), databaseName, raftRequestId);
                     break;
                 case ConnectionStringType.Snowflake:
                     command = new PutSnowflakeConnectionStringCommand(JsonDeserializationCluster.SnowflakeConnectionString(connectionString), databaseName,
@@ -2746,6 +2830,25 @@ namespace Raven.Server.ServerWide
                         }
 
                         command = new RemoveQueueConnectionStringCommand(connectionStringName, databaseName, raftRequestId);
+                        break;
+                    case ConnectionStringType.Cdc:
+
+                        var cdcSinks = rawRecord.CdcSinks;
+
+                        // Don't delete the connection string if used by tasks types: Queue Etl
+                        if (cdcSinks != null)
+                        {
+                            foreach (var queueEtlTask in cdcSinks)
+                            {
+                                if (queueEtlTask.ConnectionStringName == connectionStringName)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Can't delete connection string: {connectionStringName}. It is used by task: {queueEtlTask.Name}");
+                                }
+                            }
+                        }
+
+                        command = new RemoveCdcConnectionStringCommand(connectionStringName, databaseName, raftRequestId);
                         break;
 
                     case ConnectionStringType.Snowflake:

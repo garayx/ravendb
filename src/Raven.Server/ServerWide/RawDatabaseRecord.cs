@@ -10,10 +10,12 @@ using Raven.Client.Documents.Indexes.Analysis;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.AI.Agents;
 using Raven.Client.Documents.Operations.Backups;
+using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.Configuration;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.DataArchival;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
 using Raven.Client.Documents.Operations.ETL.Queue;
@@ -946,6 +948,29 @@ namespace Raven.Server.ServerWide
             }
         }
 
+        private List<CdcSinkConfiguration> _cdcSinks;
+
+        public List<CdcSinkConfiguration> CdcSinks
+        {
+            get
+            {
+                if (_materializedRecord != null)
+                    return _materializedRecord.CdcSinks;
+
+                if (_cdcSinks == null)
+                {
+                    _cdcSinks = new List<CdcSinkConfiguration>();
+                    if (_record.TryGet(nameof(DatabaseRecord.CdcSinks), out BlittableJsonReaderArray bjra) && bjra != null)
+                    {
+                        foreach (BlittableJsonReaderObject element in bjra)
+                            _cdcSinks.Add(JsonDeserializationCluster.CdcSinkConfiguration(element));
+                    }
+                }
+
+                return _cdcSinks;
+            }
+        }
+
         private List<EmbeddingsGenerationConfiguration> _embeddingsGenerationTasks;
 
         public List<EmbeddingsGenerationConfiguration> EmbeddingsGenerations
@@ -1593,8 +1618,41 @@ namespace Raven.Server.ServerWide
                 return _queueConnectionStrings;
             }
         }
-        
-        
+
+        private Dictionary<string, CdcConnectionString> _cdcConnectionStrings;
+
+        public Dictionary<string, CdcConnectionString> CdcConnectionStrings
+        {
+            get
+            {
+                if (_materializedRecord != null)
+                    return _materializedRecord.CdcConnectionStrings;
+
+                if (_cdcConnectionStrings == null)
+                {
+                    _cdcConnectionStrings = new Dictionary<string, CdcConnectionString>();
+                    if (_record.TryGet(nameof(DatabaseRecord.CdcConnectionStrings), out BlittableJsonReaderObject obj) && obj != null)
+                    {
+                        var propertyDetails = new BlittableJsonReaderObject.PropertyDetails();
+                        for (var i = 0; i < obj.Count; i++)
+                        {
+                            obj.GetPropertyByIndex(i, ref propertyDetails);
+
+                            if (propertyDetails.Value == null)
+                                continue;
+
+                            if (propertyDetails.Value is BlittableJsonReaderObject bjro)
+                                _cdcConnectionStrings[propertyDetails.Name] = JsonDeserializationCluster.CdcConnectionString(bjro);
+                        }
+                    }
+                }
+
+                return _cdcConnectionStrings;
+            }
+        }
+
+
+
         private Dictionary<string, SnowflakeConnectionString> _snowflakeConnectionStrings;
 
         public Dictionary<string, SnowflakeConnectionString> SnowflakeConnectionStrings
@@ -1682,6 +1740,7 @@ namespace Raven.Server.ServerWide
                 SqlConnectionStrings = SqlConnectionStrings, 
                 OlapConnectionStrings = OlapConnectionString,
                 ElasticSearchConnectionStrings = ElasticSearchConnectionStrings,
+                CdcConnectionStrings = CdcConnectionStrings,
                 QueueConnectionStrings = QueueConnectionStrings,
                 SnowflakeConnectionStrings = SnowflakeConnectionStrings,
                 AiConnectionStrings = AiConnectionStrings
@@ -1707,6 +1766,9 @@ namespace Raven.Server.ServerWide
                     break;
                 case ConnectionStringType.Queue:
                     result.QueueConnectionStrings = Filter(QueueConnectionStrings);
+                    break;
+                case ConnectionStringType.Cdc:
+                    result.CdcConnectionStrings = Filter(CdcConnectionStrings);
                     break;
                 case ConnectionStringType.Snowflake:
                     result.SnowflakeConnectionStrings = Filter(SnowflakeConnectionStrings);

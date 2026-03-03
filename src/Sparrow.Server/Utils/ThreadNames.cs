@@ -207,6 +207,13 @@ public static class ThreadNames
             Details = new ThreadDetails.QueueSinkProcess(tag, name)
         };
     }
+    public static ThreadInfo ForCdcSinkProcess(string threadName, string tag, string name)
+    {
+        return new ThreadInfo(threadName)
+        {
+            Details = new ThreadDetails.QueueSinkProcess(tag, name)
+        };
+    }
 
     public static ThreadInfo ForClusterTransactions(string threadName, string databaseName)
     {
@@ -269,6 +276,23 @@ public static class ThreadNames
             public string GetShortName()
             {
                 return $"QuSnk {_tag} {_name}";
+            }
+        }
+
+        public class CdcSinkProcess : IThreadDetails
+        {
+            private readonly string _tag;
+            private readonly string _name;
+            
+            public CdcSinkProcess(string tag, string name)
+            {
+                _tag = tag;
+                _name = name;
+            }
+
+            public string GetShortName()
+            {
+                return $"Cnc {_tag} {_name}";
             }
         }
 

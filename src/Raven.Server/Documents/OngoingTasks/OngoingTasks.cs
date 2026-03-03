@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
 using Raven.Client.Documents.Operations.Backups;
+using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.ETL;
 using Raven.Client.Documents.Operations.OngoingTasks;
 using Raven.Client.Documents.Operations.QueueSink;
@@ -141,6 +142,37 @@ public sealed class OngoingTasks : AbstractOngoingTasks<SubscriptionConnectionsS
         return connectionStatus;
     }
 
+    protected override OngoingTaskConnectionStatus GetCdcSinkTaskConnectionStatus(DatabaseRecord record, CdcSinkConfiguration config,
+        out string tag, out string error)
+    {
+        var connectionStatus = OngoingTaskConnectionStatus.None;
+        error = null;
+
+        var processState = CDC.CdcSinkLoader.GetProcessState(config.Scripts, _database, config.Name);
+
+        tag = OngoingTasksUtils.WhoseTaskIsIt(_server, record.Topology, config, processState, _database.NotificationCenter);
+
+        if (tag == _server.NodeTag)
+        {
+            var process = _database.QueueSinkLoader.Processes.FirstOrDefault(x => x.Configuration.Name == config.Name);
+
+            if (process != null)
+                connectionStatus = process.GetConnectionStatus();
+            else
+            {
+                if (config.Disabled)
+                    connectionStatus = OngoingTaskConnectionStatus.NotActive;
+                else
+                    error = $"Queue Sink process '{config.Name}' was not found.";
+            }
+        }
+        else
+        {
+            connectionStatus = OngoingTaskConnectionStatus.NotOnThisNode;
+        }
+
+        return connectionStatus;
+    }
     protected override (string Url, OngoingTaskConnectionStatus Status) GetReplicationTaskConnectionStatus<T>(DatabaseTopology databaseTopology, ClusterTopology clusterTopology, T replication, 
         Dictionary<string, RavenConnectionString> connectionStrings, out ExternalReplicationState replicationState, out string responsibleNodeTag, out RavenConnectionString connection, out long lastDatabaseEtag, out string error)
     {

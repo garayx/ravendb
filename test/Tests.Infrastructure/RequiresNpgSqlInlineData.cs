@@ -10,14 +10,14 @@ namespace Tests.Infrastructure
     {
         public RequiresNpgSqlInlineData()
         {
-            if (RavenTestHelper.SkipIntegrationTests)
-            {
-                Skip = RavenTestHelper.SkipIntegrationMessage;
-                return;
-            }
+            //if (RavenTestHelper.SkipIntegrationTests)
+            //{
+            //    Skip = RavenTestHelper.SkipIntegrationMessage;
+            //    return;
+            //}
 
-            if (RavenTestHelper.IsRunningOnCI)
-                return;
+            //if (RavenTestHelper.IsRunningOnCI)
+            //    return;
 
             if (NpgSqlConnectionString.Instance.CanConnect == false)
                 Skip = "Test requires NpgSQL database";

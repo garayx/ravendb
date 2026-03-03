@@ -106,5 +106,12 @@ namespace Raven.Server.NotificationCenter.Notifications
         RemoteAttachmentsConfigurationNotValid = 69,
         
         SchemaValidationConfiguration_Error = 70,
+
+
+        CdcSink_Error = 71,
+        CdcSink_Warning = 72,
+        CdcSink_ScriptError = 73,
+        CdcSink_ConsumeError = 74,
+        CdcSink_ConsumerCreationError = 75,
     }
 }

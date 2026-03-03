@@ -4,6 +4,7 @@ using Raven.Client.Documents.DataArchival;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.Backups;
+using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.ETL;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
@@ -39,7 +40,8 @@ namespace Raven.Client.Documents.Operations.OngoingTasks
         PullReplicationAsSink,
         QueueSink,
         EmbeddingsGeneration,
-        GenAi
+        GenAi,
+        CdcSink
     }
 
     public enum OngoingTaskState
@@ -572,6 +574,34 @@ namespace Raven.Client.Documents.Operations.OngoingTasks
         
         public string ConnectionStringName { get; set; }
         
+        public string Url { get; set; }
+
+        public override DynamicJsonValue ToJson()
+        {
+            var json = base.ToJson();
+
+            json[nameof(BrokerType)] = BrokerType;
+            json[nameof(ConnectionStringName)] = ConnectionStringName;
+            json[nameof(Url)] = Url;
+            json[nameof(Configuration)] = Configuration?.ToJson();
+
+            return json;
+        }
+    }
+
+    public class OngoingTaskCdcSink : OngoingTask
+    {
+        public OngoingTaskCdcSink()
+        {
+            TaskType = OngoingTaskType.CdcSink;
+        }
+
+        public CdcSinkConfiguration Configuration { get; set; }
+
+        public CdcBrokerType BrokerType { get; set; }
+
+        public string ConnectionStringName { get; set; }
+
         public string Url { get; set; }
 
         public override DynamicJsonValue ToJson()

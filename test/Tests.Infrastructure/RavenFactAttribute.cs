@@ -157,11 +157,11 @@ public class RavenFactAttribute : FactAttribute, ITraitAttribute
 
     private static bool ShouldSkipService(Func<bool> canConnect, string serviceName, out string skipMessage)
     {
-        if (RavenTestHelper.SkipIntegrationTests)
-        {
-            skipMessage = RavenTestHelper.SkipIntegrationMessage;
-            return true;
-        }
+        //if (RavenTestHelper.SkipIntegrationTests)
+        //{
+        //    skipMessage = RavenTestHelper.SkipIntegrationMessage;
+        //    return true;
+        //}
 
         if (RavenTestHelper.IsRunningOnCI)
         {

@@ -53,6 +53,7 @@ namespace Raven.Server.Dashboard
 
         public long GenAiCount { get; set; }
 
+        public long PostgreSqlCdcCount { get; set; }
 
         public long Total { get; set; }
 
@@ -78,7 +79,9 @@ namespace Raven.Server.Dashboard
                 [nameof(RabbitMqSinkCount)] = RabbitMqSinkCount,
                 [nameof(SnowflakeEtlCount)] = SnowflakeEtlCount,
                 [nameof(EmbeddingsGenerationCount)] = EmbeddingsGenerationCount,
-                [nameof(GenAiCount)] = GenAiCount
+                [nameof(GenAiCount)] = GenAiCount,
+                [nameof(PostgreSqlCdcCount)] = PostgreSqlCdcCount
+
             };
         }
     }

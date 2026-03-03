@@ -2,10 +2,14 @@ using System;
 using System.Collections.Generic;
 using Raven.Client.Documents.Attachments;
 using Raven.Client.Documents.Indexes;
-using Raven.Client.Documents.Operations.DataArchival;
+using Raven.Client.Documents.Operations.AI;
+using Raven.Client.Documents.Operations.AI.Agents;
 using Raven.Client.Documents.Operations.Backups;
+using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.Configuration;
+using Raven.Client.Documents.Operations.DataArchival;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
 using Raven.Client.Documents.Operations.ETL.Queue;
@@ -16,6 +20,7 @@ using Raven.Client.Documents.Operations.QueueSink;
 using Raven.Client.Documents.Operations.Refresh;
 using Raven.Client.Documents.Operations.Replication;
 using Raven.Client.Documents.Operations.Revisions;
+using Raven.Client.Documents.Operations.SchemaValidation;
 using Raven.Client.Documents.Operations.TimeSeries;
 using Raven.Client.Documents.Queries.Sorting;
 using Raven.Client.ServerWide;
@@ -27,7 +32,9 @@ using Raven.Server.Documents.Patch;
 using Raven.Server.Documents.Replication;
 using Raven.Server.Integrations.PostgreSQL.Commands;
 using Raven.Server.ServerWide.Commands;
+using Raven.Server.ServerWide.Commands.AI;
 using Raven.Server.ServerWide.Commands.Analyzers;
+using Raven.Server.ServerWide.Commands.CDC;
 using Raven.Server.ServerWide.Commands.ConnectionStrings;
 using Raven.Server.ServerWide.Commands.ETL;
 using Raven.Server.ServerWide.Commands.Indexes;
@@ -38,11 +45,7 @@ using Raven.Server.ServerWide.Commands.Sharding;
 using Raven.Server.ServerWide.Commands.Sorters;
 using Raven.Server.ServerWide.Commands.Subscriptions;
 using Sparrow.Json;
-using Raven.Client.Documents.Operations.AI;
-using Raven.Client.Documents.Operations.AI.Agents;
-using Raven.Server.ServerWide.Commands.AI;
 using AddEmbeddingsGenerationCommand = Raven.Server.ServerWide.Commands.AI.AddEmbeddingsGenerationCommand;
-using Raven.Client.Documents.Operations.SchemaValidation;
 
 namespace Raven.Server.ServerWide
 {
@@ -153,10 +156,12 @@ namespace Raven.Server.ServerWide
         public static readonly Func<BlittableJsonReaderObject, OlapConnectionString> OlapConnectionString = GenerateJsonDeserializationRoutine<OlapConnectionString>();
         public static readonly Func<BlittableJsonReaderObject, ElasticSearchConnectionString> ElasticSearchConnectionString = GenerateJsonDeserializationRoutine<ElasticSearchConnectionString>();
         public static readonly Func<BlittableJsonReaderObject, QueueConnectionString> QueueConnectionString = GenerateJsonDeserializationRoutine<QueueConnectionString>();
+        public static readonly Func<BlittableJsonReaderObject, CdcConnectionString> CdcConnectionString = GenerateJsonDeserializationRoutine<CdcConnectionString>();
         public static readonly Func<BlittableJsonReaderObject, SnowflakeConnectionString> SnowflakeConnectionString = GenerateJsonDeserializationRoutine<SnowflakeConnectionString>();
         public static readonly Func<BlittableJsonReaderObject, AiConnectionString> AiConnectionString = GenerateJsonDeserializationRoutine<AiConnectionString>();
-        
+
         public static readonly Func<BlittableJsonReaderObject, QueueSinkConfiguration> QueueSinkConfiguration = GenerateJsonDeserializationRoutine<QueueSinkConfiguration>();
+        public static readonly Func<BlittableJsonReaderObject, CdcSinkConfiguration> CdcSinkConfiguration = GenerateJsonDeserializationRoutine<CdcSinkConfiguration>();
 
         public static readonly Func<BlittableJsonReaderObject, ClientConfiguration> ClientConfiguration = GenerateJsonDeserializationRoutine<ClientConfiguration>();
 
@@ -256,6 +261,7 @@ namespace Raven.Server.ServerWide
             [nameof(AddElasticSearchEtlCommand)] = GenerateJsonDeserializationRoutine<AddElasticSearchEtlCommand>(),
             [nameof(AddQueueEtlCommand)] = GenerateJsonDeserializationRoutine<AddQueueEtlCommand>(),
             [nameof(AddQueueSinkCommand)] = GenerateJsonDeserializationRoutine<AddQueueSinkCommand>(),
+            [nameof(AddCdcSinkCommand)] = GenerateJsonDeserializationRoutine<AddCdcSinkCommand>(),
             [nameof(AddSnowflakeEtlCommand)] = GenerateJsonDeserializationRoutine<AddSnowflakeEtlCommand>(),
             [nameof(AddEmbeddingsGenerationCommand)] = GenerateJsonDeserializationRoutine<AddEmbeddingsGenerationCommand>(),
             [nameof(AddGenAiCommand)] = GenerateJsonDeserializationRoutine<AddGenAiCommand>(),
@@ -276,6 +282,7 @@ namespace Raven.Server.ServerWide
             [nameof(PutOlapConnectionStringCommand)] = GenerateJsonDeserializationRoutine<PutOlapConnectionStringCommand>(),
             [nameof(PutElasticSearchConnectionStringCommand)] = GenerateJsonDeserializationRoutine<PutElasticSearchConnectionStringCommand>(),
             [nameof(PutQueueConnectionStringCommand)] = GenerateJsonDeserializationRoutine<PutQueueConnectionStringCommand>(),
+            [nameof(PutCdcConnectionStringCommand)] = GenerateJsonDeserializationRoutine<PutCdcConnectionStringCommand>(),
             [nameof(PutSnowflakeConnectionStringCommand)] = GenerateJsonDeserializationRoutine<PutSnowflakeConnectionStringCommand>(),
             [nameof(PutAiConnectionStringCommand)] = GenerateJsonDeserializationRoutine<PutAiConnectionStringCommand>(),
             [nameof(RemoveRavenConnectionStringCommand)] = GenerateJsonDeserializationRoutine<RemoveRavenConnectionStringCommand>(),
@@ -283,6 +290,7 @@ namespace Raven.Server.ServerWide
             [nameof(RemoveOlapConnectionStringCommand)] = GenerateJsonDeserializationRoutine<RemoveOlapConnectionStringCommand>(),
             [nameof(RemoveElasticSearchConnectionStringCommand)] = GenerateJsonDeserializationRoutine<RemoveElasticSearchConnectionStringCommand>(),
             [nameof(RemoveQueueConnectionStringCommand)] = GenerateJsonDeserializationRoutine<RemoveQueueConnectionStringCommand>(),
+            [nameof(RemoveCdcConnectionStringCommand)] = GenerateJsonDeserializationRoutine<RemoveCdcConnectionStringCommand>(),
             [nameof(RemoveSnowflakeConnectionStringCommand)] = GenerateJsonDeserializationRoutine<RemoveSnowflakeConnectionStringCommand>(),
             [nameof(RemoveAiConnectionStringCommand)] = GenerateJsonDeserializationRoutine<RemoveAiConnectionStringCommand>(),
             [nameof(RemoveNodeFromClusterCommand)] = GenerateJsonDeserializationRoutine<RemoveNodeFromClusterCommand>(),
@@ -316,10 +324,12 @@ namespace Raven.Server.ServerWide
             [nameof(DestinationMigrationConfirmCommand)] = GenerateJsonDeserializationRoutine<DestinationMigrationConfirmCommand>(),
             [nameof(SourceMigrationCleanupCommand)] = GenerateJsonDeserializationRoutine<SourceMigrationCleanupCommand>(),
             [nameof(UpdateServerPublishedUrlsCommand)] = GenerateJsonDeserializationRoutine<UpdateServerPublishedUrlsCommand>(),
-            [nameof(AddQueueSinkCommand)] = GenerateJsonDeserializationRoutine<AddQueueSinkCommand>(),
             [nameof(UpdateQueueSinkCommand)] = GenerateJsonDeserializationRoutine<UpdateQueueSinkCommand>(),
             [nameof(UpdateQueueSinkProcessStateCommand)] = GenerateJsonDeserializationRoutine<UpdateQueueSinkProcessStateCommand>(),
             [nameof(RemoveQueueSinkProcessStateCommand)] = GenerateJsonDeserializationRoutine<RemoveQueueSinkProcessStateCommand>(),
+            [nameof(UpdateCdcSinkCommand)] = GenerateJsonDeserializationRoutine<UpdateCdcSinkCommand>(),
+            [nameof(UpdateCdcSinkProcessStateCommand)] = GenerateJsonDeserializationRoutine<UpdateCdcSinkProcessStateCommand>(),
+            [nameof(RemoveCdcSinkProcessStateCommand)] = GenerateJsonDeserializationRoutine<RemoveCdcSinkProcessStateCommand>(),
             [nameof(UpdateResponsibleNodeForTasksCommand)] = GenerateJsonDeserializationRoutine<UpdateResponsibleNodeForTasksCommand>(),
             [nameof(AddPrefixedShardingSettingCommand)] = GenerateJsonDeserializationRoutine<AddPrefixedShardingSettingCommand>(),
             [nameof(DeletePrefixedShardingSettingCommand)] = GenerateJsonDeserializationRoutine<DeletePrefixedShardingSettingCommand>(),

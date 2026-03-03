@@ -872,6 +872,7 @@ namespace Raven.Server.Web
         public const string PutConnectionStringDebugTag = "put-connection-string";
         public const string AddEtlDebugTag = "etl-add";
         public const string AddQueueSinkDebugTag = "queue-sink-add";
+        public const string AddCdcSinkDebugTag = "queue-cdc-add";
         public const string UpdateExternalReplicationDebugTag = "update_external_replication";
         public const string ReadRevisionsConfigTag = "read-revisions-config";
         public const string ConflictedRevisionsConfigTag = "conflicted-revisions-config";
@@ -958,6 +959,9 @@ namespace Raven.Server.Web
 
                 case ConnectionStringType.Queue:
                     return JsonDeserializationClient.QueueConnectionString(configuration).ToAuditJson();
+
+                case ConnectionStringType.Cdc:
+                    return JsonDeserializationClient.CdcConnectionString(configuration).ToAuditJson();
 
                 case ConnectionStringType.Sql:
                     return JsonDeserializationClient.SqlConnectionString(configuration).ToAuditJson();

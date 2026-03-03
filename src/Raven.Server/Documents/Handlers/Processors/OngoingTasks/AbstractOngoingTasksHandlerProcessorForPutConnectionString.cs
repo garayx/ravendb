@@ -57,6 +57,8 @@ namespace Raven.Server.Documents.Handlers.Processors.OngoingTasks
                     return JsonDeserializationCluster.ElasticSearchConnectionString(readerObject);
                 case ConnectionStringType.Queue:
                     return JsonDeserializationCluster.QueueConnectionString(readerObject);
+                case ConnectionStringType.Cdc:
+                    return JsonDeserializationCluster.CdcConnectionString(readerObject);
                 case ConnectionStringType.Snowflake:
                     return JsonDeserializationCluster.SnowflakeConnectionString(readerObject);
                 case ConnectionStringType.Ai:

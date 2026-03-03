@@ -45,6 +45,7 @@ using Raven.Server.Rachis;
 using Raven.Server.ServerWide.Commands;
 using Raven.Server.ServerWide.Commands.AI;
 using Raven.Server.ServerWide.Commands.Analyzers;
+using Raven.Server.ServerWide.Commands.CDC;
 using Raven.Server.ServerWide.Commands.ConnectionStrings;
 using Raven.Server.ServerWide.Commands.ETL;
 using Raven.Server.ServerWide.Commands.Indexes;
@@ -459,6 +460,7 @@ namespace Raven.Server.ServerWide
                     case nameof(AddElasticSearchEtlCommand):
                     case nameof(AddQueueEtlCommand):
                     case nameof(AddQueueSinkCommand):
+                    case nameof(AddCdcSinkCommand):
                     case nameof(AddSnowflakeEtlCommand):
                     case nameof(AddEmbeddingsGenerationCommand):
                     case nameof(AddOrUpdateAiAgentCommand):
@@ -469,6 +471,7 @@ namespace Raven.Server.ServerWide
                     case nameof(UpdateElasticSearchEtlCommand):
                     case nameof(UpdateQueueEtlCommand):
                     case nameof(UpdateQueueSinkCommand):
+                    case nameof(UpdateCdcSinkCommand):
                     case nameof(UpdateSnowflakeEtlCommand):
                     case nameof(UpdateEmbeddingsGenerationCommand):
                     case nameof(DeleteOngoingTaskCommand):
@@ -477,6 +480,7 @@ namespace Raven.Server.ServerWide
                     case nameof(PutOlapConnectionStringCommand):
                     case nameof(PutElasticSearchConnectionStringCommand):
                     case nameof(PutQueueConnectionStringCommand):
+                    case nameof(PutCdcConnectionStringCommand):
                     case nameof(PutSnowflakeConnectionStringCommand):
                     case nameof(PutAiConnectionStringCommand):
                     case nameof(RemoveRavenConnectionStringCommand):
@@ -484,6 +488,7 @@ namespace Raven.Server.ServerWide
                     case nameof(RemoveOlapConnectionStringCommand):
                     case nameof(RemoveElasticSearchConnectionStringCommand):
                     case nameof(RemoveQueueConnectionStringCommand):
+                    case nameof(RemoveCdcConnectionStringCommand):
                     case nameof(RemoveSnowflakeConnectionStringCommand):
                     case nameof(RemoveAiConnectionStringCommand):
                     case nameof(UpdatePullReplicationAsHubCommand):
@@ -520,6 +525,8 @@ namespace Raven.Server.ServerWide
                     case nameof(RemoveEtlProcessStateCommand):
                     case nameof(UpdateQueueSinkProcessStateCommand):
                     case nameof(RemoveQueueSinkProcessStateCommand):
+                    case nameof(UpdateCdcSinkProcessStateCommand):
+                    case nameof(RemoveCdcSinkProcessStateCommand):
                         SetValueForTypedDatabaseCommand(context, type, cmd, index, out result);
 
                         if (result != null)
@@ -1770,7 +1777,9 @@ namespace Raven.Server.ServerWide
             nameof(DatabaseRecord.QueueSinks),
             nameof(DatabaseRecord.EmbeddingsGenerations),
             nameof(DatabaseRecord.GenAis),
-            nameof(DatabaseRecord.AiAgents)
+            nameof(DatabaseRecord.AiAgents),
+            nameof(DatabaseRecord.CdcSinks),
+
         };
 
         private unsafe List<string> AddDatabase(ClusterOperationContext context, string type, BlittableJsonReaderObject cmd, long index, ServerStore serverStore)
@@ -2801,6 +2810,7 @@ namespace Raven.Server.ServerWide
                 case nameof(AddOlapEtlCommand):
                 case nameof(AddQueueEtlCommand):
                 case nameof(AddQueueSinkCommand):
+                case nameof(AddCdcSinkCommand):
                 case nameof(AddSnowflakeEtlCommand):
                 case nameof(AddEmbeddingsGenerationCommand): 
                 case nameof(AddGenAiCommand):
@@ -2831,6 +2841,7 @@ namespace Raven.Server.ServerWide
                 case nameof(PutIndexHistoryCommand):
                 case nameof(PutOlapConnectionStringCommand):
                 case nameof(PutQueueConnectionStringCommand):
+                case nameof(PutCdcConnectionStringCommand):
                 case nameof(PutSnowflakeConnectionStringCommand):
                 case nameof(PutAiConnectionStringCommand):
                 case nameof(PutRavenConnectionStringCommand):
@@ -2838,6 +2849,7 @@ namespace Raven.Server.ServerWide
                 case nameof(RemoveElasticSearchConnectionStringCommand):
                 case nameof(RemoveOlapConnectionStringCommand):
                 case nameof(RemoveQueueConnectionStringCommand):
+                case nameof(RemoveCdcConnectionStringCommand):
                 case nameof(RemoveSnowflakeConnectionStringCommand):
                 case nameof(RemoveAiConnectionStringCommand):
                 case nameof(RemoveRavenConnectionStringCommand):
@@ -2851,6 +2863,7 @@ namespace Raven.Server.ServerWide
                 case nameof(UpdatePeriodicBackupCommand):
                 case nameof(UpdateQueueEtlCommand):
                 case nameof(UpdateQueueSinkCommand):
+                case nameof(UpdateCdcSinkCommand):
                 case nameof(UpdateSnowflakeEtlCommand):
                 case nameof(UpdateEmbeddingsGenerationCommand):
                 case nameof(UpdateRavenEtlCommand):

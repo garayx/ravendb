@@ -9,9 +9,11 @@ using Raven.Client.Documents.Indexes.Analysis;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.AI.Agents;
 using Raven.Client.Documents.Operations.Backups;
+using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.Configuration;
 using Raven.Client.Documents.Operations.DataArchival;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
 using Raven.Client.Documents.Operations.ETL.Queue;
@@ -129,10 +131,11 @@ namespace Raven.Client.ServerWide
         public Dictionary<string, ElasticSearchConnectionString> ElasticSearchConnectionStrings = new Dictionary<string, ElasticSearchConnectionString>();
         
         public Dictionary<string, QueueConnectionString> QueueConnectionStrings = new Dictionary<string, QueueConnectionString>();
-        
+
         public Dictionary<string, SnowflakeConnectionString> SnowflakeConnectionStrings = new Dictionary<string, SnowflakeConnectionString>();
         
         public Dictionary<string, AiConnectionString> AiConnectionStrings = new();
+        public Dictionary<string, CdcConnectionString> CdcConnectionStrings = new Dictionary<string, CdcConnectionString>();
 
         public List<AiAgentConfiguration> AiAgents = new();
 
@@ -153,6 +156,8 @@ namespace Raven.Client.ServerWide
         public List<EmbeddingsGenerationConfiguration> EmbeddingsGenerations = [];
         
         public List<GenAiConfiguration> GenAis = [];
+
+        public List<CdcSinkConfiguration> CdcSinks = [];
 
         public ClientConfiguration Client;
 
@@ -523,6 +528,8 @@ namespace Raven.Client.ServerWide
                 throw new InvalidOperationException($"Can't use task name '{taskName}', there is already a Gen AI task with that name");
             if (AiAgents.Any(x => x.Identifier.Equals(taskName, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException($"Can't use name '{taskName}', there is already an AI Agent config with that name as identifier");
+            if (CdcSinks.Any(x => x.Name.Equals(taskName, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"Can't use task name '{taskName}', there is already a Cdc Sink task with that name");
         }
 
         internal string EnsureUniqueTaskName(string defaultTaskName)

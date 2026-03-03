@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Operations.AI;
+using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.ETL;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
@@ -21,6 +22,7 @@ using Raven.Client.Util;
 using Raven.Server.Config.Categories;
 using Raven.Server.Dashboard.DatabaseNotifications;
 using Raven.Server.Documents;
+using Raven.Server.Documents.CDC;
 using Raven.Server.Documents.ETL;
 using Raven.Server.Documents.QueueSink;
 using Raven.Server.Documents.Replication;
@@ -35,6 +37,7 @@ using Sparrow;
 using Sparrow.Binary;
 using Sparrow.Server.Utils;
 using Voron;
+using CdcSinkConfiguration = Raven.Client.Documents.Operations.CDC.CdcSinkConfiguration;
 using Size = Sparrow.Size;
 
 namespace Raven.Server.Dashboard
@@ -404,10 +407,16 @@ namespace Raven.Server.Dashboard
             long rabbitMqSinkCountOnNode = GetTaskCountOnNode<Client.Documents.Operations.QueueSink.QueueSinkConfiguration>(database, dbRecord, serverStore, database.QueueSinkLoader.Sinks,
                 task => QueueSinkLoader.GetProcessState(task.Scripts, database, task.Name), task => task.BrokerType == QueueBrokerType.RabbitMq);
 
+
+            var postgreSqlCdcCount = database.CdcSinkLoader.GetSinkCountByBroker(CdcBrokerType.PostgreSQL);
+            long postgreSqlCdcCountOnNode = GetTaskCountOnNode<CdcSinkConfiguration>(database, dbRecord, serverStore, database.QueueSinkLoader.Sinks,
+                task => CdcSinkLoader.GetProcessState(task.Scripts, database, task.Name), task => task.BrokerType == CdcBrokerType.PostgreSQL);
+
+
             ongoingTasksCount = extRepCount + replicationHubCount + replicationSinkCount +
                                 ravenEtlCount + sqlEtlCount + elasticSearchEtlCount + olapEtlCount + kafkaEtlCount +
                                 rabbitMqEtlCount + azureQueueStorageEtlCount + amazonSqsEtlCount + periodicBackupCount +
-                                subscriptionCount + kafkaSinkCount + rabbitMqSinkCount + snowflakeEtlCount + embeddingsGenerationCount + genAiCount;
+                                subscriptionCount + kafkaSinkCount + rabbitMqSinkCount + snowflakeEtlCount + embeddingsGenerationCount + genAiCount + postgreSqlCdcCount;
 
             return new DatabaseOngoingTasksInfoItem
             {
@@ -429,7 +438,8 @@ namespace Raven.Server.Dashboard
                 RabbitMqSinkCount = rabbitMqSinkCountOnNode,
                 SnowflakeEtlCount = snowflakeEtlCountOnNode,
                 EmbeddingsGenerationCount = embeddingsGenerationCountOnNode,
-                GenAiCount = genAiCountOnNode
+                GenAiCount = genAiCountOnNode,
+               PostgreSqlCdcCount= postgreSqlCdcCountOnNode
             };
         }
 

@@ -14,6 +14,7 @@ using Raven.Client.Documents.Queries.Suggestions;
 using Raven.Client.Documents.Queries.Timings;
 using Raven.Client.Extensions;
 using Raven.Server.Documents;
+using Raven.Server.Documents.CDC.Stats.Performance;
 using Raven.Server.Documents.Commands.Indexes;
 using Raven.Server.Documents.ETL.Stats;
 using Raven.Server.Documents.Includes;
@@ -168,6 +169,43 @@ namespace Raven.Server.Json
                     wp.WriteComma();
 
                     wp.WriteArray(cp, nameof(scriptStats.Performance), scriptStats.Performance, (wpp, cpp, perfStats) => wpp.WriteQueueSinkPerformanceStats(cpp, perfStats));
+
+                    wp.WriteEndObject();
+                });
+
+                w.WriteEndObject();
+            });
+            writer.WriteEndObject();
+        }
+        public static void WriteCdcSinkTaskPerformanceStats(this AbstractBlittableJsonTextWriter writer, JsonOperationContext context, IEnumerable<CdcSinkTaskPerformanceStats> stats)
+        {
+            writer.WriteStartObject();
+            writer.WriteArray(context, "Results", stats, (w, c, taskStats) =>
+            {
+                w.WriteStartObject();
+
+                w.WritePropertyName(nameof(taskStats.TaskId));
+                w.WriteInteger(taskStats.TaskId);
+                w.WriteComma();
+
+                w.WritePropertyName(nameof(taskStats.TaskName));
+                w.WriteString(taskStats.TaskName);
+                w.WriteComma();
+
+                w.WritePropertyName(nameof(taskStats.BrokerType));
+                w.WriteString(taskStats.BrokerType.ToString());
+                w.WriteComma();
+
+
+                w.WriteArray(c, nameof(taskStats.Stats), taskStats.Stats, (wp, cp, scriptStats) =>
+                {
+                    wp.WriteStartObject();
+
+                    wp.WritePropertyName(nameof(scriptStats.ScriptName));
+                    wp.WriteString(scriptStats.ScriptName);
+                    wp.WriteComma();
+
+                    wp.WriteArray(cp, nameof(scriptStats.Performance), scriptStats.Performance, (wpp, cpp, perfStats) => wpp.WriteCdcSinkPerformanceStats(cpp, perfStats));
 
                     wp.WriteEndObject();
                 });
@@ -1132,6 +1170,12 @@ namespace Raven.Server.Json
         {
             var djv = (DynamicJsonValue)TypeConverter.ToBlittableSupportedType(stats);
             writer.WriteObject(context.ReadObject(djv, "queue-sink/performance"));
+        }
+
+        private static void WriteCdcSinkPerformanceStats(this AbstractBlittableJsonTextWriter writer, JsonOperationContext context, CdcSinkPerformanceStats stats)
+        {
+            var djv = (DynamicJsonValue)TypeConverter.ToBlittableSupportedType(stats);
+            writer.WriteObject(context.ReadObject(djv, "cdc-sink/performance"));
         }
 
         public static void WriteSubscriptionBatchPerformanceStats(this AbstractBlittableJsonTextWriter writer, JsonOperationContext context, SubscriptionBatchPerformanceStats batchStats)

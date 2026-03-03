@@ -4,6 +4,7 @@ using System.Net.Http;
 using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
 using Raven.Client.Documents.Operations.ETL.Queue;
@@ -93,6 +94,7 @@ namespace Raven.Client.Documents.Operations.ConnectionStrings
         public Dictionary<string, OlapConnectionString> OlapConnectionStrings { get; set; }
         public Dictionary<string, ElasticSearchConnectionString> ElasticSearchConnectionStrings { get; set; }
         public Dictionary<string, QueueConnectionString> QueueConnectionStrings { get; set; }
+        public Dictionary<string, CdcConnectionString> CdcConnectionStrings { get; set; }
         public Dictionary<string, SnowflakeConnectionString> SnowflakeConnectionStrings { get; set; }
         public Dictionary<string, AiConnectionString> AiConnectionStrings { get; set; }
         
@@ -105,6 +107,7 @@ namespace Raven.Client.Documents.Operations.ConnectionStrings
             AddConnections(OlapConnectionStrings, nameof(OlapConnectionStrings));
             AddConnections(ElasticSearchConnectionStrings, nameof(ElasticSearchConnectionStrings));
             AddConnections(QueueConnectionStrings, nameof(QueueConnectionStrings));
+            AddConnections(CdcConnectionStrings, nameof(CdcConnectionStrings));
             AddConnections(SnowflakeConnectionStrings, nameof(SnowflakeConnectionStrings));
             AddConnections(AiConnectionStrings, nameof(AiConnectionStrings));
 

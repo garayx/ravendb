@@ -3,6 +3,7 @@ using System.Linq;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
 using Raven.Client.Documents.Operations.ETL.Queue;
@@ -131,7 +132,25 @@ namespace Raven.Server.ServerWide.Commands.ConnectionStrings
             record.QueueConnectionStrings[ConnectionString.Name] = ConnectionString;
         }
     }
-    
+
+    public sealed class PutCdcConnectionStringCommand : PutConnectionStringCommand<CdcConnectionString>
+    {
+        public PutCdcConnectionStringCommand()
+        {
+            // for deserialization
+        }
+
+        public PutCdcConnectionStringCommand(CdcConnectionString connectionString, string databaseName, string uniqueRequestId) : base(connectionString, databaseName, uniqueRequestId)
+        {
+
+        }
+
+        public override void UpdateDatabaseRecord(DatabaseRecord record, long etag)
+        {
+            record.CdcConnectionStrings[ConnectionString.Name] = ConnectionString;
+        }
+    }
+
     public sealed class PutSnowflakeConnectionStringCommand : PutConnectionStringCommand<SnowflakeConnectionString>
     {
         public PutSnowflakeConnectionStringCommand()

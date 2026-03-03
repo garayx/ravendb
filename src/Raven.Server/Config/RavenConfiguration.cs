@@ -58,7 +58,8 @@ namespace Raven.Server.Config
         
         public AiConfiguration Ai { get; }
 
-        public QueueSinkConfiguration QueueSink { get; }
+        public Categories.QueueSinkConfiguration QueueSink { get; }
+        public Categories.CdcSinkConfiguration CdcSink { get; }
 
         public ReplicationConfiguration Replication { get; }
 

@@ -1,6 +1,7 @@
 ﻿using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.ElasticSearch;
 using Raven.Client.Documents.Operations.ETL.OLAP;
 using Raven.Client.Documents.Operations.ETL.Queue;
@@ -118,7 +119,23 @@ namespace Raven.Server.ServerWide.Commands.ConnectionStrings
             record.QueueConnectionStrings.Remove(ConnectionStringName);
         }
     }
-    
+
+    public sealed class RemoveCdcConnectionStringCommand : RemoveConnectionStringCommand<CdcConnectionString>
+    {
+        public RemoveCdcConnectionStringCommand()
+        {
+            // for deserialization
+        }
+
+        public RemoveCdcConnectionStringCommand(string connectionStringName, string databaseName, string uniqueRequestId) : base(connectionStringName, databaseName, uniqueRequestId)
+        {
+        }
+
+        public override void UpdateDatabaseRecord(DatabaseRecord record, long etag)
+        {
+            record.CdcConnectionStrings.Remove(ConnectionStringName);
+        }
+    }
     public sealed class RemoveSnowflakeConnectionStringCommand : RemoveConnectionStringCommand<SnowflakeConnectionString>
     {
         public RemoveSnowflakeConnectionStringCommand()

@@ -70,6 +70,7 @@ namespace Raven.Client.Documents.Operations.ConnectionStrings
         ElasticSearch,
         Queue,
         Snowflake,
-        Ai
+        Ai,
+        Cdc
     }
 }
