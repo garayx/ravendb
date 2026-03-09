@@ -59,6 +59,8 @@ public class CdcSinkConfiguration : IDynamicJson, IDatabaseTask
     /// </summary>
     internal bool TestMode { get; set; }
 
+    // TODO: egor link this with MigrationSettings, add BatchSize etc
+
     /// <summary>
     /// A list of user-defined scripts that process incoming queue messages and define how they should be stored in RavenDB.
     /// </summary>

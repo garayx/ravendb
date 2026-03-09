@@ -1,4 +1,5 @@
-﻿using Raven.Client.Documents.Operations.QueueSink;
+﻿using Raven.Client.Documents.Operations.CDC;
+using Raven.Client.Documents.Operations.QueueSink;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;

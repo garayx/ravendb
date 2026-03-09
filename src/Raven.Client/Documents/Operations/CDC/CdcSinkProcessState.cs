@@ -1,7 +1,7 @@
 using Raven.Client.ServerWide;
 using Sparrow.Json.Parsing;
 
-namespace Raven.Client.Documents.Operations.QueueSink;
+namespace Raven.Client.Documents.Operations.CDC;
 
 public class CdcSinkProcessState : IDatabaseTaskStatus
 {
@@ -11,6 +11,8 @@ public class CdcSinkProcessState : IDatabaseTaskStatus
 
     public string ScriptName { get; set; }
     
+    public ulong LastLsn { get; set; }
+
     public DynamicJsonValue ToJson()
     {
         var json = new DynamicJsonValue
@@ -18,6 +20,7 @@ public class CdcSinkProcessState : IDatabaseTaskStatus
             [nameof(ConfigurationName)] = ConfigurationName,
             [nameof(ScriptName)] = ScriptName,
             [nameof(NodeTag)] = NodeTag,
+            [nameof(LastLsn)] = LastLsn
         };
 
         return json;

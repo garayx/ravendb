@@ -68,18 +68,18 @@ namespace SlowTests.Server.Documents.CDC
             using (db.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
-
-
                 //here I have the postgresql with the data inside.
-                // now need to setup the CDC task in ravendb. 
+                // now need to setup the CDC task in ravendb.
 
-
-
+                // var crazyGuid = Guid.NewGuid().ToString();
+                int crazyGuid = new Random().Next();
                 var connectionStringName = "NpgsqlCdcConnectionString";
                 var sqlConnectionString = new PostgresqlConnectionSettings
                 {
                     ConnectionString = connectionString,
-                    FactoryName = nameof(SqlProvider.Npgsql)
+                    FactoryName = nameof(SqlProvider.Npgsql),
+                    PostgresSlotName = $"rvn_cdc_slot_{crazyGuid}",
+                    PostgresPublicationName = $"rvn_cdc_pub_{crazyGuid}",
                 };
 
                 var cdcConnectionString = new CdcConnectionString
@@ -89,13 +89,8 @@ namespace SlowTests.Server.Documents.CDC
                     PostgresqlConnectionSettings = sqlConnectionString
                 };
 
-
                 var result1 = store.Maintenance.Send(new PutConnectionStringOperation<CdcConnectionString>(cdcConnectionString));
                 Assert.NotNull(result1.RaftCommandIndex);
-
-
-              
-
 
                 string configurationName = "my first cdc with postgresql";
                 var config = new CdcSinkConfiguration
@@ -106,12 +101,12 @@ namespace SlowTests.Server.Documents.CDC
                     BrokerType = CdcBrokerType.PostgreSQL
                 };
 
-
                 var addResult = store.Maintenance.Send(new AddCdcSinkOperation<SqlConnectionString>(config));
-        
 
+                 WaitForUserToContinueTheTest(store);
 
-                WaitForUserToContinueTheTest(store);
+                Thread.Sleep(int.MaxValue);
+
                 //var config = SetupPostgreSqlCdcSink(store, "put(this.Id, this)", new List<string>() { UsersQueueName });
 
 

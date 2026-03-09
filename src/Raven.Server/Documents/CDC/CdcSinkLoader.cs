@@ -132,11 +132,15 @@ public class CdcSinkLoader : IDisposable
             if (whoseTaskIsIt != _serverStore.NodeTag)
                 continue;
 
-            foreach (var transform in config.Scripts)
-            {
-                CdcSinkProcess process = CdcSinkProcess.CreateInstance(transform, config, _database);
-                yield return process;
-            }
+            // TODO: egor this should be same as GenericDatabaseMigrator.Migrate method, we need to iterate over the collections ?
+            //foreach (var transform in config.Scripts)
+            //{
+            //    CdcSinkProcess process = CdcSinkProcess.CreateInstance(transform, config, _database);
+            //    yield return process;
+            //}
+
+            CdcSinkProcess process = CdcSinkProcess.CreateInstance(processState.LastLsn, new CdcSinkScript(), config, _database);
+            yield return process;
         }
     }
 

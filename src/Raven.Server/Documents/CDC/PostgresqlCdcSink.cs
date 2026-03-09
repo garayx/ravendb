@@ -1,70 +1,146 @@
-using System.Collections.Generic;
-using System.Security.Cryptography;
-using Confluent.Kafka;
+using System;
+using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
+using Npgsql;
+using Npgsql.Replication;
+using Npgsql.Replication.PgOutput;
 using Raven.Client.Documents.Operations.CDC;
-using Raven.Client.Documents.Operations.QueueSink;
-using Raven.Server.Documents.QueueSink;
-using Raven.Server.Utils;
 
 namespace Raven.Server.Documents.CDC;
 
 public sealed class PostgresqlCdcSink : CdcSinkProcess
 {
-    public PostgresqlCdcSink(CdcSinkConfiguration configuration, CdcSinkScript script, DocumentDatabase database, string tag) : base(configuration, script, database, tag)
+    public PostgresqlCdcSink(CdcSinkConfiguration configuration, ulong lastLsn, CdcSinkScript script, DocumentDatabase database, string tag) : base(configuration, script, database, tag)
     {
+
+    
+        LastLsn = new NpgsqlTypes.NpgsqlLogSequenceNumber(lastLsn);
     }
 
-    protected override IQueueSinkConsumer CreateConsumer()
+    string _testTables = "\"Order\", \"customer\", \"category\", \"orderitem\", \"details\", \"product\", \"photo\", \"productcategory\"";
+
+    public NpgsqlTypes.NpgsqlLogSequenceNumber LastLsn { get; set; }
+
+    private async Task EnsureReplicationSetupAsync(CancellationToken cancellationToken)
     {
-        //var consumerConfig = new ConsumerConfig
-        //{
-        //    BootstrapServers = Configuration.Connection.KafkaConnectionSettings.BootstrapServers,
-        //    GroupId = GroupId,
-        //    IsolationLevel = IsolationLevel.ReadCommitted,
-        //    // we are disabling auto commit option and we are manually commit only messages that are processed successfully
-        //    EnableAutoCommit = false,
-        //    // we are using Earliest option because we want to be able to see messages which are present before consumer is connected
-        //    AutoOffsetReset = AutoOffsetReset.Earliest
-        //};
+        await using var conn = new NpgsqlConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
+        await conn.OpenAsync(cancellationToken);
 
-        //var settings = Configuration.Connection.KafkaConnectionSettings;
-        //var certificateHolder = Database.ServerStore.Server.Certificate;
+        await using (var cmd = new NpgsqlCommand(
+                         $"SELECT 1 FROM pg_publication WHERE pubname = @pubName",
+                         conn))
+        {
+            cmd.Parameters.AddWithValue("pubName", Configuration.Connection.PostgresqlConnectionSettings.PostgresPublicationName);
+            var exists = await cmd.ExecuteScalarAsync(cancellationToken);
 
-        //if (settings.UseRavenCertificate && certificateHolder?.ClientCertificate != null)
-        //{
-        //    consumerConfig.SslCertificatePem = certificateHolder.ClientCertificate.ExportCertificatePem();
-        //    consumerConfig.SslKeyPem = (certificateHolder.PrivateKey as RSA).GetExportableRsaPrivateKey().ExportRSAPrivateKeyPem();
-        //    consumerConfig.SecurityProtocol = SecurityProtocol.Ssl;
-        //}
+            if (exists == null)
+            {
 
-        //if (settings.ConnectionOptions != null)
-        //{
-        //    foreach (KeyValuePair<string, string> option in settings.ConnectionOptions)
-        //    {
-        //        consumerConfig.Set(option.Key, option.Value);
-        //    }
-        //}
-
-        //var consumer = new ConsumerBuilder<string, byte[]>(consumerConfig)
-        //    .SetErrorHandler((consumer, error) =>
-        //    {
-        //        if (Logger.IsErrorEnabled)
-        //            Logger.Error(
-        //                $"Kafka Sink process '{Name}' got the following Kafka consumer " +
-        //                $"{(error.IsFatal ? "fatal" : "non fatal")}{(error.IsBrokerError ? " broker" : string.Empty)} error: {error.Reason} " +
-        //                $"(code: {error.Code}, is local: {error.IsLocalError})");
-        //    })
-        //    .SetLogHandler((consumer, logMessage) =>
-        //    {
-        //        if (Logger.IsErrorEnabled)
-        //            Logger.Error($"Kafka Sink process: {Name}. {logMessage.Message} (level: {logMessage.Level}, facility: {logMessage.Facility}");
-        //    })
-        //    .Build();
-        //consumer.Subscribe(Script.Queues);
-
-        //return new KafkaSinkConsumer(consumer);
+                //TODO: egor pass from configuration 
+                //{string.Join(", ", new List<string>(){ "Order" }/*Configuration.Connection.PostgresqlConnectionSettings.PostgresTableNames*/)}
 
 
-        return null;
+
+                await using var createCmd = new NpgsqlCommand(
+                    $"CREATE PUBLICATION {Configuration.Connection.PostgresqlConnectionSettings.PostgresPublicationName} FOR TABLE {_testTables};",
+                    conn);
+                await createCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+
+        try
+        {
+            await using (var cmd = new NpgsqlCommand(
+                             $"SELECT pg_create_logical_replication_slot('{Configuration.Connection.PostgresqlConnectionSettings.PostgresSlotName}', 'pgoutput');",
+                             conn))
+            {
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42710")
+        {
+            // ignore if the replication slot already exits
+        }
+    }
+
+    protected override async Task<ICdcSinkConsumer> CreateConsumerAsync()
+    {
+        //TODO: egor make it async, maybe introduce CreateConsumerASync?
+
+        await EnsureReplicationSetupAsync(CancellationToken);
+        // Configuration.Connection.PostgresqlConnectionSettings.PostgresPublicationName
+        var conn = new LogicalReplicationConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
+
+
+        await conn.Open(CancellationToken);
+
+        var replicationStream = conn.StartReplication(
+            new PgOutputReplicationSlot(Configuration.Connection.PostgresqlConnectionSettings.PostgresSlotName),
+            new PgOutputReplicationOptions(Configuration.Connection.PostgresqlConnectionSettings.PostgresPublicationName, PgOutputProtocolVersion.V1),
+            CancellationToken,
+            LastLsn);
+
+        return new CdcPostgresSqlSinkConsumer(conn, replicationStream);
+
+    }
+
+    protected override async Task HandleInitialLoadAsync()
+    {
+        if (LastLsn > new NpgsqlTypes.NpgsqlLogSequenceNumber(0))
+        {
+            return;
+        }
+
+        try
+        {
+            var conn = new LogicalReplicationConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
+        
+            await conn.Open(CancellationToken);
+
+            var slotOptions = await conn.CreatePgOutputReplicationSlot(
+                Configuration.Connection.PostgresqlConnectionSettings.PostgresSlotName,
+                // This enum is the magic key that gives us the snapshot ID
+                slotSnapshotInitMode: LogicalSlotSnapshotInitMode.Export,
+                cancellationToken: CancellationToken);
+
+            string snapshotName = slotOptions.SnapshotName;
+
+            await using var regularConn = new NpgsqlConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
+            await regularConn.OpenAsync(CancellationToken);
+
+            // A snapshot must be used within a RepeatableRead transaction
+            await using var tx = await regularConn.BeginTransactionAsync(IsolationLevel.RepeatableRead, CancellationToken);
+
+            // Tell Postgres to set the transaction to our exported snapshot
+            await using var setSnapshotCmd = new NpgsqlCommand($"SET TRANSACTION SNAPSHOT '{snapshotName}';", regularConn, tx);
+            await setSnapshotCmd.ExecuteNonQueryAsync(CancellationToken);
+
+            // Now query the table. This query is "frozen" at the exact moment the slot was created.
+            int existingRowCount = 0;
+
+            foreach (var table in _testTables.Split(", "))
+            {
+                await using var selectCmd = new NpgsqlCommand($"SELECT * FROM {table};", regularConn, tx);
+                await using var reader = await selectCmd.ExecuteReaderAsync(CancellationToken);
+
+                while (await reader.ReadAsync(CancellationToken))
+                {
+                    // TODO: Map and save your historical documents here
+                    existingRowCount++;
+                }
+                await reader.CloseAsync();
+
+            }
+
+            // Commit the transaction to release the snapshot lock
+            await tx.CommitAsync(CancellationToken);
+            Console.WriteLine($"Initial sync complete. Processed {existingRowCount} historical rows.");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 }

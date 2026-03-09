@@ -7,8 +7,12 @@ namespace Raven.Client.Documents.Operations.CDC;
 
 public class CdcSinkScript
 {
+
+
+
     public string Name { get; set; }
-    
+    // TODO: egor link this with RootCollection
+
     public List<string> Queues { get; set; } = new();
 
     public string Script { get; set; }

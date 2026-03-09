@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.QueueSink;
 using Raven.Client.ServerWide;
 using Raven.Server.Rachis;

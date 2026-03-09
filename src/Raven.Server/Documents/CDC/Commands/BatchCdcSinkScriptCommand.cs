@@ -56,6 +56,8 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
                     using (message)
                     using (documentScript.Run(context, context, "execute", new object[] {message}))
                     {
+                        //TODO: egor write to db :)
+                        Console.WriteLine(message);
                     }
 
                     _scriptProcessingScope?.RecordProcessedMessage();
