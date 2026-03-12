@@ -21,7 +21,7 @@ namespace Raven.Server.SqlMigration.Oracle
             return $"{columnName}";
         }
 
-        protected override string QuoteTable(string schema, string tableName)
+        public override string QuoteTable(string schema, string tableName)
         {
             return $"{tableName}";
         }
@@ -97,7 +97,7 @@ namespace Raven.Server.SqlMigration.Oracle
             return inputQuery;
         }
 
-        protected override string GetSelectAllQueryForTable(string tableSchema, string tableName)
+        public override string GetSelectAllQueryForTable(string tableSchema, string tableName)
         {
             return $"select * from \"{tableName}\"";
         }

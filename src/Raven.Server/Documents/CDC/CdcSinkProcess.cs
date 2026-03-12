@@ -183,8 +183,12 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
             try
             {
-                // handle intitial load
-                await HandleInitialLoadAsync();
+                using (Database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+                {
+                    // handle intitial load
+                    await HandleInitialLoadAsync();
+                }
+
                 // this is logical replication stage:
                 if (_consumer == null)
                 {

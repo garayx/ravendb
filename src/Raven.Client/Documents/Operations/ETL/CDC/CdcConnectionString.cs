@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.ETL.Queue;
+using Raven.Server.SqlMigration.Model;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
 
@@ -22,9 +24,7 @@ public sealed class CdcConnectionString : ConnectionString
 
     public PostgresqlConnectionSettings PostgresqlConnectionSettings { get; set; }
 
-    [ForceJsonSerialization]
-    internal ulong LastLsn { get; set; }
-
+   
     public override ConnectionStringType Type => ConnectionStringType.Cdc;
 
     protected override void ValidateImpl(List<string> errors)
@@ -40,6 +40,7 @@ public sealed class CdcConnectionString : ConnectionString
                         errors.Add($"{nameof(PostgresqlConnectionSettings.PostgresPublicationName)} has invalid publication name.");
                     if (PostgresqlConnectionSettings.IsValidSlotName(PostgresqlConnectionSettings.PostgresSlotName) == false)
                         errors.Add($"{nameof(PostgresqlConnectionSettings.PostgresSlotName)} has invalid slot name.");
+
                 }
 
                 break;
@@ -72,7 +73,7 @@ public sealed class CdcConnectionString : ConnectionString
 
         json[nameof(BrokerType)] = BrokerType;
         json[nameof(PostgresqlConnectionSettings)] = PostgresqlConnectionSettings?.ToJson();
-        json[nameof(LastLsn)] = LastLsn;
+
 
         return json;
     }

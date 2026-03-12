@@ -218,7 +218,7 @@ namespace Raven.Server.SqlMigration
             return string.Concat(parts);
         }
         
-        private void FillDocumentFields(DynamicJsonValue value, DynamicJsonValue specialColumns, List<ReferenceInformation> references,
+        public static void FillDocumentFields(DynamicJsonValue value, DynamicJsonValue specialColumns, List<ReferenceInformation> references,
             string attachmentNamePrefix, Dictionary<string, byte[]> attachments)
         {
             foreach (var refInfo in references)
@@ -326,7 +326,7 @@ namespace Raven.Server.SqlMigration
             }
         }
 
-        private string GenerateAttachmentKey(params string[] tokens)
+        private static string GenerateAttachmentKey(params string[] tokens)
         {
             return string.Join("_", tokens.Where(x => string.IsNullOrWhiteSpace(x) == false));
         }
@@ -466,7 +466,7 @@ namespace Raven.Server.SqlMigration
             return result;
         }
 
-        protected string GenerateDocumentId(string collection, object[] values)
+        public static string GenerateDocumentId(string collection, object[] values)
         {
             foreach (var t in values)
             {
@@ -489,7 +489,7 @@ namespace Raven.Server.SqlMigration
             return document;
         }
 
-        protected DynamicJsonValue ExtractFromReader(DbDataReader reader, Dictionary<string, string> columnsMapping)
+        public static DynamicJsonValue ExtractFromReader(DbDataReader reader, Dictionary<string, string> columnsMapping)
         {
             var document = new DynamicJsonValue();
 
@@ -501,7 +501,7 @@ namespace Raven.Server.SqlMigration
             return document;
         }
 
-        private object ExtractValue(object value)
+        private static object ExtractValue(object value)
         {
             switch (value)
             {
@@ -520,10 +520,10 @@ namespace Raven.Server.SqlMigration
         }
 
         protected abstract string LimitRowsNumber(string inputQuery, int? rowsLimit);
-        
-        protected abstract string GetSelectAllQueryForTable(string tableSchema, string tableName);
 
-        protected abstract string QuoteTable(string schema, string tableName);
+        public abstract string GetSelectAllQueryForTable(string tableSchema, string tableName);
+
+        public abstract string QuoteTable(string schema, string tableName);
         protected abstract string QuoteColumn(string columnName);
         protected abstract string FactoryName { get; }
 

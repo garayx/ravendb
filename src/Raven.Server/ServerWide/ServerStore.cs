@@ -34,6 +34,7 @@ using Raven.Client.Exceptions.Sharding;
 using Raven.Client.Extensions;
 using Raven.Client.Http;
 using Raven.Client.Json.Serialization;
+using Raven.Client.Json.Serialization.NewtonsoftJson.Internal;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Commands;
 using Raven.Client.ServerWide.Operations;
@@ -78,6 +79,7 @@ using Raven.Server.ServerWide.Commands.PeriodicBackup;
 using Raven.Server.ServerWide.Commands.QueueSink;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.ServerWide.Maintenance;
+using Raven.Server.SqlMigration.Model;
 using Raven.Server.Storage;
 using Raven.Server.Storage.Layout;
 using Raven.Server.Storage.Schema;
@@ -102,6 +104,7 @@ using Sparrow.Utils;
 using Voron;
 using Voron.Exceptions;
 using AddEmbeddingsGenerationCommand = Raven.Server.ServerWide.Commands.AI.AddEmbeddingsGenerationCommand;
+using CdcSinkConfiguration = Raven.Client.Documents.Operations.CDC.CdcSinkConfiguration;
 using Constants = Raven.Client.Constants;
 using DeleteSubscriptionCommand = Raven.Server.ServerWide.Commands.Subscriptions.DeleteSubscriptionCommand;
 using MemoryCache = Raven.Server.Utils.Imports.Memory.MemoryCache;
@@ -2370,7 +2373,16 @@ namespace Raven.Server.ServerWide
             using (ctx.OpenReadTransaction())
             using (var rawRecord = Cluster.ReadRawDatabaseRecord(ctx, databaseName))
             {
-                var cdcSink = JsonDeserializationCluster.CdcSinkConfiguration(cdcSinkConfiguration);
+                CdcSinkConfiguration cdcSink = null;
+
+                     cdcSink = JsonDeserializationCluster.CdcSinkConfiguration(cdcSinkConfiguration);
+                     //var serializer = DocumentConventions.DefaultForServer.Serialization.CreateDeserializer();
+                     //using (var blittableJsonReader = new BlittableJsonReader())
+                     //{
+                     //    blittableJsonReader.Initialize(cdcSinkConfiguration);
+                     //    cdcSink= serializer.Deserialize<CdcSinkConfiguration>(blittableJsonReader);
+                     //}
+
                 cdcSink.Validate(out var CdcSinkErr, validateName: false, validateConnection: false);
 
                 var cdcConnectionString = rawRecord.CdcConnectionStrings;

@@ -15,7 +15,7 @@ namespace Raven.Server.SqlMigration.MsSQL
             return $"[{columnName}]";
         }
 
-        protected override string QuoteTable(string schema, string tableName)
+        public override string QuoteTable(string schema, string tableName)
         {
             return $"[{schema}].[{tableName}]";
         }
@@ -73,8 +73,8 @@ namespace Raven.Server.SqlMigration.MsSQL
             return inputQuery;
         }
 
-        
-        protected override string GetSelectAllQueryForTable(string tableSchema, string tableName)
+
+        public override string GetSelectAllQueryForTable(string tableSchema, string tableName)
         {
             return "select * from " + QuoteTable(tableSchema, tableName);
         }

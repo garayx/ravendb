@@ -7,6 +7,7 @@ using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.Queue;
 using Raven.Client.Documents.Operations.QueueSink;
 using Raven.Client.ServerWide;
+using Raven.Server.SqlMigration.Model;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
 
@@ -18,6 +19,11 @@ namespace Raven.Client.Documents.Operations.CDC;
 public class CdcSinkConfiguration : IDynamicJson, IDatabaseTask
 {
     private bool _initialized;
+
+
+    [ForceJsonSerialization]
+    internal ulong LastLsn { get; set; }
+    public MigrationSettings2 Settings { get; set; }
 
     /// <summary>
     /// Specifies the type of queue broker being used.
@@ -112,6 +118,14 @@ public class CdcSinkConfiguration : IDynamicJson, IDatabaseTask
             return false;
         }
 
+
+        if (Settings.Collections.Any() == false)
+            errors.Add($"{nameof(Settings.Collections)} has no collection to migrate.");
+        if (Settings.BatchSize <= 0)
+        {
+            errors.Add($"{nameof(Settings.BatchSize)} should be greater than 0.");
+        }
+
         return errors.Count == 0;
     }
 
@@ -128,7 +142,8 @@ public class CdcSinkConfiguration : IDynamicJson, IDatabaseTask
             [nameof(Scripts)] = new DynamicJsonArray(Scripts.Select(x => x.ToJson())),
             [nameof(BrokerType)] = BrokerType
         };
-
+        result[nameof(LastLsn)] = LastLsn;
+        result[nameof(Settings)] = Settings?.ToJson();
         return result;
     }
 
@@ -221,5 +236,34 @@ public class CdcSinkConfiguration : IDynamicJson, IDatabaseTask
             differences |= CdcSinkConfigurationCompareDifferences.ConfigurationDisabled;
 
         return differences;
+    }
+}
+
+public class Collection2 : AbstractCollection
+{
+
+    public Collection2() : base()
+    {
+    }
+
+    public Collection2(string sourceTableSchema, string sourceTableName, string name) : base(sourceTableSchema, sourceTableName, name)
+    {
+    }
+
+
+}
+public sealed class MigrationSettings2 : IDynamicJson
+{
+    public List<Collection2> Collections { get; set; }
+    public int BatchSize { get; set; } = 1000;
+    public int? MaxRowsPerTable { get; set; }
+
+    public DynamicJsonValue ToJson()
+    {
+        var json = new DynamicJsonValue();
+        json[nameof(Collections)] = new DynamicJsonArray(Collections.Select(x=>x.ToJson()));
+        json[nameof(BatchSize)] = BatchSize;
+        json[nameof(MaxRowsPerTable)] = MaxRowsPerTable;
+        return json;
     }
 }

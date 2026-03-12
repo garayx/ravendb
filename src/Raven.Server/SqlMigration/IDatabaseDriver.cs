@@ -18,5 +18,9 @@ namespace Raven.Server.SqlMigration
         
         Task Migrate(MigrationSettings settings, DatabaseSchema schema, DocumentDatabase db, DocumentsOperationContext context,
             MigrationResult result = null, Action<IOperationProgress> onProgress = null, CancellationToken token = default);
+
+        public string QuoteTable(string schema, string tableName);
+        public  string GetSelectAllQueryForTable(string tableSchema, string tableName);
+
     }
 }

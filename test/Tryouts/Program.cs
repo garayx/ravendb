@@ -10,7 +10,9 @@ using Raven.Server.Utils;
 using Xunit;
 using FastTests;
 using Raven.Client.Documents.Operations.AI;
+using Raven.Server.SqlMigration;
 using SlowTests.Server.Documents.AI;
+using SlowTests.Server.Documents.CDC;
 
 namespace Tryouts;
 
@@ -21,24 +23,23 @@ public static class Program
         XunitLogging.RedirectStreams = false;
     }
 
-    public static async Task Main(string[] args)
+    public static async Task Main(string[] args)    
     {
         Console.WriteLine(Process.GetCurrentProcess().Id);
         var sources = EventSource.GetSources();
         var runtime = sources.FirstOrDefault(x => x.Name == "System.Runtime");
         runtime?.Dispose();
-        for (int i = 0; i < 1; i++)
+        for (int i = 0; i < 123; i++)
         {
             Console.WriteLine($"Starting to run {i}");
             
             try
             {
                 using (var testOutputHelper = new ConsoleTestOutputHelper())
-                using (var test = new ChatCompletionClientTests(testOutputHelper))
+                using (var test = new PostgreSqlCdcSinkTests(testOutputHelper))
                 {
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
-                    var p = GetGenAiConfig(RavenAiIntegration.OpenAi);
-                    await test.GenAiClientSanityTest(p.Options, p.Configuration);
+                    await test.CanSimpleImport_OneToOne(MigrationProvider.NpgSQL);
                 }
             }
             catch (Exception e)

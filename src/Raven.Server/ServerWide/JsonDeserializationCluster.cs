@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using Org.BouncyCastle.Crypto.IO;
 using Raven.Client.Documents.Attachments;
+using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.AI.Agents;
@@ -23,6 +27,7 @@ using Raven.Client.Documents.Operations.Revisions;
 using Raven.Client.Documents.Operations.SchemaValidation;
 using Raven.Client.Documents.Operations.TimeSeries;
 using Raven.Client.Documents.Queries.Sorting;
+using Raven.Client.Json.Serialization.NewtonsoftJson.Internal;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations.Configuration;
 using Raven.Client.ServerWide.Operations.Integrations.PostgreSQL;
@@ -162,6 +167,68 @@ namespace Raven.Server.ServerWide
 
         public static readonly Func<BlittableJsonReaderObject, QueueSinkConfiguration> QueueSinkConfiguration = GenerateJsonDeserializationRoutine<QueueSinkConfiguration>();
         public static readonly Func<BlittableJsonReaderObject, CdcSinkConfiguration> CdcSinkConfiguration = GenerateJsonDeserializationRoutine<CdcSinkConfiguration>();
+
+
+
+        //TODO: egor I moved The MigrationSettings to client, because the cdc is a task and its saved in the db record, not like migration which is a single time ops
+        // I had to create a new serializer (by using the NewtonsoftJson) and it worked, because we dont support recursive objects in our desirialization routine.
+        // but in the tx merged of cluster it was failing and  had _corruped_ bjro ??
+        // so I used for now just string for collections....
+
+        private static Func<BlittableJsonReaderObject, T> GenerateJsonDeserializationRoutine2<T>()
+        {
+            var jsonParam = Expression.Parameter(typeof(BlittableJsonReaderObject), "json");
+
+            var deserializeMethod = typeof(JsonDeserializationCluster)
+                .GetMethod(nameof(DeserializeViaNewtonsoftJson), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                .MakeGenericMethod(typeof(T));
+
+            var call = Expression.Call(deserializeMethod, jsonParam);
+            var lambda = Expression.Lambda<Func<BlittableJsonReaderObject, T>>(call, jsonParam);
+            return lambda.Compile();
+        }
+
+        private static T DeserializeViaNewtonsoftJson<T>(BlittableJsonReaderObject json)
+        {
+            var serializer = DocumentConventions.DefaultForServer.Serialization.CreateDeserializer();
+            var readerVar = new BlittableJsonReader();
+            readerVar.Initialize(json);
+            return serializer.Deserialize<T>(readerVar);
+        }
+
+        //private static Func<BlittableJsonReaderObject, T> GenerateJsonDeserializationRoutine2<T>()
+        //{
+        //    var jsonParam = Expression.Parameter(typeof(BlittableJsonReaderObject), "json");
+        //    var deserializer = DocumentConventions.DefaultForServer.Serialization.CreateDeserializer();
+
+        //    var interfaceType = typeof(Raven.Client.Json.Serialization.IJsonSerializer);
+        //    var deserializerConst = Expression.Convert(Expression.Constant(deserializer), interfaceType);
+
+        //    // BlittableJsonReader readerInstance = new BlittableJsonReader();
+        //    var readerType = typeof(BlittableJsonReader);
+        //    var readerVar = Expression.Variable(readerType, "reader");
+        //    var newReader = Expression.Assign(readerVar, Expression.New(readerType));
+
+        //    // readerInstance.Initialize(json);
+        //    var initMethod = readerType.GetMethod(nameof(BlittableJsonReader.Initialize));
+        //    var initCall = Expression.Call(readerVar, initMethod, jsonParam);
+
+        //    // deserializer.Deserialize<T>(readerInstance)
+        //    var deserializeMethod = interfaceType.GetMethods()
+        //        .First(m => m.IsGenericMethodDefinition && m.Name == nameof(Raven.Client.Json.Serialization.IJsonSerializer.Deserialize))
+        //        .MakeGenericMethod(typeof(T));
+        //    var deserializeCall = Expression.Call(deserializerConst, deserializeMethod, readerVar);
+
+        //    var body = Expression.Block(
+        //        new[] { readerVar },
+        //        newReader,
+        //        initCall,
+        //        deserializeCall
+        //    );
+
+        //    var lambda = Expression.Lambda<Func<BlittableJsonReaderObject, T>>(body, jsonParam);
+        //    return lambda.Compile();
+        //}
 
         public static readonly Func<BlittableJsonReaderObject, ClientConfiguration> ClientConfiguration = GenerateJsonDeserializationRoutine<ClientConfiguration>();
 
