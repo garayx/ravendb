@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Npgsql.Replication.PgOutput;
 using Raven.Client;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Exceptions.Documents.Patching;
@@ -477,7 +478,7 @@ namespace Raven.Server.SqlMigration
             return collection + "/" + string.Join("/", values);
         }
 
-        protected DynamicJsonValue ExtractFromReader(DbDataReader reader, IEnumerable<string> columnNames)
+        public static DynamicJsonValue ExtractFromReader(DbDataReader reader, IEnumerable<string> columnNames)
         {
             var document = new DynamicJsonValue();
 
@@ -499,6 +500,37 @@ namespace Raven.Server.SqlMigration
             }
 
             return document;
+        }
+
+        public static async Task<SqlMigrationDocument> ExtractFromReader(ReplicationTuple reader, Dictionary<string, string> tableColumnsMapping, HashSet<string> columnNames)
+        {
+            var document = new DynamicJsonValue();
+            var specialColumns = new DynamicJsonValue();
+
+            await foreach (var item in reader)
+            {
+                var columnName = item.GetFieldName();
+                if (tableColumnsMapping.TryGetValue(columnName, out var mappingValue))
+                {
+                    object val = await item.Get();
+
+                    document[mappingValue] = ExtractValue(val);
+                }
+                else if(columnNames.Contains(columnName))
+                {
+                    object val = await item.Get();
+
+                    specialColumns[columnName] = ExtractValue(val);
+                }
+
+            }
+
+            return new SqlMigrationDocument
+            {
+                Object = document,
+                Attachments = new Dictionary<string, byte[]>(),
+                SpecialColumnsValues = specialColumns,
+            };
         }
 
         private static object ExtractValue(object value)
@@ -708,5 +740,6 @@ namespace Raven.Server.SqlMigration
 
             return GetSelectAllQueryForTable(collection.SourceTableSchema, collection.SourceTableName);
         }
+
     }
 }

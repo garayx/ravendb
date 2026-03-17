@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.QueueSink;
+using Raven.Client.Json.Serialization;
 using Raven.Client.ServerWide;
 using Raven.Server.Rachis;
 using Raven.Server.ServerWide.Context;
@@ -31,7 +32,7 @@ public sealed class UpdateCdcSinkProcessStateCommand : UpdateValueForDatabaseCom
     {
         var databaseName = ShardHelper.ToDatabaseName(DatabaseName);
 
-        return CdcSinkProcessState.GenerateItemName(databaseName, State.ConfigurationName, State.ScriptName);
+        return CdcSinkProcessState.GenerateItemName(databaseName, State.ConfigurationName);
     }
 
     public override void FillJson(DynamicJsonValue json)
@@ -53,6 +54,11 @@ public sealed class UpdateCdcSinkProcessStateCommand : UpdateValueForDatabaseCom
             var lastResponsibleNode = GetLastResponsibleNode(HasHighlyAvailableTasks, topology, State.NodeTag);
             if (topology.WhoseTaskIsIt(RachisState.Follower, databaseTask, lastResponsibleNode) != State.NodeTag)
                 throw new RachisApplyException($"Can't update state of Queue Sink {State.ConfigurationName} by node {State.NodeTag}, because it's not its task to update this Queue Sink");
+
+
+
+            var state = JsonDeserializationClient.CdcSinkProcessState(existingValue);
+
         }
 
         return new UpdatedValue(UpdatedValueActionType.Update, context.ReadObject(State.ToJson(), GetItemId()));

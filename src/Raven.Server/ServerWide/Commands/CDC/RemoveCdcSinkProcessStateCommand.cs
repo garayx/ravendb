@@ -25,7 +25,7 @@ public sealed class RemoveCdcSinkProcessStateCommand : UpdateValueForDatabaseCom
 
     public override string GetItemId()
     {
-        return CdcSinkProcessState.GenerateItemName(DatabaseName, ConfigurationName, ScriptName);
+        return CdcSinkProcessState.GenerateItemName(DatabaseName, ConfigurationName);
     }
 
     protected override UpdatedValue GetUpdatedValue(long index, RawDatabaseRecord record, ClusterOperationContext context,

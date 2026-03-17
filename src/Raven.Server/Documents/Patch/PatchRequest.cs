@@ -111,6 +111,12 @@ function execute(doc, args){{
 
                 case PatchRequestType.EtlBehaviorFunctions:
                     return Script;
+                case PatchRequestType.CdcSink:
+                    //TODO: egor jsut return for now :D
+                    return $@"
+function execute(doc, args){{ 
+    return doc;
+}}";
                 default:
                     throw new ArgumentOutOfRangeException();
             }

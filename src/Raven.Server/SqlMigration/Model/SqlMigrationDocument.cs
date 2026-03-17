@@ -22,11 +22,17 @@ namespace Raven.Server.SqlMigration.Model
 
         public void SetCollectionAndId(string collectionName, string id)
         {
-            Object[Constants.Documents.Metadata.Key] = new DynamicJsonValue
+            var m  = new DynamicJsonValue
             {
                 [Constants.Documents.Metadata.Collection] = collectionName,
                 ["@sql-keys"] = SpecialColumnsValues
             };
+
+            //if (string.IsNullOrEmpty(id) == false)
+            //    m[Constants.Documents.Metadata.Id] = id;
+
+            Object[Constants.Documents.Metadata.Key] = m;
+
             Collection = collectionName;
         }
 

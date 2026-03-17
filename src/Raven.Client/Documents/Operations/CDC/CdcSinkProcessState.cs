@@ -13,6 +13,8 @@ public class CdcSinkProcessState : IDatabaseTaskStatus
     
     public ulong LastLsn { get; set; }
 
+    //public MigrationSettings2 Settings { get; set; }
+
     public DynamicJsonValue ToJson()
     {
         var json = new DynamicJsonValue
@@ -26,8 +28,8 @@ public class CdcSinkProcessState : IDatabaseTaskStatus
         return json;
     }
 
-    public static string GenerateItemName(string databaseName, string configurationName, string transformationName)
+    public static string GenerateItemName(string databaseName, string configurationName)
     {
-        return $"values/{databaseName}/cdcsink/{configurationName.ToLowerInvariant()}/{transformationName.ToLowerInvariant()}";
+        return $"{Helpers.ClusterStateMachineValuesPrefix(databaseName)}cdcsink/{configurationName.ToLowerInvariant()}";
     }
 }

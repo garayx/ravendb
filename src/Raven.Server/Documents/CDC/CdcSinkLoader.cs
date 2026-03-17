@@ -127,7 +127,7 @@ public class CdcSinkLoader : IDisposable
             if (ValidateConfiguration(config, uniqueNames) == false)
                 continue;
 
-            var processState = GetProcessState(config.Scripts, _database, config.Name);
+            CdcSinkProcessState processState = GetProcessState(config.Scripts, _database, config.Name);
             var whoseTaskIsIt = OngoingTasksUtils.WhoseTaskIsIt(_serverStore, _databaseRecord.Topology, config, processState, _database.NotificationCenter);
             if (whoseTaskIsIt != _serverStore.NodeTag)
                 continue;
@@ -139,7 +139,7 @@ public class CdcSinkLoader : IDisposable
             //    yield return process;
             //}
 
-            CdcSinkProcess process = CdcSinkProcess.CreateInstance(processState.LastLsn, new CdcSinkScript(), config, _database);
+            CdcSinkProcess process = CdcSinkProcess.CreateInstance(processState, config, _database);
             yield return process;
         }
     }
@@ -199,15 +199,7 @@ public class CdcSinkLoader : IDisposable
     {
         CdcSinkProcessState processState = null;
 
-        foreach (var script in scripts)
-        {
-            if (script.Name == null)
-                continue;
-
-            processState = CdcSinkProcess.GetProcessState(database, configurationName, script.Name);
-            if (processState.NodeTag != null)
-                break;
-        }
+        processState = CdcSinkProcess.GetProcessState(database, configurationName);
 
         return processState ?? new CdcSinkProcessState();
     }

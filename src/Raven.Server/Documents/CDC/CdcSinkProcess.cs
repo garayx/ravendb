@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -13,7 +14,6 @@ using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.ETL.Queue;
 using Raven.Client.Documents.Operations.OngoingTasks;
-using Raven.Client.Documents.Operations.QueueSink;
 using Raven.Client.Exceptions.Documents.Patching;
 using Raven.Client.Json.Serialization;
 using Raven.Client.Util;
@@ -22,14 +22,13 @@ using Raven.Server.Documents.CDC.Stats;
 using Raven.Server.Documents.CDC.Stats.Performance;
 using Raven.Server.Documents.CDC.Test;
 using Raven.Server.Documents.Patch;
-using Raven.Server.Documents.QueueSink;
-using Raven.Server.Documents.QueueSink.Commands;
 using Raven.Server.NotificationCenter.Notifications;
 using Raven.Server.NotificationCenter.Notifications.Details;
 using Raven.Server.ServerWide.Commands.CDC;
-using Raven.Server.ServerWide.Commands.QueueSink;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.ServerWide.Memory;
+using Raven.Server.SqlMigration;
+using Raven.Server.SqlMigration.Schema;
 using Raven.Server.Utils;
 using Sparrow;
 using Sparrow.Json;
@@ -67,25 +66,25 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
     private ICdcSinkConsumer _consumer;
 
-    protected CdcSinkProcess(CdcSinkConfiguration configuration, CdcSinkScript script,
+    protected CdcSinkProcess(CdcSinkConfiguration configuration,
         DocumentDatabase database, string tag)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(database.DatabaseShutdown);
         Logger = database.Loggers.GetLogger(GetType());
         Database = database;
         Configuration = configuration;
-        Script = script;
+        Script = new CdcSinkScript();
         Tag = tag;
-        Name = $"{Configuration.Name}/{Script.Name}";
+        Name = $"{Configuration.Name}";
         Statistics = new CdcSinkProcessStatistics(Tag, Name, Database.NotificationCenter);
     }
 
-    public static CdcSinkProcess CreateInstance(ulong lastLsn, CdcSinkScript script, CdcSinkConfiguration configuration, DocumentDatabase database)
+    public static CdcSinkProcess CreateInstance(CdcSinkProcessState processState, CdcSinkConfiguration configuration, DocumentDatabase database)
     {
         switch (configuration.BrokerType)
         {
             case CdcBrokerType.PostgreSQL:
-                return new PostgresqlCdcSink(configuration, lastLsn, script, database, PostgreSqlTag);
+                return new PostgresqlCdcSink(configuration, processState, database, PostgreSqlTag);
             default:
                 throw new NotSupportedException($"Unknown broker type: {configuration.BrokerType}");
         }
@@ -112,6 +111,10 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
     public TimeSpan? FallbackTime { get; protected set; }
 
+    protected abstract void Initialize();
+    protected abstract Task<ICdcSinkConsumer> CreateConsumerAsync();
+    protected abstract Task HandleInitialLoadAsync();
+
     public OngoingTaskConnectionStatus GetConnectionStatus()
     {
         if (Configuration.Disabled || CancellationToken.IsCancellationRequested)
@@ -126,14 +129,13 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
         return OngoingTaskConnectionStatus.NotActive;
     }
 
-    public static CdcSinkProcessState GetProcessState(DocumentDatabase database, string configurationName,
-        string scriptName)
+    public static CdcSinkProcessState GetProcessState(DocumentDatabase database, string configurationName)
     {
         using (database.ServerStore.ContextPool.AllocateOperationContext(out TransactionOperationContext context))
         using (context.OpenReadTransaction())
         {
             var stateBlittable = database.ServerStore.Cluster.Read(context,
-                CdcSinkProcessState.GenerateItemName(database.Name, configurationName, scriptName));
+                CdcSinkProcessState.GenerateItemName(database.Name, configurationName));
 
             if (stateBlittable != null)
             {
@@ -185,6 +187,10 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
             {
                 using (Database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
                 {
+                    Initialize();
+
+
+
                     // handle intitial load
                     await HandleInitialLoadAsync();
                 }
@@ -220,9 +226,9 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                 using (Database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
                 using (var stats = statsAggregator.CreateScope())
                 {
-                    var messages = new List<BlittableJsonReaderObject>();
-                    NpgsqlLogSequenceNumber lastLsn;
-                    using (var readScope = stats.For(CdcSinkBatchPhases.CdcReading, start: false))
+                    var messages = new List<(string,BlittableJsonReaderObject)>();
+                    NpgsqlLogSequenceNumber lastLsn = default;
+                    using (CdcSinkStatsScope readScope = stats.For(CdcSinkBatchPhases.CdcReading, start: false))
                     {
                         var batchStarted = false;
 
@@ -231,10 +237,9 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                             try
                             {
                                 var message = await _consumer.ConsumeAsync(CancellationToken);
-
-                                if (message is null)
+                                if(message == null)
                                     break;
-
+               
                                 if (batchStarted == false)
                                 {
                                     statsAggregator.Start();
@@ -247,34 +252,49 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                 batchStarted = true;
 
 
-                                var (id, json) = ProcessBatchItem(message);
-
-                                if (id == "CommitMessage")
+                                var result = await ProcessBatchItemAsync(context, message, messages, readScope);
+                                
+                                if (result.Status == CdcBatchStatus.DocumentsSent)
                                 {
-                                     lastLsn = (NpgsqlLogSequenceNumber)json;
+                                    continue;
+                                }
 
-                                    Console.WriteLine();
+                                if (result.Status == CdcBatchStatus.EmptyBatch)
+                                {
+                                    continue;
+                                }
 
+                                if (result.Status == CdcBatchStatus.Commit)
+                                {
+                                    lastLsn= result.LastLsn;
 
-
-
-                                    if (CanContinueBatch(stats, messages.Count, context) == false)
+                                    if (CanContinueBatch(stats, int.MaxValue/*messages.Count*/, context) == false)
                                     {
                                         break;
                                     }
                                 }
-                                else if (id == "BeginMessage")
-                                {
 
-                                }
-                                else
-                                {
-                                    var blittable = DocumentConventions.DefaultForServer.Serialization.DefaultConverter.ToBlittable(json, context);
+                                //if (id == "CommitMessage")
+                                //{
+       
+                                //}
+                                //else if (id == "BeginMessage")
+                                //{
 
-                                    messages.Add(blittable);
+                                //} else if (id == "RelationMessage")
+                                //{
+                                //    var blittable = DocumentConventions.DefaultForServer.Serialization.DefaultConverter.ToBlittable(json, context);
+                                //    Console.WriteLine("$$$ RelationMessage:");
+                                //    Console.WriteLine(blittable);
+                                //}
+                                //else
+                                //{
+                                //    var blittable = DocumentConventions.DefaultForServer.Serialization.DefaultConverter.ToBlittable(json, context);
 
-                                    readScope.RecordReadMessage();
-                                }
+                                //    messages.Add(blittable);
+
+                                //    readScope.RecordReadMessage();
+                                //}
 
 
                             }
@@ -284,6 +304,7 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                             }
                             catch (Exception e)
                             {
+               //                 Console.WriteLine($"$$$ ERROR IN CDC {Environment.NewLine}"+e);
                                 string msg = "Failed to consume message.";
 
                                 if (Logger.IsErrorEnabled)
@@ -330,6 +351,7 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                     processedSuccessfully = command.ProcessedSuccessfully;
 
                                     _consumer.Commit();
+      
                                 }
                                 catch (JavaScriptParseException e)
                                 {
@@ -357,11 +379,13 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
                             try
                             {
+                                    Debug.Assert(lastLsn != default, "lastLsn != default");
                                 UpdateProcessState(new CdcSinkProcessState
                                 {
                                     ConfigurationName = Configuration.Name,
                                     ScriptName = Script.Name,
-                                    NodeTag = Database.ServerStore.NodeTag
+                                    NodeTag = Database.ServerStore.NodeTag,
+                                    LastLsn = (ulong)lastLsn
                                 });
 
                                 Database.CdcSinkLoader.OnBatchCompleted(Configuration.Name, Script.Name, Statistics);
@@ -396,160 +420,21 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
         }
     }
 
-
-    private (string, object) ProcessBatchItem(PgOutputReplicationMessage message)
+    protected class CdcBatchResult
     {
-        switch (message)
-        {
-            case InsertMessage insert:
-                {
-                    var (id, doc) = GetRowData(insert.Relation, insert.NewRow).GetAwaiter().GetResult();
-                    //  _settings.TablesProcessingScripts.TryGetValue(insert.Relation.RelationName, out var script);
-                    //   pending.Add(new ChangeRecord(id, doc, false, script));
-                    return (id, doc);
-                    break;
-                }
-            case UpdateMessage update:
-                {
-                    var (id, doc) =  GetRowData(update.Relation, update.NewRow).GetAwaiter().GetResult();
-                    return (id, doc);
-                    //    _settings.TablesProcessingScripts.TryGetValue(update.Relation.RelationName, out var script);
-                                     //    pending.Add(new ChangeRecord(id, doc, false, script));
-                    break;
-                }
-            case KeyDeleteMessage keyDel:
-                {
-                    var (id, doc) =  GetRowData(keyDel.Relation, keyDel.Key).GetAwaiter().GetResult();
-                    //  _settings.TablesDeletionScripts.TryGetValue(keyDel.Relation.RelationName, out var script);
-                    //  pending.Add(new ChangeRecord(id, doc, true, script));
-                    return (id, doc);
-                }
-                break;
-            case FullDeleteMessage fullDel:
-                {
-                    var (id, doc) =  GetRowData(fullDel.Relation, fullDel.OldRow).GetAwaiter().GetResult();
-                    // _settings.TablesDeletionScripts.TryGetValue(fullDel.Relation.RelationName, out var script);
-                    //  pending.Add(new ChangeRecord(id, doc, true, script));
-                    return (id, doc);
-                }
-            case BeginMessage: // begin tx
-                return ("BeginMessage", null);
-
-            case CommitMessage commit:
-                //    batch.AddRange(pending);
-                //   pending.Clear();
-                //if (lastBatch.IsCompleted)
-                //{
-                //    await lastBatch;
-                //    conn.SetReplicationStatus(lastLsn);
-                //    if (batch.Count > 0)
-                //    {
-                //        lastBatch = ProcessBatch(batch, config, cancellationToken);
-                //        lastLsn = commit.CommitLsn;
-                //        batch = [];
-                //    }
-                //}
-                //else if (batch.Count >= _settings.BatchSize)
-                //{
-                //    // If previous batch is still processing, 
-                //    // wait for it to complete before sending more
-                //    await lastBatch;
-                //    conn.SetReplicationStatus(lastLsn);
-                //    lastBatch = ProcessBatch(batch, config, cancellationToken);
-                //    lastLsn = commit.CommitLsn;
-                //    batch = [];
-                //}
-                NpgsqlLogSequenceNumber lastLsn = commit.CommitLsn;
-                return ("CommitMessage", lastLsn);
-            default:
-                throw new InvalidOperationException($"Unsupported message type: {message.GetType().Name}");
-        }
-
-    }
-    private async Task<(string, object)> GetRowData(RelationMessage relation, ReplicationTuple row)
-    {
-        string id = relation.RelationName + "/";
-        var doc = new Dictionary<string, object?>();
-        bool isFirstKey = true;
-        await foreach (var item in row)
-        {
-            var columnName = item.GetFieldName();
-            object val = await item.Get();
-            if (relation.Columns.Single(x => x.ColumnName == columnName)
-                .Flags.HasFlag(RelationMessage.Column.ColumnFlags.PartOfKey))
-            {
-                if (isFirstKey)
-                {
-                    id += val;
-                    isFirstKey = false;
-                }
-                else
-                {
-                    id += "," + val;
-                }
-            }
-            doc[columnName] = ConvertPostgresType(item.GetDataTypeName(), item.IsDBNull ? null : val);
-        }
-        doc["@metadata"] = new Dictionary<string, object>
-        {
-            ["@collection"] = relation.RelationName
-        };
-        return (id, doc);
+        public CdcBatchStatus Status;
+        public NpgsqlLogSequenceNumber LastLsn;
     }
 
-    private static object? ConvertPostgresType(string postgresType, object? value)
+    protected enum CdcBatchStatus
     {
-        if (value is null || value == DBNull.Value)
-            return null;
-
-        return postgresType.ToLower() switch
-        {
-            // Integer types
-            "smallint" => Convert.ToInt16(value),
-            "integer" => Convert.ToInt32(value),
-            "bigint" => Convert.ToInt64(value),
-            "serial" => Convert.ToInt32(value),
-            "bigserial" => Convert.ToInt64(value),
-
-            // Floating point types
-            "real" => Convert.ToSingle(value),
-            "double precision" => Convert.ToDouble(value),
-            "numeric" => Convert.ToDecimal(value),
-            "decimal" => Convert.ToDecimal(value),
-
-            // Date/Time types
-            "date" => Convert.ToDateTime(value),
-            "time" => value.ToString(), // Keep as string for time-only
-            "timetz" => value.ToString(), // Keep as string for time with timezone
-            "timestamp" => Convert.ToDateTime(value),
-            "timestamptz" => Convert.ToDateTime(value),
-
-            // Boolean
-            "boolean" => Convert.ToBoolean(value),
-
-            // Text types
-            "character" => value.ToString(),
-            "character varying" => value.ToString(),
-            "varchar" => value.ToString(),
-            "text" => value.ToString(),
-
-            // Binary types
-            "bytea" => value, // Keep as byte array
-
-            // UUID
-            "uuid" => value.ToString(),
-
-            // JSON types (PostgreSQL 9.2+)
-            "json" => value.ToString(),
-            "jsonb" => value.ToString(),
-
-            // Arrays (simplified - return as string representation)
-            var t when t.EndsWith("[]") => value.ToString(),
-
-            // Default: keep as-is
-            _ => value
-        };
+        EmptyBatch,
+        DocumentsSent,
+        Commit
     }
+
+    protected abstract Task<CdcBatchResult> ProcessBatchItemAsync(DocumentsOperationContext context, PgOutputReplicationMessage message, List<(string,BlittableJsonReaderObject)> messages, CdcSinkStatsScope readScope);
+  
     private void AddPerformanceStats(CdcSinkStatsAggregator stats)
     {
         
@@ -560,9 +445,6 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
         while (_lastCdcSinkStats.Count > 25)
             _lastCdcSinkStats.TryDequeue(out _);
     }
-
-    protected abstract Task<ICdcSinkConsumer> CreateConsumerAsync();
-    protected abstract Task HandleInitialLoadAsync();
 
     public void Start()
     {

@@ -43,6 +43,7 @@ public class CdcPostgresSqlSinkConsumer : ICdcSinkConsumer
     public void Commit()
     {
         _conn.SetReplicationStatus(_lastLsn);
+
     }
 
     public async ValueTask DisposeAsync()

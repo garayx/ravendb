@@ -242,7 +242,7 @@ public class CdcSinkConfiguration : IDynamicJson, IDatabaseTask
 public class Collection2 : AbstractCollection
 {
 
-    public Collection2() : base()
+    public Collection2() 
     {
     }
 
@@ -251,6 +251,14 @@ public class Collection2 : AbstractCollection
     }
 
 
+    public string Patch { get; set; }
+
+    public override DynamicJsonValue ToJson()
+    {
+        var json = base.ToJson();
+        json[nameof(Patch)] = Patch;
+        return json;
+    }
 }
 public sealed class MigrationSettings2 : IDynamicJson
 {
