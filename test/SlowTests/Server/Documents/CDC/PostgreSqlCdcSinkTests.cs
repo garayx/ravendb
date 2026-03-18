@@ -1,14 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Confluent.Kafka;
-using Confluent.Kafka.Admin;
-using Newtonsoft.Json;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Operations;
@@ -19,16 +15,13 @@ using Raven.Client.Documents.Operations.ETL.Queue;
 using Raven.Client.Documents.Operations.ETL.SQL;
 using Raven.Client.Json.Serialization.NewtonsoftJson.Internal;
 using Raven.Client.ServerWide.Operations;
-using Raven.Server.Config.Settings;
 using Raven.Server.Documents.CDC;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.SqlMigration;
 using Raven.Server.SqlMigration.Model;
-using SlowTests.Server.Documents.Attachments;
 using Sparrow.Json;
 using Sparrow.Server.Json.Sync;
 using Tests.Infrastructure;
-using Tests.Infrastructure.ConnectionString;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -98,7 +91,7 @@ namespace SlowTests.Server.Documents.CDC
                         ColumnsMapping = x.ColumnsMapping,
                         SourceTableSchema = x.SourceTableSchema,
                         Name = x.Name,
-                        Patch = x.Patch
+                        Patch = x.Patch // still doesnt work, but there is code for it :)
                     }).ToList(),
                 };
 
@@ -878,6 +871,378 @@ namespace SlowTests.Server.Documents.CDC
                 // verify no duplicates: total should be exactly initialCount + 2
                 var finalStats = store.Maintenance.Send(new GetStatisticsOperation());
                 Assert.Equal(initialCount + 2, finalStats.CountOfDocuments);
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanReplicateDeleteFromPostgreSQL(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_delete_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                // insert a fresh customer with no FK references so we can freely delete it
+                ulong lsnBeforeInsert = state.LastLsn;
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('WillBeDeleted')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeInsert);
+
+                bool inserted = await WaitForValueAsync(() =>
+                {
+                    using (var session = store.OpenSession())
+                        return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "WillBeDeleted");
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(inserted, "Expected 'WillBeDeleted' customer to arrive before the delete");
+
+                string insertedId;
+                using (var session = store.OpenSession())
+                {
+                    var all = session.Advanced.RawQuery<Customer>("from Customer").ToList();
+                    insertedId = session.Advanced.GetDocumentId(all.First(c => c.Firstname == "WillBeDeleted"));
+                }
+
+                DatabaseStatistics statsBeforeDelete = store.Maintenance.Send(new GetStatisticsOperation());
+                ulong lsnBeforeDelete = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+
+                var pgId = insertedId.Split('/')[1];
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = {pgId}";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeDelete);
+
+                bool deleted = await WaitForValueAsync(() =>
+                {
+                    var currentStats = store.Maintenance.Send(new GetStatisticsOperation());
+                    return currentStats.CountOfDocuments == statsBeforeDelete.CountOfDocuments - 1;
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(deleted, $"Expected {insertedId} to be deleted in RavenDB after DELETE in PostgreSQL");
+
+                using (var session = store.OpenSession())
+                {
+                    Assert.Null(session.Load<Customer>(insertedId));
+                }
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanReplicateMultipleDeletesInSingleTransaction(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_multi_delete_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                // insert 3 fresh customers with no FK references so we can freely delete them
+                ulong lsnBeforeInserts = state.LastLsn;
+                var insertedNames = new[] { "DeleteMe1", "DeleteMe2", "DeleteMe3" };
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    await using var tx = await conn.BeginTransactionAsync(cts.Token);
+                    foreach (var name in insertedNames)
+                    {
+                        using var cmd = conn.CreateCommand();
+                        cmd.Transaction = tx;
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('{name}')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    await tx.CommitAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeInserts);
+
+                bool allInserted = await WaitForValueAsync(() =>
+                {
+                    using (var session = store.OpenSession())
+                    {
+                        var all = session.Advanced.RawQuery<Customer>("from Customer").ToList();
+                        return insertedNames.All(n => all.Any(c => c.Firstname == n));
+                    }
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(allInserted, "Expected all 3 inserted customers to arrive");
+
+                List<string> insertedIds;
+                using (var session = store.OpenSession())
+                {
+                    var all = session.Advanced.RawQuery<Customer>("from Customer").ToList();
+                    insertedIds = insertedNames
+                        .Select(n => session.Advanced.GetDocumentId(all.First(c => c.Firstname == n)))
+                        .ToList();
+                }
+
+                DatabaseStatistics statsBeforeDelete = store.Maintenance.Send(new GetStatisticsOperation());
+                ulong lsnBeforeDelete = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    await using var tx = await conn.BeginTransactionAsync(cts.Token);
+                    foreach (var docId in insertedIds)
+                    {
+                        var pgId = docId.Split('/')[1];
+                        using var cmd = conn.CreateCommand();
+                        cmd.Transaction = tx;
+                        cmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = {pgId}";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    await tx.CommitAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeDelete);
+
+                bool allDeleted = await WaitForValueAsync(() =>
+                {
+                    var currentStats = store.Maintenance.Send(new GetStatisticsOperation());
+                    return currentStats.CountOfDocuments == statsBeforeDelete.CountOfDocuments - 3;
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(allDeleted, "Expected all 3 customers deleted in the transaction to be removed from RavenDB");
+
+                using (var session = store.OpenSession())
+                {
+                    foreach (var docId in insertedIds)
+                        Assert.Null(session.Load<Customer>(docId));
+                }
+            }
+        }
+
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanReplicateDeleteAndInsertInSameTransaction(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_delete_insert_tx_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                // insert a fresh customer first so we have one with no FK references to delete
+                ulong lsnBeforeInsert = state.LastLsn;
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('ToDeleteInTx')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeInsert);
+
+                bool inserted = await WaitForValueAsync(() =>
+                {
+                    using (var session = store.OpenSession())
+                        return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "ToDeleteInTx");
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(inserted, "Expected 'ToDeleteInTx' to arrive before the delete+insert transaction");
+
+                string toDeleteId;
+                using (var session = store.OpenSession())
+                {
+                    var all = session.Advanced.RawQuery<Customer>("from Customer").ToList();
+                    toDeleteId = session.Advanced.GetDocumentId(all.First(c => c.Firstname == "ToDeleteInTx"));
+                }
+
+                // advance sequence again for the upcoming insert
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                DatabaseStatistics statsBeforeTx = store.Maintenance.Send(new GetStatisticsOperation());
+                ulong lsnBeforeTx = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+
+                // delete the fresh customer and insert another one in the same transaction
+                var pgId = toDeleteId.Split('/')[1];
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    await using var tx = await conn.BeginTransactionAsync(cts.Token);
+
+                    using (var deleteCmd = conn.CreateCommand())
+                    {
+                        deleteCmd.Transaction = tx;
+                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = {pgId}";
+                        await deleteCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    using (var insertCmd = conn.CreateCommand())
+                    {
+                        insertCmd.Transaction = tx;
+                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('NewAfterDelete')";
+                        await insertCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    await tx.CommitAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeTx);
+
+                // net effect: count stays the same (-1 delete +1 insert)
+                bool countUnchanged = await WaitForValueAsync(() =>
+                {
+                    var currentStats = store.Maintenance.Send(new GetStatisticsOperation());
+                    return currentStats.CountOfDocuments == statsBeforeTx.CountOfDocuments;
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(countUnchanged, "Expected document count to remain the same after one delete and one insert");
+
+                using (var session = store.OpenSession())
+                {
+                    Assert.Null(session.Load<Customer>(toDeleteId));
+                    var all = session.Advanced.RawQuery<Customer>("from Customer").ToList();
+                    Assert.NotNull(all.FirstOrDefault(c => c.Firstname == "NewAfterDelete"));
+                }
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanReplicateUpdateWithReplicaIdentityFull(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                // set REPLICA IDENTITY FULL so PostgreSQL sends FullUpdateMessage
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"ALTER TABLE ""{schemaName}"".""customer"" REPLICA IDENTITY FULL";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                string configurationName = "cdc_full_update_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                using (var session = store.OpenSession())
+                {
+                    var customer = session.Load<Customer>("Customer/1");
+                    Assert.NotNull(customer);
+                    Assert.NotEqual("FullUpdateName", customer.Firstname);
+                }
+
+                ulong lsnBeforeUpdate = state.LastLsn;
+
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"UPDATE ""{schemaName}"".""customer"" SET ""firstname"" = 'FullUpdateName' WHERE ""id"" = 1";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeUpdate);
+
+                bool updated = await WaitForValueAsync(() =>
+                {
+                    using (var session = store.OpenSession())
+                    {
+                        var customer = session.Load<Customer>("Customer/1");
+                        return customer?.Firstname == "FullUpdateName";
+                    }
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(updated, "Expected the customer document to be updated via CDC with REPLICA IDENTITY FULL");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanReplicateUpdateWithReplicaIdentityUsingIndex(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                // create a unique index on the PK column and set REPLICA IDENTITY USING INDEX
+                // so PostgreSQL sends IndexUpdateMessage
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"CREATE UNIQUE INDEX customer_id_idx ON ""{schemaName}"".""customer"" (""id"")";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"ALTER TABLE ""{schemaName}"".""customer"" REPLICA IDENTITY USING INDEX customer_id_idx";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                }
+
+                string configurationName = "cdc_index_update_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                using (var session = store.OpenSession())
+                {
+                    var customer = session.Load<Customer>("Customer/1");
+                    Assert.NotNull(customer);
+                    Assert.NotEqual("IndexUpdateName", customer.Firstname);
+                }
+
+                ulong lsnBeforeUpdate = state.LastLsn;
+
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"UPDATE ""{schemaName}"".""customer"" SET ""firstname"" = 'IndexUpdateName' WHERE ""id"" = 1";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeUpdate);
+
+                bool updated = await WaitForValueAsync(() =>
+                {
+                    using (var session = store.OpenSession())
+                    {
+                        var customer = session.Load<Customer>("Customer/1");
+                        return customer?.Firstname == "IndexUpdateName";
+                    }
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(updated, "Expected the customer document to be updated via CDC with REPLICA IDENTITY USING INDEX");
             }
         }
     }

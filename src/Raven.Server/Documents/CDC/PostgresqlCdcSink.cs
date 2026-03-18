@@ -337,6 +337,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
                 }
             case FullUpdateMessage fullUpdate:
                 {
+                    //TODO: egor test
                     var (id, doc) = await GetRowData(context, fullUpdate.Relation, fullUpdate.NewRow);
                     messages.Add(new CdcChangeItem { Id = id, Document = doc, ChangeType = CdcChangeType.Put });
                     readScope.RecordReadMessage();
@@ -348,6 +349,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
                 }
             case IndexUpdateMessage indexUpdate:
                 {
+                    //TODO: egor test
                     var (id, doc) = await GetRowData(context, indexUpdate.Relation, indexUpdate.NewRow);
                     messages.Add(new CdcChangeItem { Id = id, Document = doc, ChangeType = CdcChangeType.Put });
                     readScope.RecordReadMessage();
@@ -429,6 +431,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
                 return ContinueCdcBatch;
 
             default:
+                //TODO: egor do we want to throw or log?
                 throw new InvalidOperationException($"Unsupported message type: {message.GetType().Name}");
         }
 
