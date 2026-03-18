@@ -50,17 +50,26 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
 
             if (exists == null)
             {
-
-                //TODO: egor pass from configuration 
-                //{string.Join(", ", new List<string>(){ "Order" }/*Configuration.Connection.PostgresqlConnectionSettings.PostgresTableNames*/)}
-
-
-
                 await using var createCmd = new NpgsqlCommand(
                     $"CREATE PUBLICATION {Configuration.Connection.PostgresqlConnectionSettings.PostgresPublicationName} FOR TABLE {string.Join(", ", _testTables.Select(x => $"\"{x.SourceTableName}\""))};",
                     conn);
                 await createCmd.ExecuteNonQueryAsync(cancellationToken);
             }
+        }
+
+        // Terminate any active backend that may still be holding our replication slot
+        // (e.g., from a previous process instance that was stopped when the database was disabled)
+        try
+        {
+            await using var terminateCmd = new NpgsqlCommand(
+                "SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots WHERE slot_name = @slotName AND active_pid IS NOT NULL",
+                conn);
+            terminateCmd.Parameters.AddWithValue("slotName", Configuration.Connection.PostgresqlConnectionSettings.PostgresSlotName);
+            await terminateCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch
+        {
+            // ignore errors — slot may not exist yet or no active backend
         }
 
         try
@@ -296,7 +305,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
     protected static CdcBatchResult EmptyCdcBatch = new CdcBatchResult() { Status = CdcBatchStatus.EmptyBatch };
     protected static CdcBatchResult ContinueCdcBatch = new CdcBatchResult() { Status = CdcBatchStatus.DocumentsSent };
 
-    protected override async Task<CdcBatchResult> ProcessBatchItemAsync(DocumentsOperationContext context, PgOutputReplicationMessage message, List<(string, BlittableJsonReaderObject)> messages, CdcSinkStatsScope readScope)
+    protected override async Task<CdcBatchResult> ProcessBatchItemAsync(DocumentsOperationContext context, PgOutputReplicationMessage message, List<CdcChangeItem> messages, CdcSinkStatsScope readScope)
     {
         if (message == null)
             return EmptyCdcBatch;
@@ -307,110 +316,79 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
             case InsertMessage insert:
                 {
                     var (id, doc) = await GetRowData(context, insert.Relation, insert.NewRow);
-                    //  _settings.TablesProcessingScripts.TryGetValue(insert.Relation.RelationName, out var script);
-                    //   pending.Add(new ChangeRecord(id, doc, false, script));
-                    messages.Add((id, doc));
+                    messages.Add(new CdcChangeItem { Id = id, Document = doc, ChangeType = CdcChangeType.Put });
                     readScope.RecordReadMessage();
-
 
                     return new CdcBatchResult()
                     {
                         Status = CdcBatchStatus.DocumentsSent
                     };
-
-                    break;
                 }
             case DefaultUpdateMessage defaultUpdateMessage:
                 {
-                    Console.WriteLine("defaultUpdateMessage");
                     var (id, doc) = await GetRowData(context, defaultUpdateMessage.Relation, defaultUpdateMessage.NewRow);
-                    messages.Add((id, doc));
+                    messages.Add(new CdcChangeItem { Id = id, Document = doc, ChangeType = CdcChangeType.Put });
                     readScope.RecordReadMessage();
-
 
                     return new CdcBatchResult()
                     {
                         Status = CdcBatchStatus.DocumentsSent
                     };
-
                 }
             case FullUpdateMessage fullUpdate:
                 {
-                    Console.WriteLine("fullUpdate");
                     var (id, doc) = await GetRowData(context, fullUpdate.Relation, fullUpdate.NewRow);
-                    messages.Add((id, doc));
+                    messages.Add(new CdcChangeItem { Id = id, Document = doc, ChangeType = CdcChangeType.Put });
                     readScope.RecordReadMessage();
-
 
                     return new CdcBatchResult()
                     {
                         Status = CdcBatchStatus.DocumentsSent
                     };
-
                 }
             case IndexUpdateMessage indexUpdate:
                 {
-                    Console.WriteLine("indexUpdate");
                     var (id, doc) = await GetRowData(context, indexUpdate.Relation, indexUpdate.NewRow);
-                    messages.Add((id, doc));
+                    messages.Add(new CdcChangeItem { Id = id, Document = doc, ChangeType = CdcChangeType.Put });
                     readScope.RecordReadMessage();
-
 
                     return new CdcBatchResult()
                     {
                         Status = CdcBatchStatus.DocumentsSent
                     };
-
                 }
             case UpdateMessage update:
                 {
                     var (id, doc) = await GetRowData(context, update.Relation, update.NewRow);
-                    messages.Add((id, doc));
+                    messages.Add(new CdcChangeItem { Id = id, Document = doc, ChangeType = CdcChangeType.Put });
                     readScope.RecordReadMessage();
-
 
                     return new CdcBatchResult()
                     {
                         Status = CdcBatchStatus.DocumentsSent
                     };
-
                 }
             case KeyDeleteMessage keyDel:
                 {
-                    var (id, doc) = await GetRowData(context, keyDel.Relation, keyDel.Key);
-                    //  _settings.TablesDeletionScripts.TryGetValue(keyDel.Relation.RelationName, out var script);
-                    //  pending.Add(new ChangeRecord(id, doc, true, script));
-
-                    //TODO: egor what to do on delete?
-
-                    //messages.Add(doc);
-                    //readScope.RecordReadMessage();
-
+                    var (id, _) = await GetRowData(context, keyDel.Relation, keyDel.Key);
+                    messages.Add(new CdcChangeItem { Id = id, Document = null, ChangeType = CdcChangeType.Delete });
+                    readScope.RecordReadMessage();
 
                     return new CdcBatchResult()
                     {
-                        Status = CdcBatchStatus.DocumentsSent
+                        Status = CdcBatchStatus.DocumentDeleted
                     };
-
                 }
-                break;
             case FullDeleteMessage fullDel:
                 {
-                    var (id, doc) = await GetRowData(context, fullDel.Relation, fullDel.OldRow);
-                    // _settings.TablesDeletionScripts.TryGetValue(fullDel.Relation.RelationName, out var script);
-                    //  pending.Add(new ChangeRecord(id, doc, true, script));
-
-                    //TODO: egor what to do on delete?
-
-                    //messages.Add(doc);
-                    //readScope.RecordReadMessage();
-
+                    var (id, _) = await GetRowData(context, fullDel.Relation, fullDel.OldRow);
+                    messages.Add(new CdcChangeItem { Id = id, Document = null, ChangeType = CdcChangeType.Delete });
+                    readScope.RecordReadMessage();
 
                     return new CdcBatchResult()
                     {
-                        Status = CdcBatchStatus.DocumentsSent
+                        Status = CdcBatchStatus.DocumentDeleted
                     };
-
                 }
             case BeginMessage: // begin tx
                 return ContinueCdcBatch;
@@ -424,30 +402,30 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
                 };
 
             case RelationMessage relationMessage:
-                Console.WriteLine("RelationMessage");
-                // TODO: egor we can get relation message in the middle of the stream, so we need to update our cache of relations
+                // A RelationMessage is sent by PostgreSQL whenever the structure of a replicated table changes
+                // (e.g., ALTER TABLE ADD COLUMN) or at the beginning of the replication stream for each table.
+                // We must refresh our cached schema so that subsequent Insert/Update messages are decoded correctly
+                // against the new column set.
+                _schema = _dbDriver.FindSchema();
 
                 return ContinueCdcBatch;
 
             case LogicalDecodingMessage logicalDecoding:
-                Console.WriteLine("LogicalDecodingMessage");
-                // Handle logical decoding message
-
-                // TODO: egor what is this??
+                // A user-defined logical decoding message emitted via pg_logical_emit_message().
+                // These are application-level messages injected into the WAL stream and do not
+                // correspond to any DML operation. Safe to ignore for CDC replication purposes.
                 return ContinueCdcBatch;
 
             case TruncateMessage truncateMessage:
-                Console.WriteLine("TruncateMessage");
-                // Handle truncate message
-
-                // TODO: egor what is this??
+                // A TRUNCATE was executed on one or more replicated tables.
+                // For now we skip this; a future enhancement could delete all documents
+                // in the corresponding RavenDB collection.
                 return ContinueCdcBatch;
 
             case TypeMessage typeMessage:
-                Console.WriteLine("TypeMessage");
-                // Handle type message
-
-                // TODO: egor what is this??
+                // Sent when a custom PostgreSQL type used by a replicated column is created or changed.
+                // Safe to ignore for standard data types; refresh schema to pick up any type changes.
+                _schema = _dbDriver.FindSchema();
                 return ContinueCdcBatch;
 
             default:
@@ -478,92 +456,5 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         BlittableJsonReaderObject docBlittable = doc.ToBlittable(context);
 
         return (id, docBlittable);
-    }
-
-
-
-    private async Task<(string, object)> GetRowData2(RelationMessage relation, ReplicationTuple row)
-    {
-        string id = relation.RelationName + "/";
-        var doc = new Dictionary<string, object?>();
-        bool isFirstKey = true;
-        await foreach (var item in row)
-        {
-            var columnName = item.GetFieldName();
-            object val = await item.Get();
-            if (relation.Columns.Single(x => x.ColumnName == columnName)
-                .Flags.HasFlag(RelationMessage.Column.ColumnFlags.PartOfKey))
-            {
-                if (isFirstKey)
-                {
-                    id += val;
-                    isFirstKey = false;
-                }
-                else
-                {
-                    id += "," + val;
-                }
-            }
-            doc[columnName] = ConvertPostgresType(item.GetDataTypeName(), item.IsDBNull ? null : val);
-        }
-        doc["@metadata"] = new Dictionary<string, object>
-        {
-            ["@collection"] = relation.RelationName
-        };
-        return (id, doc);
-    }
-
-    private static object? ConvertPostgresType(string postgresType, object? value)
-    {
-        if (value is null || value == DBNull.Value)
-            return null;
-
-        return postgresType.ToLower() switch
-        {
-            // Integer types
-            "smallint" => Convert.ToInt16(value),
-            "integer" => Convert.ToInt32(value),
-            "bigint" => Convert.ToInt64(value),
-            "serial" => Convert.ToInt32(value),
-            "bigserial" => Convert.ToInt64(value),
-
-            // Floating point types
-            "real" => Convert.ToSingle(value),
-            "double precision" => Convert.ToDouble(value),
-            "numeric" => Convert.ToDecimal(value),
-            "decimal" => Convert.ToDecimal(value),
-
-            // Date/Time types
-            "date" => Convert.ToDateTime(value),
-            "time" => value.ToString(), // Keep as string for time-only
-            "timetz" => value.ToString(), // Keep as string for time with timezone
-            "timestamp" => Convert.ToDateTime(value),
-            "timestamptz" => Convert.ToDateTime(value),
-
-            // Boolean
-            "boolean" => Convert.ToBoolean(value),
-
-            // Text types
-            "character" => value.ToString(),
-            "character varying" => value.ToString(),
-            "varchar" => value.ToString(),
-            "text" => value.ToString(),
-
-            // Binary types
-            "bytea" => value, // Keep as byte array
-
-            // UUID
-            "uuid" => value.ToString(),
-
-            // JSON types (PostgreSQL 9.2+)
-            "json" => value.ToString(),
-            "jsonb" => value.ToString(),
-
-            // Arrays (simplified - return as string representation)
-            var t when t.EndsWith("[]") => value.ToString(),
-
-            // Default: keep as-is
-            _ => value
-        };
     }
 }

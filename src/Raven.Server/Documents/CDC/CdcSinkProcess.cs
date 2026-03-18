@@ -189,9 +189,7 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                 {
                     Initialize();
 
-
-
-                    // handle intitial load
+                    // handle initial load
                     await HandleInitialLoadAsync();
                 }
 
@@ -226,7 +224,7 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                 using (Database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
                 using (var stats = statsAggregator.CreateScope())
                 {
-                    var messages = new List<(string,BlittableJsonReaderObject)>();
+                    var messages = new List<CdcChangeItem>();
                     NpgsqlLogSequenceNumber lastLsn = default;
                     using (CdcSinkStatsScope readScope = stats.For(CdcSinkBatchPhases.CdcReading, start: false))
                     {
@@ -252,9 +250,10 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                 batchStarted = true;
 
 
-                                var result = await ProcessBatchItemAsync(context, message, messages, readScope);
+                                CdcBatchResult result = await ProcessBatchItemAsync(context, message, messages, readScope);
                                 
-                                if (result.Status == CdcBatchStatus.DocumentsSent)
+                                if (result.Status == CdcBatchStatus.DocumentsSent ||
+                                    result.Status == CdcBatchStatus.DocumentDeleted)
                                 {
                                     continue;
                                 }
@@ -273,30 +272,6 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                         break;
                                     }
                                 }
-
-                                //if (id == "CommitMessage")
-                                //{
-       
-                                //}
-                                //else if (id == "BeginMessage")
-                                //{
-
-                                //} else if (id == "RelationMessage")
-                                //{
-                                //    var blittable = DocumentConventions.DefaultForServer.Serialization.DefaultConverter.ToBlittable(json, context);
-                                //    Console.WriteLine("$$$ RelationMessage:");
-                                //    Console.WriteLine(blittable);
-                                //}
-                                //else
-                                //{
-                                //    var blittable = DocumentConventions.DefaultForServer.Serialization.DefaultConverter.ToBlittable(json, context);
-
-                                //    messages.Add(blittable);
-
-                                //    readScope.RecordReadMessage();
-                                //}
-
-
                             }
                             catch (OperationCanceledException)
                             {
@@ -304,7 +279,6 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                             }
                             catch (Exception e)
                             {
-               //                 Console.WriteLine($"$$$ ERROR IN CDC {Environment.NewLine}"+e);
                                 string msg = "Failed to consume message.";
 
                                 if (Logger.IsErrorEnabled)
@@ -339,15 +313,6 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
                                     Database.TxMerger.EnqueueSync(command);
 
-                                    //var clusterCmd = AckLsnToCLsuter();
-
-                                    //TODO: egor here I need to update the PostgresqlCdcSink.LastLsn 
-                                    // I should  use cluster command 
-                                    // need to handle cases Database.TxMerger command succeed, cluster command failed 
-                                    // then I only need to apply cluster command
-
-                                    // will we receive the same batch?
-                                    // todo: egor check etl process
                                     processedSuccessfully = command.ProcessedSuccessfully;
 
                                     _consumer.Commit();
@@ -430,10 +395,24 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
     {
         EmptyBatch,
         DocumentsSent,
+        DocumentDeleted,
         Commit
     }
 
-    protected abstract Task<CdcBatchResult> ProcessBatchItemAsync(DocumentsOperationContext context, PgOutputReplicationMessage message, List<(string,BlittableJsonReaderObject)> messages, CdcSinkStatsScope readScope);
+    public enum CdcChangeType
+    {
+        Put,
+        Delete
+    }
+
+    public sealed class CdcChangeItem
+    {
+        public string Id;
+        public BlittableJsonReaderObject Document;
+        public CdcChangeType ChangeType;
+    }
+
+    protected abstract Task<CdcBatchResult> ProcessBatchItemAsync(DocumentsOperationContext context, PgOutputReplicationMessage message, List<CdcChangeItem> messages, CdcSinkStatsScope readScope);
   
     private void AddPerformanceStats(CdcSinkStatsAggregator stats)
     {

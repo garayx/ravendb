@@ -498,5 +498,5 @@ public enum RavenTestCategory : long
     /// EXAMPLES: Debug Package Analyzer
     /// </summary>
     Debug = 1L << 53,
-    Cnc = 1L << 54,
+    Cdc = 1L << 54,
 }

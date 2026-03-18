@@ -512,15 +512,15 @@ namespace Raven.Server.SqlMigration
                 var columnName = item.GetFieldName();
                 if (tableColumnsMapping.TryGetValue(columnName, out var mappingValue))
                 {
-                    object val = await item.Get();
+                    object val = item.IsDBNull ? null : await item.Get();
 
-                    document[mappingValue] = ExtractValue(val);
+                    document[mappingValue] = ExtractReplicationValue(val, item.GetDataTypeName());
                 }
                 else if(columnNames.Contains(columnName))
                 {
-                    object val = await item.Get();
+                    object val = item.IsDBNull ? null : await item.Get();
 
-                    specialColumns[columnName] = ExtractValue(val);
+                    specialColumns[columnName] = ExtractReplicationValue(val, item.GetDataTypeName());
                 }
 
             }
@@ -531,6 +531,82 @@ namespace Raven.Server.SqlMigration
                 Attachments = new Dictionary<string, byte[]>(),
                 SpecialColumnsValues = specialColumns,
             };
+        }
+
+        private static object ExtractReplicationValue(object value, string dataTypeName)
+        {
+            if (value is null or DBNull)
+                return null;
+
+            // Npgsql logical replication may deliver values as their text representation.
+            // Convert common PostgreSQL types to proper .NET types so the stored JSON 
+            // contains numbers/booleans instead of strings.
+            if (value is string str)
+            {
+                switch (dataTypeName?.ToLowerInvariant())
+                {
+                    case "boolean":
+                        if (str is "t" or "true" or "True")
+                            return true;
+                        if (str is "f" or "false" or "False")
+                            return false;
+                        break;
+                    case "smallint":
+                        if (short.TryParse(str, out var shortVal))
+                            return shortVal;
+                        break;
+                    case "integer":
+                    case "serial":
+                        if (int.TryParse(str, out var intVal))
+                            return intVal;
+                        break;
+                    case "bigint":
+                    case "bigserial":
+                        if (long.TryParse(str, out var longVal))
+                            return longVal;
+                        break;
+                    case "real":
+                        if (float.TryParse(str, System.Globalization.CultureInfo.InvariantCulture, out var floatVal))
+                            return floatVal;
+                        break;
+                    case "double precision":
+                        if (double.TryParse(str, System.Globalization.CultureInfo.InvariantCulture, out var doubleVal))
+                            return doubleVal;
+                        break;
+                    case "numeric":
+                    case "decimal":
+                    case "money":
+                        if (decimal.TryParse(str, System.Globalization.CultureInfo.InvariantCulture, out var decVal))
+                            return decVal;
+                        break;
+                    case "date":
+                    case "timestamp":
+                    case "timestamptz":
+                        if (DateTime.TryParse(str, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dateVal))
+                            return dateVal;
+                        break;
+                    case "time":
+                    case "timetz":
+                    case "character":
+                    case "character varying":
+                    case "varchar":
+                    case "text":
+                    case "json":
+                    case "jsonb":
+                    case "uuid":
+                        return str;
+                    case "bytea":
+                        return str; // keep as-is; binary comes through logical replication as hex-encoded string
+                    default:
+                        if (dataTypeName != null && dataTypeName.EndsWith("[]"))
+                            return str; // arrays: keep as string representation
+                        break;
+                }
+
+                return str;
+            }
+
+            return ExtractValue(value);
         }
 
         private static object ExtractValue(object value)

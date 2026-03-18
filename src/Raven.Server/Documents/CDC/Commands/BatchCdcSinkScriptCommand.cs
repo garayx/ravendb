@@ -12,27 +12,23 @@ namespace Raven.Server.Documents.CDC.Commands;
 
 public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
 {
-    private readonly List<(string, BlittableJsonReaderObject)> _messages;
+    private readonly List<CdcSinkProcess.CdcChangeItem> _messages;
     private readonly string _script = string.Empty;
     private readonly CdcSinkStatsScope _scriptProcessingScope;
     private readonly CdcSinkProcessStatistics _statistics;
     private readonly RavenLogger _logger;
 
-    public BatchCdcSinkScriptCommand(string script, List<(string, BlittableJsonReaderObject)> messages, CdcSinkStatsScope scriptProcessingScope,
+    public BatchCdcSinkScriptCommand(string script, List<CdcSinkProcess.CdcChangeItem> messages, CdcSinkStatsScope scriptProcessingScope,
         CdcSinkProcessStatistics statistics, RavenLogger logger)
     {
-        //TODO: egor pass the Patch per collection here
-        //_script = script ?? throw new ArgumentException("Script cannot be null", nameof(script));
         _messages = messages ?? throw new ArgumentException("Messages cannot be null", nameof(messages));
         _scriptProcessingScope = scriptProcessingScope ?? throw new ArgumentException($"{nameof(CdcSinkStatsScope)} cannot be null", nameof(scriptProcessingScope));
         _statistics = statistics ?? throw new ArgumentException($"{nameof(CdcSinkProcessStatistics)} cannot be null", nameof(statistics));
         _logger = logger ?? throw new ArgumentException($"{nameof(RavenLogger)} cannot be null", nameof(logger));
     }
 
-    private BatchCdcSinkScriptCommand(string script, List<(string, BlittableJsonReaderObject)> messages)
+    private BatchCdcSinkScriptCommand(List<CdcSinkProcess.CdcChangeItem> messages)
     {
-        //TODO: egor pass the Patch per collection here
-        //_script = script ?? throw new ArgumentException("Script cannot be null", nameof(script));
         _messages = messages ?? throw new ArgumentException("Messages cannot be null", nameof(messages));
         _scriptProcessingScope = null;
         _statistics = null;
@@ -43,51 +39,42 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
 
     protected override long ExecuteCmd(DocumentsOperationContext context)
     {
-        try
+        var processed = 0L;
+
+        foreach (var item in _messages)
         {
-            var mainScript = new PatchRequest(_script, PatchRequestType.CdcSink);
-
-            using (context.DocumentDatabase.Scripts.GetScriptRunner(mainScript, readOnly: false, out var documentScript))
+            try
             {
-                var processed = 0L;
+                processed++;
 
-                foreach (var tuple in _messages)
+                switch (item.ChangeType)
                 {
-                    try
-                    {
-                        processed++;
-                 var       message = tuple.Item2;
-                 var id = tuple.Item1;
-                        using (message)
-                        using (documentScript.Run(context, context, "execute", new object[] {message}))
+                    case CdcSinkProcess.CdcChangeType.Put:
+                        using (item.Document)
                         {
-                            //TODO: egor write to db :)
-                            Console.WriteLine(message);
-                            //message.TryGet("id", out string id);
-                            context.DocumentDatabase.DocumentsStorage.Put(context, id, null, message);
+                            context.DocumentDatabase.DocumentsStorage.Put(context, item.Id, null, item.Document);
                         }
+                        break;
 
-                        _scriptProcessingScope?.RecordProcessedMessage();
-                        ProcessedSuccessfully++;
-                    }
-                    catch (Exception e)
-                    {
-                        if (_logger?.IsErrorEnabled == true)
-                            _logger.Error("Failed to process consumed message by the script.", e);
-
-                        _scriptProcessingScope?.RecordScriptProcessingError();
-                        _statistics?.RecordScriptExecutionError(e);
-                    }
+                    case CdcSinkProcess.CdcChangeType.Delete:
+                        context.DocumentDatabase.DocumentsStorage.Delete(context, item.Id, null);
+                        break;
                 }
 
-                return processed;
+                _scriptProcessingScope?.RecordProcessedMessage();
+                ProcessedSuccessfully++;
+            }
+            catch (Exception e)
+            {
+                if (_logger?.IsErrorEnabled == true)
+                    _logger.Error($"Failed to process CDC change (type: {item.ChangeType}, id: {item.Id}).", e);
+
+                _scriptProcessingScope?.RecordScriptProcessingError();
+                _statistics?.RecordScriptExecutionError(e);
             }
         }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            throw;
-        }
+
+        return processed;
     }
 
     public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, DocumentMergedTransactionCommand> ToDto(DocumentsOperationContext context)
@@ -105,11 +92,11 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
     {
         public string Script { get; set; }
 
-        public List<(string, BlittableJsonReaderObject)> Messages { get; set; }
+        public List<CdcSinkProcess.CdcChangeItem> Messages { get; set; }
 
         public DocumentMergedTransactionCommand ToCommand(DocumentsOperationContext context, DocumentDatabase database)
         {
-            return new BatchCdcSinkScriptCommand(Script, Messages);
+            return new BatchCdcSinkScriptCommand(Messages);
         }
     }
 }
