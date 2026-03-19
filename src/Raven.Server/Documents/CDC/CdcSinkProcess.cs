@@ -185,34 +185,31 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
             try
             {
+                try
+                {
                     Initialize();
 
-                    // handle initial load
+                    // handle initial load if needed
                     await HandleInitialLoadAsync();
 
-                // this is logical replication stage:
-                if (_consumer == null)
+                    // this is logical replication stage:
+                    _consumer ??= await CreateConsumerAsync();
+                }
+                catch (Exception e)
                 {
-                    try
-                    {
-                        _consumer = await CreateConsumerAsync();
-                    }
-                    catch (Exception e)
-                    {
-                        string msg = $"[{Name}] Failed to create Cdc consumer";
+                    string msg = $"[{Name}] Failed to start Cdc replication";
 
-                        if (Logger.IsErrorEnabled)
-                            Logger.Error(msg, e);
+                    if (Logger.IsErrorEnabled)
+                        Logger.Error(msg, e);
 
-                        var key = $"{Tag}/{Name}";
+                    var key = $"{Tag}/{Name}";
 
-                        var alert = AlertRaised.Create(Database.Name, Tag, msg, AlertReason.CdcSink_ConsumerCreationError, NotificationSeverity.Error, key, new ExceptionDetails(e));
+                    var alert = AlertRaised.Create(Database.Name, Tag, msg, AlertReason.CdcSink_ConsumerCreationError, NotificationSeverity.Error, key, new ExceptionDetails(e));
 
-                        Database.NotificationCenter.Add(alert);
+                    Database.NotificationCenter.Add(alert);
 
-                        EnterFallbackMode();
-                        continue;
-                    }
+                    EnterFallbackMode();
+                    continue;
                 }
 
                 var statsAggregator = new CdcSinkStatsAggregator(Interlocked.Increment(ref _statsId), _lastStats);
@@ -223,6 +220,7 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                 {
                     var messages = new List<CdcChangeItem>();
                     NpgsqlLogSequenceNumber lastLsn = default;
+                    bool streamEnded = false;
                     using (CdcSinkStatsScope readScope = stats.For(CdcSinkBatchPhases.CdcReading, start: false))
                     {
                         var batchStarted = false;
@@ -232,8 +230,11 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                             try
                             {
                                 var message = await _consumer.ConsumeAsync(CancellationToken);
-                                if(message == null)
+                                if (message == null)
+                                {
+                                    streamEnded = true;
                                     break;
+                                }
                
                                 if (batchStarted == false)
                                 {
@@ -289,8 +290,22 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                      //failed to consume any message, let's do the fallback then
                                     EnterFallbackMode();
                                 }
+
+                                // the consumer is likely in a bad state, dispose it so it gets recreated
+                                await DisposeConsumerAsync();
+                                break;
                             }
                         }
+                    }
+
+                    if (streamEnded)
+                    {
+                        // the replication stream ended (connection lost, slot dropped, etc.)
+                        // dispose the consumer so it will be recreated on the next iteration
+                        await DisposeConsumerAsync();
+
+                        //TODO: egor what if we processed some messages and then the stream ended? do we want to commit those? or we will retry the batch anyway?
+                        // TODO: egor wdo we want to EnterFallbackMode ? if yes do we want to check batchStarted? 
                     }
 
                     if (messages.Count == 0)
@@ -518,8 +533,28 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
         if (longRunningWork != PoolOfThreads.LongRunningWork.Current)  // prevent a deadlock
             longRunningWork.Join(int.MaxValue);
 
-        _consumer?.DisposeAsync().AsTask().Wait();
+        //TODO: egor good / bad? Thsi is called from OnDatabaseChange....
+        DisposeConsumerAsync().Wait(CancellationToken);
+
+    }
+
+    private async Task DisposeConsumerAsync()
+    {
+        var consumer = _consumer;
         _consumer = null;
+
+        if (consumer != null)
+        {
+            try
+            {
+                await consumer.DisposeAsync();
+            }
+            catch (Exception e)
+            {
+                if (Logger.IsInfoEnabled)
+                    Logger.Info($"[{Name}] Error disposing CDC consumer", e);
+            }
+        }
     }
 
     private void HandleScriptParseException(Exception e)

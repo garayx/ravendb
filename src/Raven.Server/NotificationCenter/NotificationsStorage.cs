@@ -77,7 +77,10 @@ namespace Raven.Server.NotificationCenter
                     // if previous notification had postponed until value pass this value to newly saved notification
                     using (var existing = Get(notification.Id, context, tx))
                     {
-                        if (existing != null && updateExisting == false)
+                        if (existing == null) // table wasn't created yet
+                            return false;
+
+                        if (updateExisting == false)
                             return false;
 
                         if (postponeUntil == null)

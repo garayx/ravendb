@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Npgsql.Replication;
@@ -23,9 +24,14 @@ public class CdcPostgresSqlSinkConsumer : ICdcSinkConsumer
 
     public async Task<PgOutputReplicationMessage> ConsumeAsync(CancellationToken cancellationToken)
     {
-        var vt = await _consumer.MoveNextAsync();
+        var hasMore = await _consumer.MoveNextAsync();
+
+        if (hasMore == false)
+            return null;
 
         var message = _consumer.Current;
+
+        Debug.Assert(message != null, "message != null");
 
         if (message is CommitMessage commit)
         {

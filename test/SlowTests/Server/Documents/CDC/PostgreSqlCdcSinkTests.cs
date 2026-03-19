@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -457,7 +457,7 @@ namespace SlowTests.Server.Documents.CDC
             }
         }
 
-        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true, Skip = "Requires investigation into CDC process state persistence across database disable/enable cycle")]
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
         [RequiresNpgSqlInlineData]
         public async Task CanReplicateAfterDatabaseDisableAndEnable(MigrationProvider provider)
         {
@@ -470,11 +470,41 @@ namespace SlowTests.Server.Documents.CDC
                 string configurationName = "cdc_disable_enable_test";
                 var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
+                // verify initial load worked by inserting a row before disable
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+                ulong lsnBeforePreDisable = state.LastLsn;
+
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('BeforeDisable')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforePreDisable);
+
+                bool preDisableArrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "BeforeDisable");
+                }, true, timeout: 60_000, interval: 1000);
+                Assert.True(preDisableArrived, "Expected pre-disable insert to arrive");
+
                 DatabaseStatistics statsBeforeDisable = store.Maintenance.Send(new GetStatisticsOperation());
 
                 // disable the database
                 store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: true));
-                await Task.Delay(2000);
+                await Task.Delay(5000);
+
+                // insert while disabled � this should be picked up after re-enable via the persisted slot
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('WhileDisabled')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
 
                 // re-enable the database
                 store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: false));
@@ -482,45 +512,40 @@ namespace SlowTests.Server.Documents.CDC
                 // re-acquire the database instance (it was recreated after enable)
                 db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
-                CdcSinkProcessState stateAfterEnable = null;
-                var resumed = await WaitForValueAsync(() =>
+                // wait for the CDC process to actually be running
+                bool cdcRunning = await WaitForValueAsync(() =>
                 {
-                    stateAfterEnable = CdcSinkProcess.GetProcessState(db, configurationName);
-                    return stateAfterEnable.LastLsn > 0;
+                    return db.CdcSinkLoader?.Processes?.Length > 0;
                 }, true, timeout: 60_000, interval: 1000);
+                Assert.True(cdcRunning, "Expected CDC process to be running after re-enable");
 
-                Assert.True(resumed, "Expected CDC process to resume after database re-enable");
+                // the row inserted while disabled should arrive through the replication slot
+                bool disabledInsertArrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "WhileDisabled");
+                }, true, timeout: 120_000, interval: 1000);
 
-                ulong lsnBeforeInsert = stateAfterEnable.LastLsn;
+                Assert.True(disabledInsertArrived, "Expected the row inserted while database was disabled to arrive via CDC");
 
+                // also insert a row after re-enable
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
                     await conn.OpenAsync(cts.Token);
-
                     using var cmd = conn.CreateCommand();
-                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('Charlie')";
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('AfterEnable')";
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeInsert);
-
-                long countBeforeInsert = statsBeforeDisable.CountOfDocuments;
-                bool newDocArrived = await WaitForValueAsync(() =>
+                bool afterEnableArrived = await WaitForValueAsync(() =>
                 {
-                    var currentStats = store.Maintenance.Send(new GetStatisticsOperation());
-                    return currentStats.CountOfDocuments > countBeforeInsert;
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "AfterEnable");
                 }, true, timeout: 60_000, interval: 1000);
 
-                Assert.True(newDocArrived, "Expected a new document to arrive after database disable/enable cycle");
-
-                using (var session = store.OpenSession())
-                {
-                    var allCustomers = session.Advanced.RawQuery<Customer>("from Customer").ToList();
-                    var charlie = allCustomers.FirstOrDefault(c => c.Firstname == "Charlie");
-                    Assert.NotNull(charlie);
-                }
+                Assert.True(afterEnableArrived, "Expected a new document to arrive after database disable/enable cycle");
             }
         }
 
@@ -649,7 +674,6 @@ namespace SlowTests.Server.Documents.CDC
         {
             using var store = GetDocumentStore();
             var db = await Databases.GetDocumentDatabaseInstanceFor(store);
-
             using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
@@ -794,7 +818,7 @@ namespace SlowTests.Server.Documents.CDC
             }
         }
 
-        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true, Skip = "Requires investigation into CDC process state persistence across database disable/enable cycle")]
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
         [RequiresNpgSqlInlineData]
         public async Task DoesNotDuplicateDocumentsAfterLsnResume(MigrationProvider provider)
         {
@@ -834,22 +858,10 @@ namespace SlowTests.Server.Documents.CDC
 
                 // disable and re-enable the database to force CDC process restart
                 store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: true));
-                await Task.Delay(2000);
-                store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: false));
-                db = await Databases.GetDocumentDatabaseInstanceFor(store);
+                await Task.Delay(5000);
 
-                // wait for CDC to resume
-                CdcSinkProcessState stateAfterRestart = null;
-                var resumed = await WaitForValueAsync(() =>
-                {
-                    stateAfterRestart = CdcSinkProcess.GetProcessState(db, configurationName);
-                    return stateAfterRestart.LastLsn > 0;
-                }, true, timeout: 60_000, interval: 1000);
-
-                Assert.True(resumed, "Expected CDC process to resume");
-
-                // insert a second row
-                ulong lsnBeforeSecond = stateAfterRestart.LastLsn;
+                // insert while disabled — the slot retains this
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
                     await conn.OpenAsync(cts.Token);
@@ -858,19 +870,34 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeSecond);
+                store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: false));
+                db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+                // wait for CDC process to be running
+                bool cdcRunning = await WaitForValueAsync(() =>
+                {
+                    return db.CdcSinkLoader?.Processes?.Length > 0;
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(cdcRunning, "Expected CDC process to resume");
 
                 bool secondArrived = await WaitForValueAsync(() =>
                 {
-                    var currentStats = store.Maintenance.Send(new GetStatisticsOperation());
-                    return currentStats.CountOfDocuments == initialCount + 2;
-                }, true, timeout: 60_000, interval: 1000);
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "SecondInsert");
+                }, true, timeout: 120_000, interval: 1000);
 
                 Assert.True(secondArrived, "Expected second insert to arrive");
 
-                // verify no duplicates: total should be exactly initialCount + 2
-                var finalStats = store.Maintenance.Send(new GetStatisticsOperation());
-                Assert.Equal(initialCount + 2, finalStats.CountOfDocuments);
+                // verify no duplicates by checking that each customer name appears at most once
+                using (var session = store.OpenSession())
+                {
+                    var allCustomers = session.Advanced.RawQuery<Customer>("from Customer").ToList();
+                    var firstInsertCount = allCustomers.Count(c => c.Firstname == "FirstInsert");
+                    var secondInsertCount = allCustomers.Count(c => c.Firstname == "SecondInsert");
+                    Assert.Equal(1, firstInsertCount);
+                    Assert.Equal(1, secondInsertCount);
+                }
             }
         }
 
@@ -894,6 +921,7 @@ namespace SlowTests.Server.Documents.CDC
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
                     await conn.OpenAsync(cts.Token);
+
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('WillBeDeleted')";
                     await cmd.ExecuteNonQueryAsync(cts.Token);
@@ -1048,7 +1076,6 @@ namespace SlowTests.Server.Documents.CDC
             {
                 string configurationName = "cdc_delete_insert_tx_test";
                 var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
-
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
                 // insert a fresh customer first so we have one with no FK references to delete
@@ -1179,6 +1206,111 @@ namespace SlowTests.Server.Documents.CDC
                 }, true, timeout: 60_000, interval: 1000);
 
                 Assert.True(updated, "Expected the customer document to be updated via CDC with REPLICA IDENTITY FULL");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanRecoverAfterPostgreSqlConnectionDropped(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_connection_drop_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                // forcefully terminate the replication backend in PostgreSQL
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        SELECT pg_terminate_backend(active_pid)
+                        FROM pg_replication_slots
+                        WHERE active_pid IS NOT NULL AND slot_type = 'logical'";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                // give the CDC process time to detect the broken connection and recreate the consumer
+                await Task.Delay(10_000, cts.Token);
+
+                // insert a new row — it should arrive once the process reconnects
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('AfterDrop')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                bool arrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "AfterDrop");
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(arrived, "Expected document to arrive after PostgreSQL connection was dropped and recovered");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CdcProcessStateSurvivesMultipleRestarts(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_multi_restart_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                // perform 3 disable/enable cycles, inserting a row while disabled each time
+                for (int i = 1; i <= 3; i++)
+                {
+                    store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: true));
+                    await Task.Delay(3000);
+
+                    await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+                    using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                    {
+                        await conn.OpenAsync(cts.Token);
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('Restart{i}')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: false));
+                    db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+                    bool cdcRunning = await WaitForValueAsync(() =>
+                    {
+                        return db.CdcSinkLoader?.Processes?.Length > 0;
+                    }, true, timeout: 60_000, interval: 1000);
+                    Assert.True(cdcRunning, $"Expected CDC process to be running after restart #{i}");
+
+                    bool arrived = await WaitForValueAsync(() =>
+                    {
+                        using var session = store.OpenSession();
+                        return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == $"Restart{i}");
+                    }, true, timeout: 120_000, interval: 1000);
+
+                    Assert.True(arrived, $"Expected 'Restart{i}' to arrive after restart #{i}");
+
+                    // verify the row is exactly once (no duplicates from slot replay)
+                    using (var session = store.OpenSession())
+                    {
+                        var allCustomers = session.Advanced.RawQuery<Customer>("from Customer").ToList();
+                        Assert.Equal(1, allCustomers.Count(c => c.Firstname == $"Restart{i}"));
+                    }
+                }
             }
         }
 

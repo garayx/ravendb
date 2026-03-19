@@ -89,8 +89,8 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
 
     protected override void Initialize()
     {
-        _dbDriver = DatabaseDriverDispatcher.CreateDriver(MigrationProvider.NpgSQL, Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
-        _schema = _dbDriver.FindSchema();
+        _dbDriver ??= DatabaseDriverDispatcher.CreateDriver(MigrationProvider.NpgSQL, Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
+        _schema ??= _dbDriver.FindSchema();
     }
 
     protected override async Task<ICdcSinkConsumer> CreateConsumerAsync()
@@ -187,24 +187,15 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
 
     protected override async Task HandleInitialLoadAsync()
     {
-        if (LastLsn > new NpgsqlTypes.NpgsqlLogSequenceNumber(0))
+        if (LastLsn > ZeroLsn)
         {
             return;
         }
 
         try
         {
-     //       await CleanupReplicationSlotsBySlotsNameAsync(CancellationToken);
-            await CleanupAllReplicationSlotsAsync(CancellationToken);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            throw;
-        }
+            await CleanupReplicationSlotsBySlotsNameAsync(CancellationToken);
 
-        try
-        {
             //DatabaseDriverDispatcher.CreateDriver(MigrationProvider.NpgSQL, Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
 
             await using var conn = new LogicalReplicationConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
@@ -302,6 +293,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         }
     }
 
+    private static readonly NpgsqlLogSequenceNumber ZeroLsn = new NpgsqlLogSequenceNumber(0);
     protected static CdcBatchResult EmptyCdcBatch = new CdcBatchResult() { Status = CdcBatchStatus.EmptyBatch };
     protected static CdcBatchResult ContinueCdcBatch = new CdcBatchResult() { Status = CdcBatchStatus.DocumentsSent };
 
