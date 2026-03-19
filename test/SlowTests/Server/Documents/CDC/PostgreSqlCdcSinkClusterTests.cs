@@ -19,7 +19,7 @@ using Xunit.Abstractions;
 
 namespace SlowTests.Server.Documents.CDC
 {
-    public class PostgreSqlCdcSinkClusterTests : CdcSinkClusterTestBase
+    public class PostgreSqlCdcSinkClusterTests : CdcSinkTestBase
     {
         public PostgreSqlCdcSinkClusterTests(ITestOutputHelper output) : base(output)
         {
@@ -32,7 +32,7 @@ namespace SlowTests.Server.Documents.CDC
             var (nodes, leader) = await CreateRaftCluster(3);
 
             using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
-            using (WithNpgSqlDatabase(out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 var options = new Options { Server = leader, ReplicationFactor = 3 };
                 using var store = GetDocumentStore(options);
@@ -62,7 +62,7 @@ namespace SlowTests.Server.Documents.CDC
             var (nodes, leader) = await CreateRaftCluster(3);
 
             using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
-            using (WithNpgSqlDatabase(out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 var options = new Options { Server = leader, ReplicationFactor = 3 };
                 using var store = GetDocumentStore(options);
@@ -99,7 +99,7 @@ namespace SlowTests.Server.Documents.CDC
             var (nodes, leader) = await CreateRaftCluster(3);
 
             using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
-            using (WithNpgSqlDatabase(out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 var options = new Options { Server = leader, ReplicationFactor = 3 };
                 using var store = GetDocumentStore(options);
@@ -142,7 +142,7 @@ namespace SlowTests.Server.Documents.CDC
             var (nodes, leader) = await CreateRaftCluster(3);
 
             using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
-            using (WithNpgSqlDatabase(out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 var options = new Options { Server = leader, ReplicationFactor = 3 };
                 using var store = GetDocumentStore(options);
