@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Operations.CDC;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.Queue;
 using Raven.Client.Documents.Operations.ETL.SQL;
+using Raven.Client.Documents.Operations.OngoingTasks;
+using Raven.Server;
 using Raven.Server.Documents.CDC;
 using Raven.Server.SqlMigration;
 using Raven.Server.SqlMigration.Model;
@@ -196,6 +200,264 @@ namespace SlowTests.Server.Documents.CDC
                 }, true, timeout: 120_000, interval: 1000);
 
                 Assert.True(deleted, $"Expected {insertedId} to be deleted in RavenDB after DELETE in PostgreSQL");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task Cluster_CdcSinkFailoverWhenResponsibleNodeGoesDown(MigrationProvider provider)
+        {
+            var (nodes, leader) = await CreateRaftCluster(3, shouldRunInMemory: false);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                var options = new Options { Server = leader, ReplicationFactor = 3, RunInMemory = false };
+                using var store = GetDocumentStore(options);
+
+                var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+                string configurationName = "cdc_cluster_failover";
+                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                // find the responsible node tag
+                var responsibleTag = cdcDb.ServerStore.NodeTag;
+
+                // dispose the responsible node
+                var responsibleServer = nodes.First(s => s.ServerStore.NodeTag == responsibleTag);
+                var disposeResult = await DisposeServerAndWaitForFinishOfDisposalAsync(responsibleServer);
+
+                // wait for a new responsible node to pick up the CDC task
+                string newResponsibleTag = null;
+                var foundNewNode = await WaitForValueAsync(async () =>
+                {
+                    foreach (var server in nodes.Where(s => !s.Disposed))
+                    {
+                        try
+                        {
+                            var database = await server.ServerStore.DatabasesLandlord.TryGetOrCreateResourceStore(store.Database);
+                            if (database == null)
+                                continue;
+
+                            if (database.CdcSinkLoader == null)
+                                continue;
+
+                            var processState = CdcSinkProcess.GetProcessState(database, configurationName);
+                            if (processState.LastLsn > 0)
+                            {
+                                newResponsibleTag = server.ServerStore.NodeTag;
+                                return true;
+                            }
+                        }
+                        catch
+                        {
+                            // node might be in rehab, skip
+                        }
+                    }
+                    return false;
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(foundNewNode, $"Expected CDC task to failover to a new node after disposing node '{responsibleTag}'");
+                Assert.NotEqual(responsibleTag, newResponsibleTag);
+
+                // verify the new responsible node can process inserts from PostgreSQL
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('AfterFailover')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                bool arrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "AfterFailover");
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(arrived, $"Expected 'AfterFailover' document to arrive via CDC on new responsible node '{newResponsibleTag}' after failover from '{responsibleTag}'");
+            }
+        }
+
+        /// <summary>
+        /// Scenario: The responsible node is disposed while it is actively consuming a CDC batch.
+        /// Multiple rows are inserted into PostgreSQL and the node is killed immediately afterwards,
+        /// before the CDC process has a chance to commit the LSN via Raft (UpdateProcessState).
+        /// The new responsible node should re-consume from the old LSN and eventually deliver all documents.
+        /// </summary>
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task Cluster_FailoverDuringActiveBatch_DocumentsAreEventuallyDelivered(MigrationProvider provider)
+        {
+            var (nodes, leader) = await CreateRaftCluster(3, shouldRunInMemory: false);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                var options = new Options { Server = leader, ReplicationFactor = 3, RunInMemory = false };
+                using var store = GetDocumentStore(options);
+
+                var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+                string configurationName = "cdc_failover_mid_batch";
+                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                var responsibleTag = cdcDb.ServerStore.NodeTag;
+                var lsnBeforeInserts = state.LastLsn;
+
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                // Insert multiple rows in a single transaction to create a batch
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    await using var tx = await conn.BeginTransactionAsync(cts.Token);
+                    for (int i = 0; i < 10; i++)
+                    {
+                        using var cmd = conn.CreateCommand();
+                        cmd.Transaction = tx;
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('MidBatch_{i}')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    await tx.CommitAsync(cts.Token);
+                }
+
+                // Kill the responsible node immediately — the CDC process may be mid-batch
+                // or may not have updated its LSN via Raft yet
+                var responsibleServer = nodes.First(s => s.ServerStore.NodeTag == responsibleTag);
+                await DisposeServerAndWaitForFinishOfDisposalAsync(responsibleServer);
+
+                // Wait for a new node to pick up the CDC task
+                var foundNewNode = await WaitForValueAsync(async () =>
+                {
+                    foreach (var server in nodes.Where(s => !s.Disposed))
+                    {
+                        try
+                        {
+                            var database = await server.ServerStore.DatabasesLandlord.TryGetOrCreateResourceStore(store.Database);
+                            if (database?.CdcSinkLoader == null)
+                                continue;
+
+                            var processState = CdcSinkProcess.GetProcessState(database, configurationName);
+                            if (processState.LastLsn > 0)
+                                return true;
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    return false;
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(foundNewNode, "Expected CDC task to failover to a new node");
+
+                // Verify all 10 documents eventually arrive via the new responsible node
+                bool allArrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var customers = session.Advanced.RawQuery<Customer>("from Customer where startsWith(Firstname, 'MidBatch_')").ToList();
+                    return customers.Count == 10;
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(allArrived, "Expected all 10 'MidBatch_*' documents to arrive after failover");
+            }
+        }
+
+        /// <summary>
+        /// Scenario: The responsible node processes CDC data and writes documents locally,
+        /// but is killed before RavenDB's internal replication has time to propagate those
+        /// documents to the other cluster nodes.
+        /// 
+        /// We verify that the surviving nodes eventually receive all the data — either
+        /// through the new CDC responsible node re-consuming from the old LSN, or through
+        /// delayed replication from the revived node.
+        /// </summary>
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task Cluster_FailoverBeforeReplication_DocumentsAreEventuallyDelivered(MigrationProvider provider)
+        {
+            var (nodes, leader) = await CreateRaftCluster(3, shouldRunInMemory: false);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                var options = new Options { Server = leader, ReplicationFactor = 3, RunInMemory = false };
+                using var store = GetDocumentStore(options);
+
+                var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+                string configurationName = "cdc_failover_pre_repl";
+                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                var responsibleTag = cdcDb.ServerStore.NodeTag;
+
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                // Insert rows and wait for them to arrive on the responsible node only
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    for (int i = 0; i < 5; i++)
+                    {
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('PreRepl_{i}')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                }
+
+                // Wait until the responsible node has the documents locally
+                bool responsibleHasDocs = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var customers = session.Advanced.RawQuery<Customer>("from Customer where startsWith(Firstname, 'PreRepl_')").ToList();
+                    return customers.Count == 5;
+                }, true, timeout: 60_000, interval: 500);
+
+                Assert.True(responsibleHasDocs, "Expected the responsible node to have received the 5 PreRepl_ documents via CDC");
+
+                // Kill the responsible node immediately — replication to the other nodes may not be complete
+                var responsibleServer = nodes.First(s => s.ServerStore.NodeTag == responsibleTag);
+                var disposeResult = await DisposeServerAndWaitForFinishOfDisposalAsync(responsibleServer);
+
+                // Use a store connected to one of the surviving nodes to verify data arrives
+                var survivingServer = nodes.First(s => !s.Disposed);
+                using var survivingStore = new DocumentStore
+                {
+                    Urls = new[] { survivingServer.WebUrl },
+                    Database = store.Database,
+                    Conventions = new DocumentConventions { DisableTopologyUpdates = true }
+                }.Initialize();
+
+                // The surviving node should eventually get all 5 documents,
+                // either from the CDC task re-consuming on the new responsible node,
+                // or from delayed replication when the killed node is eventually revived.
+                bool survivorHasDocs = await WaitForValueAsync(() =>
+                {
+                    using var session = survivingStore.OpenSession();
+                    var customers = session.Advanced.RawQuery<Customer>("from Customer where startsWith(Firstname, 'PreRepl_')").ToList();
+                    return customers.Count == 5;
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(survivorHasDocs, $"Expected the surviving node '{survivingServer.ServerStore.NodeTag}' to eventually have all 5 PreRepl_ documents after responsible node '{responsibleTag}' was killed");
+
+                // Also insert new data to prove the CDC pipeline is still functional after failover
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('AfterPreReplFailover')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                bool newDocArrived = await WaitForValueAsync(() =>
+                {
+                    using var session = survivingStore.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "AfterPreReplFailover");
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(newDocArrived, "Expected 'AfterPreReplFailover' document to arrive on the surviving node after failover");
             }
         }
     }
