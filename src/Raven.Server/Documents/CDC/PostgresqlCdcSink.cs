@@ -195,25 +195,35 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         await using var conn = new NpgsqlConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
         await conn.OpenAsync(cancellationToken);
 
-        await using var cmd = new NpgsqlCommand("""
-                                                SELECT pg_terminate_backend(active_pid)
-                                                FROM pg_replication_slots
-                                                WHERE slot_name = @slotName
-                                                  AND active_pid IS NOT NULL;
-
-                                                SELECT pg_drop_replication_slot(slot_name)
-                                                FROM pg_replication_slots
-                                                WHERE slot_name = @slotName;
-                                                """, conn);
-
-        cmd.Parameters.AddWithValue("slotName", Configuration.Connection.PostgresqlConnectionSettings.PostgresSlotName);
-
+        // Step 1: Terminate any active backend holding the slot
         try
         {
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
+            await using var terminateCmd = new NpgsqlCommand(
+                "SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots WHERE slot_name = @slotName AND active_pid IS NOT NULL",
+                conn);
+            terminateCmd.Parameters.AddWithValue("slotName", Configuration.Connection.PostgresqlConnectionSettings.PostgresSlotName);
+            await terminateCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            // Give PostgreSQL time to fully release the slot after terminating the backend
+            await Task.Delay(1000, cancellationToken);
+        }
+        catch
+        {
+            // ignore errors from terminate
+        }
+
+        // Step 2: Drop the replication slot
+        try
+        {
+            await using var dropCmd = new NpgsqlCommand(
+                "SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name = @slotName",
+                conn);
+            dropCmd.Parameters.AddWithValue("slotName", Configuration.Connection.PostgresqlConnectionSettings.PostgresSlotName);
+            await dropCmd.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (PostgresException ex) when (ex.SqlState == "42704")
         {
+            // slot doesn't exist, ignore
         }
     }
 
@@ -303,14 +313,12 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
                 {
                     if (table.NestedCollections == null || table.NestedCollections.Count == 0)
                         continue;
-
                     foreach (var nested in table.NestedCollections)
                     {
                         var childTableSchema = _schema.GetTable(nested.SourceTableSchema, nested.SourceTableName);
                         var childSpecialColumns = _schema.FindSpecialColumns(nested.SourceTableSchema, nested.SourceTableName);
 
                         var q = $"SELECT * FROM \"{nested.SourceTableName}\";";
-                        Console.WriteLine(q);
                         await using var selectCmd = new NpgsqlCommand(q, regularConn, tx);
                         await using var reader = await selectCmd.ExecuteReaderAsync(CancellationToken);
 
@@ -319,6 +327,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
 
                         while (await reader.ReadAsync(CancellationToken))
                         {
+
                             var childDoc = new SqlMigrationDocument
                             {
                                 Object = nested.ColumnsMapping != null && nested.ColumnsMapping.Count > 0

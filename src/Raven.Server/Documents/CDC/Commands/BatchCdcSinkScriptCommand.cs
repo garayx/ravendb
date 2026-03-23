@@ -52,6 +52,12 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
     {
         var processed = 0L;
 
+        // Group nested puts by parent document so we can apply all changes at once,
+        // avoiding the issue where multiple Puts to the same document within a single
+        // transaction are not visible to subsequent Gets.
+        var nestedPutsByParent = new Dictionary<string, List<CdcSinkProcess.CdcChangeItem>>(StringComparer.OrdinalIgnoreCase);
+        var nestedDeletesByParent = new Dictionary<string, List<CdcSinkProcess.CdcChangeItem>>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var item in _messages)
         {
             try
@@ -72,11 +78,21 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
                         break;
 
                     case CdcSinkProcess.CdcChangeType.NestedPut:
-                        ProcessNestedPut(context, item);
+                        if (nestedPutsByParent.TryGetValue(item.ParentDocumentId, out var putList) == false)
+                        {
+                            putList = new List<CdcSinkProcess.CdcChangeItem>();
+                            nestedPutsByParent[item.ParentDocumentId] = putList;
+                        }
+                        putList.Add(item);
                         break;
 
                     case CdcSinkProcess.CdcChangeType.NestedDelete:
-                        ProcessNestedDelete(context, item);
+                        if (nestedDeletesByParent.TryGetValue(item.ParentDocumentId, out var delList) == false)
+                        {
+                            delList = new List<CdcSinkProcess.CdcChangeItem>();
+                            nestedDeletesByParent[item.ParentDocumentId] = delList;
+                        }
+                        delList.Add(item);
                         break;
                 }
 
@@ -93,94 +109,188 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
             }
         }
 
+        // Apply all nested deletes grouped by parent
+        foreach (var kvp in nestedDeletesByParent)
+        {
+            try
+            {
+                ProcessGroupedNestedDeletes(context, kvp.Key, kvp.Value);
+            }
+            catch (Exception e)
+            {
+                if (_logger?.IsErrorEnabled == true)
+                    _logger.Error($"Failed to process grouped nested deletes for parent '{kvp.Key}'.", e);
+
+                _scriptProcessingScope?.RecordScriptProcessingError();
+                _statistics?.RecordScriptExecutionError(e);
+            }
+        }
+
+        // Apply all nested puts grouped by parent
+        foreach (var kvp in nestedPutsByParent)
+        {
+            try
+            {
+                ProcessGroupedNestedPuts(context, kvp.Key, kvp.Value);
+            }
+            catch (Exception e)
+            {
+                if (_logger?.IsErrorEnabled == true)
+                    _logger.Error($"Failed to process grouped nested puts for parent '{kvp.Key}'.", e);
+
+                _scriptProcessingScope?.RecordScriptProcessingError();
+                _statistics?.RecordScriptExecutionError(e);
+            }
+        }
+
         return processed;
     }
 
     /// <summary>
-    /// Handles a nested insert or update: loads the parent document, finds or adds
-    /// the nested item in the array property, and saves the parent back.
+    /// Applies all nested puts for a single parent document in one Get-Modify-Put cycle.
+    /// This avoids the problem where multiple Puts within the same write transaction
+    /// are not visible to subsequent Gets.
     /// </summary>
-    private void ProcessNestedPut(DocumentsOperationContext context, CdcSinkProcess.CdcChangeItem item)
+    private void ProcessGroupedNestedPuts(DocumentsOperationContext context, string parentDocumentId, List<CdcSinkProcess.CdcChangeItem> items)
     {
-        var existingDoc = context.DocumentDatabase.DocumentsStorage.Get(context, item.ParentDocumentId);
+        var existingDoc = context.DocumentDatabase.DocumentsStorage.Get(context, parentDocumentId);
         if (existingDoc == null)
         {
             if (_logger?.IsInfoEnabled == true)
-                _logger.Info($"Parent document '{item.ParentDocumentId}' not found for nested put on '{item.NestedPropertyName}'. Skipping.");
+                _logger.Info($"Parent document '{parentDocumentId}' not found for nested put. Skipping.");
             return;
         }
 
         var modifications = new DynamicJsonValue(existingDoc.Data);
 
-        // Build the new nested array: keep existing items that don't match the PK, add/replace with the new item
-        var newArray = new DynamicJsonArray();
-
-        if (existingDoc.Data.TryGet(item.NestedPropertyName, out BlittableJsonReaderArray existingArray) && existingArray != null)
+        // Group items by nested property name since a parent could have multiple nested collections
+        var itemsByProperty = new Dictionary<string, List<CdcSinkProcess.CdcChangeItem>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
         {
-            foreach (var existingItem in existingArray)
+            if (itemsByProperty.TryGetValue(item.NestedPropertyName, out var list) == false)
             {
-                if (existingItem is BlittableJsonReaderObject existingObj && NestedItemMatchesKey(existingObj, item.NestedItemKey))
-                {
-                    // Skip the old version — we'll add the updated one below
-                    continue;
-                }
-                newArray.Add(existingItem);
+                list = new List<CdcSinkProcess.CdcChangeItem>();
+                itemsByProperty[item.NestedPropertyName] = list;
             }
+            list.Add(item);
         }
 
-        // Add the new/updated nested item
-        using (item.Document)
+        foreach (var kvp in itemsByProperty)
         {
-            newArray.Add(item.Document.Clone(context));
+            var propertyName = kvp.Key;
+            var propertyItems = kvp.Value;
+
+            var newArray = new DynamicJsonArray();
+
+            if (existingDoc.Data.TryGet(propertyName, out BlittableJsonReaderArray existingArray) && existingArray != null)
+            {
+                foreach (var existingItem in existingArray)
+                {
+                    bool shouldSkip = false;
+                    if (existingItem is BlittableJsonReaderObject existingObj)
+                    {
+                        foreach (var newItem in propertyItems)
+                        {
+                            if (NestedItemMatchesKey(existingObj, newItem.NestedItemKey))
+                            {
+                                shouldSkip = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (shouldSkip == false)
+                        newArray.Add(existingItem);
+                }
+            }
+
+            foreach (var item in propertyItems)
+            {
+                using (item.Document)
+                {
+                    newArray.Add(item.Document.Clone(context));
+                }
+            }
+
+            modifications[propertyName] = newArray;
         }
 
-        modifications[item.NestedPropertyName] = newArray;
-
-        using var updatedBlittable = context.ReadObject(modifications, item.ParentDocumentId);
-        context.DocumentDatabase.DocumentsStorage.Put(context, item.ParentDocumentId, null, updatedBlittable);
+        existingDoc.Data.Modifications = modifications;
+        using var updatedBlittable = context.ReadObject(existingDoc.Data, parentDocumentId, BlittableJsonDocumentBuilder.UsageMode.ToDisk);
+        context.DocumentDatabase.DocumentsStorage.Put(context, parentDocumentId, null, updatedBlittable);
     }
 
     /// <summary>
-    /// Handles a nested delete: loads the parent document, removes the matching item
-    /// from the nested array, and saves the parent back.
+    /// Applies all nested deletes for a single parent document in one Get-Modify-Put cycle.
     /// </summary>
-    private void ProcessNestedDelete(DocumentsOperationContext context, CdcSinkProcess.CdcChangeItem item)
+    private void ProcessGroupedNestedDeletes(DocumentsOperationContext context, string parentDocumentId, List<CdcSinkProcess.CdcChangeItem> items)
     {
-        var existingDoc = context.DocumentDatabase.DocumentsStorage.Get(context, item.ParentDocumentId);
+        var existingDoc = context.DocumentDatabase.DocumentsStorage.Get(context, parentDocumentId);
         if (existingDoc == null)
         {
             if (_logger?.IsInfoEnabled == true)
-                _logger.Info($"Parent document '{item.ParentDocumentId}' not found for nested delete on '{item.NestedPropertyName}'. Skipping.");
+                _logger.Info($"Parent document '{parentDocumentId}' not found for nested delete. Skipping.");
             return;
         }
 
-        if (existingDoc.Data.TryGet(item.NestedPropertyName, out BlittableJsonReaderArray existingArray) == false ||
-            existingArray == null || existingArray.Length == 0)
+        // Group items by nested property name
+        var itemsByProperty = new Dictionary<string, List<CdcSinkProcess.CdcChangeItem>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
         {
-            return; // nothing to delete
+            if (itemsByProperty.TryGetValue(item.NestedPropertyName, out var list) == false)
+            {
+                list = new List<CdcSinkProcess.CdcChangeItem>();
+                itemsByProperty[item.NestedPropertyName] = list;
+            }
+            list.Add(item);
         }
 
         var modifications = new DynamicJsonValue(existingDoc.Data);
-        var newArray = new DynamicJsonArray();
-        bool found = false;
+        bool anyChanges = false;
 
-        foreach (var existingItem in existingArray)
+        foreach (var kvp in itemsByProperty)
         {
-            if (existingItem is BlittableJsonReaderObject existingObj && NestedItemMatchesKey(existingObj, item.NestedItemKey))
+            var propertyName = kvp.Key;
+            var propertyItems = kvp.Value;
+
+            if (existingDoc.Data.TryGet(propertyName, out BlittableJsonReaderArray existingArray) == false ||
+                existingArray == null || existingArray.Length == 0)
+                continue;
+
+            var newArray = new DynamicJsonArray();
+            bool foundAny = false;
+
+            foreach (var existingItem in existingArray)
             {
-                found = true;
-                continue; // skip the item to delete
+                bool shouldDelete = false;
+                if (existingItem is BlittableJsonReaderObject existingObj)
+                {
+                    foreach (var deleteItem in propertyItems)
+                    {
+                        if (NestedItemMatchesKey(existingObj, deleteItem.NestedItemKey))
+                        {
+                            shouldDelete = true;
+                            foundAny = true;
+                            break;
+                        }
+                    }
+                }
+                if (shouldDelete == false)
+                    newArray.Add(existingItem);
             }
-            newArray.Add(existingItem);
+
+            if (foundAny)
+            {
+                modifications[propertyName] = newArray;
+                anyChanges = true;
+            }
         }
 
-        if (found == false)
-            return; // item wasn't in the array
-
-        modifications[item.NestedPropertyName] = newArray;
-
-        using var updatedBlittable = context.ReadObject(modifications, item.ParentDocumentId);
-        context.DocumentDatabase.DocumentsStorage.Put(context, item.ParentDocumentId, null, updatedBlittable);
+        if (anyChanges)
+        {
+            existingDoc.Data.Modifications = modifications;
+            using var updatedBlittable = context.ReadObject(existingDoc.Data, parentDocumentId, BlittableJsonDocumentBuilder.UsageMode.ToDisk);
+            context.DocumentDatabase.DocumentsStorage.Put(context, parentDocumentId, null, updatedBlittable);
+        }
     }
 
     /// <summary>
