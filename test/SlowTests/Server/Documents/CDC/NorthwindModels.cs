@@ -19,6 +19,18 @@ namespace SlowTests.Server.Documents.CDC
         public string Name { get; set; }
     }
 
+    public class CategoryWithNested
+    {
+        public string Name { get; set; }
+        public ProductCategoryNested[] Productcategory { get; set; }
+    }
+
+    public class ProductCategoryNested
+    {
+        public int Productid { get; set; }
+        public int Categoryid { get; set; }
+    }
+
     public class Order
     {
         public string Orderdate { get; set; }

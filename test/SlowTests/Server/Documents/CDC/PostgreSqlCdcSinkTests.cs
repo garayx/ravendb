@@ -1260,5 +1260,285 @@ namespace SlowTests.Server.Documents.CDC
                 Assert.True(updated, "Expected the customer document to be updated via CDC with REPLICA IDENTITY USING INDEX");
             }
         }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task NestedCollection_InitialLoadEmbedsChildRows(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                // Insert categories and productcategory rows
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (1, 'Beverages')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (2, 'Condiments')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (1, 1)";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (2, 1)";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (3, 2)";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                }
+
+                var collections = new List<Collection2>
+                {
+                    new Collection2
+                    {
+                        SourceTableName = "category", SourceTableSchema = schemaName, Name = "Category",
+                        ColumnsMapping = new Dictionary<string, string> { { "name", "Name" } },
+                        NestedCollections = new List<NestedCollection2>
+                        {
+                            new NestedCollection2
+                            {
+                                SourceTableName = "productcategory", SourceTableSchema = schemaName,
+                                Name = "Productcategory",
+                                JoinColumns = new List<string> { "categoryid" },
+                                Type = RelationType.OneToMany,
+                                ColumnsMapping = new Dictionary<string, string>(),
+                                AttachmentNameMapping = new Dictionary<string, string>()
+                            }
+                        }
+                    }
+                };
+
+                string configurationName = "cdc_nested_initial_load";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                    collections: collections, expectedMinDocuments: 2);
+
+                // Category/1 should have 2 productcategory items (product 1 and 2)
+                using (var session = store.OpenSession())
+                {
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    Assert.NotNull(cat1);
+                    Assert.Equal("Beverages", cat1.Name);
+                    Assert.NotNull(cat1.Productcategory);
+                    Assert.Equal(2, cat1.Productcategory.Length);
+                    Assert.Contains(cat1.Productcategory, p => p.Productid == 1);
+                    Assert.Contains(cat1.Productcategory, p => p.Productid == 2);
+
+                    // Category/2 should have 1 productcategory item (product 3)
+                    var cat2 = session.Load<CategoryWithNested>("Category/2");
+                    Assert.NotNull(cat2);
+                    Assert.NotNull(cat2.Productcategory);
+                    Assert.Single(cat2.Productcategory);
+                    Assert.Equal(3, cat2.Productcategory[0].Productid);
+                }
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task NestedCollection_InsertReplicatesAsNestedProperty(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                // Insert categories (no productcategory rows yet)
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (1, 'Beverages')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (2, 'Condiments')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                var collections = new List<Collection2>
+                {
+                    new Collection2
+                    {
+                        SourceTableName = "category", SourceTableSchema = schemaName, Name = "Category",
+                        ColumnsMapping = new Dictionary<string, string> { { "name", "Name" } },
+                        NestedCollections = new List<NestedCollection2>
+                        {
+                            new NestedCollection2
+                            {
+                                SourceTableName = "productcategory", SourceTableSchema = schemaName,
+                                Name = "Productcategory",
+                                JoinColumns = new List<string> { "categoryid" },
+                                Type = RelationType.OneToMany,
+                                ColumnsMapping = new Dictionary<string, string>(),
+                                AttachmentNameMapping = new Dictionary<string, string>()
+                            }
+                        }
+                    }
+                };
+
+                string configurationName = "cdc_nested_insert";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                    collections: collections, expectedMinDocuments: 2);
+
+                // No productcategory rows exist yet after initial load (none in insert.sql)
+                using (var session = store.OpenSession())
+                {
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    Assert.NotNull(cat1);
+                    Assert.NotNull(cat1.Productcategory);
+                    Assert.Empty(cat1.Productcategory);
+                }
+
+                ulong lsnBefore = state.LastLsn;
+
+                // Insert a productcategory row via CDC
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (1, 1)";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+
+                // Category/1 should now have a Productcategory array with one item
+                bool nestedArrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    return cat1?.Productcategory != null && cat1.Productcategory.Length == 1;
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(nestedArrived, "Expected productcategory to be nested inside Category/1 after CDC insert");
+
+                using (var session = store.OpenSession())
+                {
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    Assert.Equal(1, cat1.Productcategory[0].Productid);
+                    Assert.Equal(1, cat1.Productcategory[0].Categoryid);
+                }
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task NestedCollection_DeleteRemovesFromNestedArray(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                // Pre-insert categories and productcategory rows
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (1, 'Beverages')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (2, 'Condiments')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (1, 1)";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (2, 1)";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                }
+
+                var collections = new List<Collection2>
+                {
+                    new Collection2
+                    {
+                        SourceTableName = "category", SourceTableSchema = schemaName, Name = "Category",
+                        ColumnsMapping = new Dictionary<string, string> { { "name", "Name" } },
+                        NestedCollections = new List<NestedCollection2>
+                        {
+                            new NestedCollection2
+                            {
+                                SourceTableName = "productcategory", SourceTableSchema = schemaName,
+                                Name = "Productcategory",
+                                JoinColumns = new List<string> { "categoryid" },
+                                Type = RelationType.OneToMany,
+                                ColumnsMapping = new Dictionary<string, string>(),
+                                AttachmentNameMapping = new Dictionary<string, string>()
+                            }
+                        }
+                    }
+                };
+
+                string configurationName = "cdc_nested_delete";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                    collections: collections, expectedMinDocuments: 2);
+
+                // Verify initial state: Category/1 has 2 nested items
+                using (var session = store.OpenSession())
+                {
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    Assert.NotNull(cat1);
+                    Assert.Equal(2, cat1.Productcategory.Length);
+                }
+
+                ulong lsnBefore = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+
+                // Delete one productcategory row
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"DELETE FROM ""{schemaName}"".""productcategory"" WHERE ""productid"" = 1 AND ""categoryid"" = 1";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+
+                // Category/1 should now have only 1 nested item
+                bool nestedDeleted = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    return cat1?.Productcategory != null && cat1.Productcategory.Length == 1;
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(nestedDeleted, "Expected productcategory item to be removed from Category/1 after CDC delete");
+
+                using (var session = store.OpenSession())
+                {
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    Assert.Equal(2, cat1.Productcategory[0].Productid);
+                    Assert.Equal(1, cat1.Productcategory[0].Categoryid);
+                }
+            }
+        }
     }
 }

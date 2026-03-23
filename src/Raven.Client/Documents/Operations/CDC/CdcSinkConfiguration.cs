@@ -253,13 +253,57 @@ public class Collection2 : AbstractCollection
 
     public string Patch { get; set; }
 
+    public List<NestedCollection2> NestedCollections { get; set; } = new List<NestedCollection2>();
+
     public override DynamicJsonValue ToJson()
     {
         var json = base.ToJson();
         json[nameof(Patch)] = Patch;
+        json[nameof(NestedCollections)] = new DynamicJsonArray(NestedCollections.Select(x => x.ToJson()));
         return json;
     }
 }
+
+/// <summary>
+/// Represents a child table that should be embedded as a nested array property
+/// inside its parent collection's documents during CDC replication.
+/// For example, "productcategory" embedded inside "category" via the "categoryid" join column.
+/// </summary>
+public class NestedCollection2 : AbstractCollection
+{
+    public NestedCollection2()
+    {
+    }
+
+    public NestedCollection2(string sourceTableSchema, string sourceTableName, string name,
+        List<string> joinColumns, RelationType type)
+        : base(sourceTableSchema, sourceTableName, name)
+    {
+        JoinColumns = joinColumns;
+        Type = type;
+    }
+
+    /// <summary>
+    /// The FK columns in the child table that reference the parent's PK.
+    /// For a OneToMany nested collection, these are the columns in the child table
+    /// that correspond to the parent's primary key (e.g., "categoryid" in productcategory).
+    /// </summary>
+    public List<string> JoinColumns { get; set; } = new List<string>();
+
+    /// <summary>
+    /// The relation type — typically OneToMany for nested arrays.
+    /// </summary>
+    public RelationType Type { get; set; }
+
+    public override DynamicJsonValue ToJson()
+    {
+        var json = base.ToJson();
+        json[nameof(JoinColumns)] = new DynamicJsonArray(JoinColumns);
+        json[nameof(Type)] = Type.ToString();
+        return json;
+    }
+}
+
 public sealed class MigrationSettings2 : IDynamicJson
 {
     public List<Collection2> Collections { get; set; }

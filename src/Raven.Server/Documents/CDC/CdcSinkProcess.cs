@@ -414,7 +414,9 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
     public enum CdcChangeType
     {
         Put,
-        Delete
+        Delete,
+        NestedPut,
+        NestedDelete
     }
 
     public sealed class CdcChangeItem
@@ -422,6 +424,22 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
         public string Id;
         public BlittableJsonReaderObject Document;
         public CdcChangeType ChangeType;
+
+        /// <summary>
+        /// For NestedPut/NestedDelete: the ID of the parent document that contains the nested array.
+        /// </summary>
+        public string ParentDocumentId;
+
+        /// <summary>
+        /// For NestedPut/NestedDelete: the property name on the parent document that holds the nested array.
+        /// </summary>
+        public string NestedPropertyName;
+
+        /// <summary>
+        /// For NestedPut/NestedDelete: the PK column values of the nested item, used to identify
+        /// which element in the array to update or remove.
+        /// </summary>
+        public Dictionary<string, object> NestedItemKey;
     }
 
     protected abstract Task<CdcBatchResult> ProcessBatchItemAsync(DocumentsOperationContext context, PgOutputReplicationMessage message, List<CdcChangeItem> messages, CdcSinkStatsScope readScope);
