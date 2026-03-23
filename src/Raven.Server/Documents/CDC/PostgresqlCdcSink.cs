@@ -318,6 +318,13 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
                         var childTableSchema = _schema.GetTable(nested.SourceTableSchema, nested.SourceTableName);
                         var childSpecialColumns = _schema.FindSpecialColumns(nested.SourceTableSchema, nested.SourceTableName);
 
+                        // Ensure join columns (FK) are treated as special columns so their values
+                        // are available in SpecialColumnsValues for parent document ID resolution
+                        foreach (var joinCol in nested.JoinColumns)
+                        {
+                            childSpecialColumns.Add(joinCol);
+                        }
+
                         var q = $"SELECT * FROM \"{nested.SourceTableName}\";";
                         await using var selectCmd = new NpgsqlCommand(q, regularConn, tx);
                         await using var reader = await selectCmd.ExecuteReaderAsync(CancellationToken);
@@ -588,6 +595,13 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         var childTableSchema = _schema.GetTable(nested.SourceTableSchema, nested.SourceTableName);
         var childSpecialColumns = _schema.FindSpecialColumns(nested.SourceTableSchema, nested.SourceTableName);
 
+        // Ensure join columns (FK) are treated as special columns so their values
+        // are available in SpecialColumnsValues for parent document ID resolution
+        foreach (var joinCol in nested.JoinColumns)
+        {
+            childSpecialColumns.Add(joinCol);
+        }
+
         // Extract all columns from the CDC row
         var childColumnsMapping = nested.ColumnsMapping != null && nested.ColumnsMapping.Count > 0
             ? nested.ColumnsMapping
@@ -599,6 +613,15 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         {
             if (allColumnsToRead.ContainsKey(specialCol) == false)
                 allColumnsToRead[specialCol] = specialCol;
+        }
+
+        // Ensure special columns (PKs, FKs) are NOT in allColumnsToRead so ExtractFromReader
+        // puts them into SpecialColumnsValues, not Document. The else-if in ExtractFromReader
+        // only processes columnNames (specialColumns) when the column is NOT in tableColumnsMapping.
+        foreach (var specialCol in childSpecialColumns)
+        {
+            if (childColumnsMapping.ContainsKey(specialCol) == false)
+                allColumnsToRead.Remove(specialCol);
         }
 
         var doc = await GenericDatabaseMigrator.ExtractFromReader(row, allColumnsToRead, childSpecialColumns);
