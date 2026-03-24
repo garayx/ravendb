@@ -1040,6 +1040,64 @@ namespace SlowTests.Server.Documents.CDC
 
         [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
         [RequiresNpgSqlInlineData]
+        public async Task CanReplicateDeleteAndInsertInSameTransaction2(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_delete_insert_tx_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                DatabaseStatistics statsBeforeTx = store.Maintenance.Send(new GetStatisticsOperation());
+                ulong lsnBeforeTx = state.LastLsn;
+
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+
+                // delete + insert in a single transaction
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+
+                    await using var tx = await conn.BeginTransactionAsync(cts.Token);
+
+                    using (var deleteCmd = conn.CreateCommand())
+                    {
+                        deleteCmd.Transaction = tx;
+                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = 1";
+                        await deleteCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    using (var insertCmd = conn.CreateCommand())
+                    {
+                        insertCmd.Transaction = tx;
+                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""id"", ""firstname"") VALUES (1, 'NewName')";
+                        await insertCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    await tx.CommitAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeTx);
+
+                // verify the update
+                bool updated = await WaitForValueAsync(() =>
+                {
+                    using (var session = store.OpenSession())
+                    {
+                        var customer = session.Load<Customer>("Customer/1");
+                        return customer?.Firstname == "NewName";
+                    }
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(updated, "Expected Customer/1 to exist with Firstname='NewName' after delete+insert of same id in single transaction");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
         public async Task CanReplicateUpdateWithReplicaIdentityFull(MigrationProvider provider)
         {
             using var store = GetDocumentStore();
@@ -1538,6 +1596,158 @@ namespace SlowTests.Server.Documents.CDC
                     Assert.Equal(2, cat1.Productcategory[0].Productid);
                     Assert.Equal(1, cat1.Productcategory[0].Categoryid);
                 }
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanReplicateDeleteAndPutOfSameIdInSingleBatch(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_delete_put_same_id";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                using (var session = store.OpenSession())
+                {
+                    var customer = session.Load<Customer>("Customer/1");
+                    Assert.NotNull(customer);
+                }
+
+                ulong lsnBefore = state.LastLsn;
+
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    await using var tx = await conn.BeginTransactionAsync(cts.Token);
+
+                    using (var deleteCmd = conn.CreateCommand())
+                    {
+                        deleteCmd.Transaction = tx;
+                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = 1";
+                        await deleteCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    using (var insertCmd = conn.CreateCommand())
+                    {
+                        insertCmd.Transaction = tx;
+                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""id"", ""firstname"") VALUES (1, 'Resurrected')";
+                        await insertCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    await tx.CommitAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+
+                bool updated = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var customer = session.Load<Customer>("Customer/1");
+                    return customer?.Firstname == "Resurrected";
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(updated, "Expected Customer/1 to exist with Firstname='Resurrected' after delete+put of same id in single transaction");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task NestedCollection_DeleteAndPutOfSameNestedIdInSingleBatch(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                // Pre-insert category and one productcategory row
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using (var cmd = conn.CreateCommand())
+                    { cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (1, 'Beverages')"; await cmd.ExecuteNonQueryAsync(cts.Token); }
+                    using (var cmd = conn.CreateCommand())
+                    { cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (2, 'Condiments')"; await cmd.ExecuteNonQueryAsync(cts.Token); }
+                    using (var cmd = conn.CreateCommand())
+                    { cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (1, 1)"; await cmd.ExecuteNonQueryAsync(cts.Token); }
+                    using (var cmd = conn.CreateCommand())
+                    { cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (2, 1)"; await cmd.ExecuteNonQueryAsync(cts.Token); }
+                }
+
+                var collections = new List<Collection2>
+                {
+                    new Collection2
+                    {
+                        SourceTableName = "category", SourceTableSchema = schemaName, Name = "Category",
+                        ColumnsMapping = new Dictionary<string, string> { { "name", "Name" } },
+                        NestedCollections = new List<NestedCollection2>
+                        {
+                            new NestedCollection2
+                            {
+                                SourceTableName = "productcategory", SourceTableSchema = schemaName,
+                                Name = "Productcategory",
+                                JoinColumns = new List<string> { "categoryid" },
+                                Type = RelationType.OneToMany,
+                                ColumnsMapping = new Dictionary<string, string>(),
+                                AttachmentNameMapping = new Dictionary<string, string>()
+                            }
+                        }
+                    }
+                };
+
+                string configurationName = "cdc_nested_delete_put";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                    collections: collections, expectedMinDocuments: 2);
+
+                using (var session = store.OpenSession())
+                {
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    Assert.NotNull(cat1);
+                    Assert.Equal(2, cat1.Productcategory.Length);
+                }
+
+                ulong lsnBefore = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    await using var tx = await conn.BeginTransactionAsync(cts.Token);
+
+                    using (var deleteCmd = conn.CreateCommand())
+                    {
+                        deleteCmd.Transaction = tx;
+                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""productcategory"" WHERE ""productid"" = 1 AND ""categoryid"" = 1";
+                        await deleteCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    using (var insertCmd = conn.CreateCommand())
+                    {
+                        insertCmd.Transaction = tx;
+                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (99, 1)";
+                        await insertCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    await tx.CommitAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+
+                // Category/1 should now have 1 nested item with productid=99 (old one deleted, new one inserted)
+                bool nestedUpdated = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    return cat1?.Productcategory != null
+                        && cat1.Productcategory.Length == 1
+                        && cat1.Productcategory[0].Productid == 99;
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(nestedUpdated, "Expected Category/1 to have a single nested item with Productid=99 after delete+put of same nested id in single transaction");
             }
         }
     }

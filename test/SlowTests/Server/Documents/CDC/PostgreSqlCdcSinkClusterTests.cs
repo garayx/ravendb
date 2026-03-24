@@ -460,5 +460,125 @@ namespace SlowTests.Server.Documents.CDC
                 Assert.True(newDocArrived, "Expected 'AfterPreReplFailover' document to arrive on the surviving node after failover");
             }
         }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task Cluster_CdcSinkFailoverWithNestedCollections(MigrationProvider provider)
+        {
+            var (nodes, leader) = await CreateRaftCluster(3, shouldRunInMemory: false);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(MigrationProvider.NpgSQL, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                var options = new Options { Server = leader, ReplicationFactor = 3, RunInMemory = false };
+                using var store = GetDocumentStore(options);
+
+                var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+                // Pre-insert categories and productcategory rows
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (1, 'Beverages')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""category"" (""id"", ""name"") VALUES (2, 'Condiments')";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (1, 1)";
+                        await cmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+                }
+
+                var collections = new List<Collection2>
+                {
+                    new Collection2
+                    {
+                        SourceTableName = "category", SourceTableSchema = schemaName, Name = "Category",
+                        ColumnsMapping = new Dictionary<string, string> { { "name", "Name" } },
+                        NestedCollections = new List<NestedCollection2>
+                        {
+                            new NestedCollection2
+                            {
+                                SourceTableName = "productcategory", SourceTableSchema = schemaName,
+                                Name = "Productcategory",
+                                JoinColumns = new List<string> { "categoryid" },
+                                Type = RelationType.OneToMany,
+                                ColumnsMapping = new Dictionary<string, string>(),
+                                AttachmentNameMapping = new Dictionary<string, string>()
+                            }
+                        }
+                    }
+                };
+
+                string configurationName = "cdc_cluster_nested_failover";
+                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                    collections: collections, expectedMinDocuments: 2);
+
+                // verify initial nested data arrived
+                bool initialNested = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    return cat1?.Productcategory != null && cat1.Productcategory.Length == 1;
+                }, true, timeout: 60_000, interval: 1000);
+                Assert.True(initialNested, "Expected Category/1 to have 1 nested item after initial load");
+
+                var responsibleTag = cdcDb.ServerStore.NodeTag;
+
+                // dispose the responsible node
+                var responsibleServer = nodes.First(s => s.ServerStore.NodeTag == responsibleTag);
+                await DisposeServerAndWaitForFinishOfDisposalAsync(responsibleServer);
+
+                // wait for a new node to pick up the CDC task
+                var foundNewNode = await WaitForValueAsync(async () =>
+                {
+                    foreach (var server in nodes.Where(s => !s.Disposed))
+                    {
+                        try
+                        {
+                            var database = await server.ServerStore.DatabasesLandlord.TryGetOrCreateResourceStore(store.Database);
+                            if (database?.CdcSinkLoader == null)
+                                continue;
+
+                            var processState = CdcSinkProcess.GetProcessState(database, configurationName);
+                            if (processState.LastLsn > 0)
+                                return true;
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    return false;
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(foundNewNode, "Expected CDC task to failover to a new node");
+
+                // insert a new nested row after failover
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (2, 1)";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                // Category/1 should now have 2 nested items
+                bool nestedAfterFailover = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    var cat1 = session.Load<CategoryWithNested>("Category/1");
+                    return cat1?.Productcategory != null && cat1.Productcategory.Length == 2;
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(nestedAfterFailover, "Expected Category/1 to have 2 nested items after CDC failover and new insert");
+            }
+        }
     }
 }
