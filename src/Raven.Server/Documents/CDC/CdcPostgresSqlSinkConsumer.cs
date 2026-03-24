@@ -14,7 +14,6 @@ public class CdcPostgresSqlSinkConsumer : ICdcSinkConsumer
 {
     private readonly LogicalReplicationConnection _conn;
     private IAsyncEnumerator<PgOutputReplicationMessage> _consumer;
-    private NpgsqlLogSequenceNumber _lastLsn;
 
     public CdcPostgresSqlSinkConsumer(LogicalReplicationConnection conn, IAsyncEnumerable<PgOutputReplicationMessage> replicationStream)
     {
@@ -33,10 +32,7 @@ public class CdcPostgresSqlSinkConsumer : ICdcSinkConsumer
 
         Debug.Assert(message != null, "message != null");
 
-        if (message is CommitMessage commit)
-        {
-            _lastLsn = commit.CommitLsn;
-        }
+
 
         return message;
     }
@@ -46,9 +42,9 @@ public class CdcPostgresSqlSinkConsumer : ICdcSinkConsumer
         throw new NotImplementedException();
     }
 
-    public void Commit()
+    public void Commit(NpgsqlLogSequenceNumber lastLsn)
     {
-        _conn.SetReplicationStatus(_lastLsn);
+        _conn.SetReplicationStatus(lastLsn);
 
     }
 

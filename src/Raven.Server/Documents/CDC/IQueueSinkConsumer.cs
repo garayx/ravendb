@@ -12,5 +12,5 @@ public interface ICdcSinkConsumer : IAsyncDisposable
 
     //public byte[] Consume(TimeSpan timeout);
 
-    public void Commit();
+    public void Commit(NpgsqlLogSequenceNumber lastLsn);
 }

@@ -265,6 +265,9 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                 {
                                     lastLsn= result.LastLsn;
 
+                                    // TODO: egor I pass here always int.MaxValue as batch size, I think I have to commit the docs to database, on each commit command,
+                                    // thats why I stop the replication batch (I cannot handle multiple batches as one, since I need to send "ack" (consumer.commit()))
+                                    // to the postgresql
                                     if (CanContinueBatch(stats, int.MaxValue/*messages.Count*/, context) == false)
                                     {
                                         break;
@@ -327,7 +330,6 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
                                     processedSuccessfully = command.ProcessedSuccessfully;
 
-                                    _consumer.Commit();
       
                                 }
                                 catch (JavaScriptParseException e)
@@ -356,7 +358,7 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
 
                             try
                             {
-                                    Debug.Assert(lastLsn != default, "lastLsn != default");
+                                Debug.Assert(lastLsn != default, "lastLsn != default");
                                 UpdateProcessState(new CdcSinkProcessState
                                 {
                                     ConfigurationName = Configuration.Name,
@@ -364,6 +366,8 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                     NodeTag = Database.ServerStore.NodeTag,
                                     LastLsn = (ulong)lastLsn
                                 });
+
+                                _consumer.Commit(lastLsn);
 
                                 Database.CdcSinkLoader.OnBatchCompleted(Configuration.Name, Script.Name, Statistics);
                             }
