@@ -1776,5 +1776,66 @@ namespace SlowTests.Server.Documents.CDC
                 Assert.True(nestedUpdated, "Expected Category/1 to have nested items with Productid=2 and Productid=3 after delete+put of same nested id in single transaction");
             }
         }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CdcUpdateRecreatesDocumentDeletedLocally(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_update_after_local_delete";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                // Step 1: Verify the document arrived via initial load
+                using (var session = store.OpenSession())
+                {
+                    var customer = session.Load<Customer>("Customer/1");
+                    Assert.NotNull(customer);
+                    Assert.Equal("Maria", customer.Firstname);
+                }
+
+                // Step 2: Delete the document locally via RavenDB session
+                using (var session = store.OpenSession())
+                {
+                    session.Delete("Customer/1");
+                    session.SaveChanges();
+                }
+
+                // Verify the document is gone
+                using (var session = store.OpenSession())
+                {
+                    Assert.Null(session.Load<Customer>("Customer/1"));
+                }
+
+                ulong lsnBeforeUpdate = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+
+                // Step 3: Update the same row in PostgreSQL — this should recreate the document in RavenDB
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"UPDATE ""{schemaName}"".""customer"" SET ""firstname"" = 'RecreatedViaCdc' WHERE ""id"" = 1";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeUpdate);
+
+                // The CDC update should recreate the document with the new value
+                bool recreated = await WaitForValueAsync(() =>
+                {
+                    using (var session = store.OpenSession())
+                    {
+                        var customer = session.Load<Customer>("Customer/1");
+                        return customer?.Firstname == "RecreatedViaCdc";
+                    }
+                }, true, timeout: 60_000, interval: 1000);
+
+                Assert.True(recreated, "Expected Customer/1 to be recreated with Firstname='RecreatedViaCdc' after CDC update on a locally-deleted document");
+            }
+        }
     }
 }
