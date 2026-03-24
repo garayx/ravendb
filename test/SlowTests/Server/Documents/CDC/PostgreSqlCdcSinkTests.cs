@@ -1048,32 +1048,47 @@ namespace SlowTests.Server.Documents.CDC
             using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
-                string configurationName = "cdc_delete_insert_tx_test";
+                string configurationName = "cdc_delete_insert_tx_test2";
                 var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
-
-                DatabaseStatistics statsBeforeTx = store.Maintenance.Send(new GetStatisticsOperation());
-                ulong lsnBeforeTx = state.LastLsn;
-
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
-                // delete + insert in a single transaction
+                // insert a fresh customer with no FK references so we can safely delete+reinsert it
+                ulong lsnBeforeSetup = state.LastLsn;
+                int freshId;
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
                     await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('OrigName') RETURNING ""id""";
+                    freshId = (int)await cmd.ExecuteScalarAsync(cts.Token);
+                }
 
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeSetup);
+                Assert.True(await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Load<Customer>($"Customer/{freshId}")?.Firstname == "OrigName";
+                }, true, timeout: 60_000, interval: 1000), "Expected fresh customer to arrive");
+
+                ulong lsnBeforeTx = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+
+                // delete + insert same id in a single transaction
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
                     await using var tx = await conn.BeginTransactionAsync(cts.Token);
 
                     using (var deleteCmd = conn.CreateCommand())
                     {
                         deleteCmd.Transaction = tx;
-                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = 1";
+                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = {freshId}";
                         await deleteCmd.ExecuteNonQueryAsync(cts.Token);
                     }
 
                     using (var insertCmd = conn.CreateCommand())
                     {
                         insertCmd.Transaction = tx;
-                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""id"", ""firstname"") VALUES (1, 'NewName')";
+                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""id"", ""firstname"") VALUES ({freshId}, 'NewName')";
                         await insertCmd.ExecuteNonQueryAsync(cts.Token);
                     }
 
@@ -1082,17 +1097,15 @@ namespace SlowTests.Server.Documents.CDC
 
                 await WaitForLsnAdvance(db, configurationName, lsnBeforeTx);
 
-                // verify the update
                 bool updated = await WaitForValueAsync(() =>
                 {
                     using (var session = store.OpenSession())
                     {
-                        var customer = session.Load<Customer>("Customer/1");
-                        return customer?.Firstname == "NewName";
+                        return session.Load<Customer>($"Customer/{freshId}")?.Firstname == "NewName";
                     }
                 }, true, timeout: 60_000, interval: 1000);
 
-                Assert.True(updated, "Expected Customer/1 to exist with Firstname='NewName' after delete+insert of same id in single transaction");
+                Assert.True(updated, $"Expected Customer/{freshId} to exist with Firstname='NewName' after delete+insert of same id in single transaction");
             }
         }
 
@@ -1611,14 +1624,27 @@ namespace SlowTests.Server.Documents.CDC
             {
                 string configurationName = "cdc_delete_put_same_id";
                 var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
-                using (var session = store.OpenSession())
+                // insert a fresh customer with no FK references so we can safely delete+reinsert it
+                ulong lsnBeforeSetup = state.LastLsn;
+                int freshId;
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
-                    var customer = session.Load<Customer>("Customer/1");
-                    Assert.NotNull(customer);
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('Original') RETURNING ""id""";
+                    freshId = (int)await cmd.ExecuteScalarAsync(cts.Token);
                 }
 
-                ulong lsnBefore = state.LastLsn;
+                await WaitForLsnAdvance(db, configurationName, lsnBeforeSetup);
+                Assert.True(await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Load<Customer>($"Customer/{freshId}")?.Firstname == "Original";
+                }, true, timeout: 60_000, interval: 1000), "Expected fresh customer to arrive");
+
+                ulong lsnBefore = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
 
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
@@ -1628,14 +1654,14 @@ namespace SlowTests.Server.Documents.CDC
                     using (var deleteCmd = conn.CreateCommand())
                     {
                         deleteCmd.Transaction = tx;
-                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = 1";
+                        deleteCmd.CommandText = $@"DELETE FROM ""{schemaName}"".""customer"" WHERE ""id"" = {freshId}";
                         await deleteCmd.ExecuteNonQueryAsync(cts.Token);
                     }
 
                     using (var insertCmd = conn.CreateCommand())
                     {
                         insertCmd.Transaction = tx;
-                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""id"", ""firstname"") VALUES (1, 'Resurrected')";
+                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""id"", ""firstname"") VALUES ({freshId}, 'Resurrected')";
                         await insertCmd.ExecuteNonQueryAsync(cts.Token);
                     }
 
@@ -1647,11 +1673,10 @@ namespace SlowTests.Server.Documents.CDC
                 bool updated = await WaitForValueAsync(() =>
                 {
                     using var session = store.OpenSession();
-                    var customer = session.Load<Customer>("Customer/1");
-                    return customer?.Firstname == "Resurrected";
+                    return session.Load<Customer>($"Customer/{freshId}")?.Firstname == "Resurrected";
                 }, true, timeout: 60_000, interval: 1000);
 
-                Assert.True(updated, "Expected Customer/1 to exist with Firstname='Resurrected' after delete+put of same id in single transaction");
+                Assert.True(updated, $"Expected Customer/{freshId} to exist with Firstname='Resurrected' after delete+put of same id in single transaction");
             }
         }
 
@@ -1728,7 +1753,7 @@ namespace SlowTests.Server.Documents.CDC
                     using (var insertCmd = conn.CreateCommand())
                     {
                         insertCmd.Transaction = tx;
-                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (99, 1)";
+                        insertCmd.CommandText = $@"INSERT INTO ""{schemaName}"".""productcategory"" (""productid"", ""categoryid"") VALUES (3, 1)";
                         await insertCmd.ExecuteNonQueryAsync(cts.Token);
                     }
 
@@ -1737,17 +1762,18 @@ namespace SlowTests.Server.Documents.CDC
 
                 await WaitForLsnAdvance(db, configurationName, lsnBefore);
 
-                // Category/1 should now have 1 nested item with productid=99 (old one deleted, new one inserted)
+                // Category/1 should now have 2 nested items: productid=2 (kept) and productid=3 (new)
                 bool nestedUpdated = await WaitForValueAsync(() =>
                 {
                     using var session = store.OpenSession();
                     var cat1 = session.Load<CategoryWithNested>("Category/1");
-                    return cat1?.Productcategory != null
-                        && cat1.Productcategory.Length == 1
-                        && cat1.Productcategory[0].Productid == 99;
+                    if (cat1?.Productcategory == null || cat1.Productcategory.Length != 2)
+                        return false;
+                    var ids = cat1.Productcategory.Select(p => p.Productid).OrderBy(x => x).ToArray();
+                    return ids[0] == 2 && ids[1] == 3;
                 }, true, timeout: 60_000, interval: 1000);
 
-                Assert.True(nestedUpdated, "Expected Category/1 to have a single nested item with Productid=99 after delete+put of same nested id in single transaction");
+                Assert.True(nestedUpdated, "Expected Category/1 to have nested items with Productid=2 and Productid=3 after delete+put of same nested id in single transaction");
             }
         }
     }
