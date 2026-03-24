@@ -380,7 +380,7 @@ namespace SlowTests.Server.Documents.CDC
                 store.Maintenance.Server.Send(new ToggleDatabasesStateOperation(store.Database, disable: true));
                 await Task.Delay(5000);
 
-                // insert while disabled � this should be picked up after re-enable via the persisted slot
+                // insert while disabled this should be picked up after re-enable via the persisted slot
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
                     await conn.OpenAsync(cts.Token);
@@ -1835,6 +1835,141 @@ namespace SlowTests.Server.Documents.CDC
                 }, true, timeout: 60_000, interval: 1000);
 
                 Assert.True(recreated, "Expected Customer/1 to be recreated with Firstname='RecreatedViaCdc' after CDC update on a locally-deleted document");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanRecoverAfterPostgreSqlDatabaseDroppedAndRecreated(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_pg_down_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                // Verify initial load completed
+                var statsAfterLoad = store.Maintenance.Send(new GetStatisticsOperation());
+                Assert.True(statsAfterLoad.CountOfDocuments >= 5, $"Expected at least 5 documents after initial load, got {statsAfterLoad.CountOfDocuments}");
+
+                // Terminate ALL connections to the PostgreSQL database, simulating "PostgreSQL is down"
+                // by killing every backend connected to this specific database
+                var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+                var dbName = builder.Database;
+                var rawConnectionString = connectionString.Replace($";Database=\"{dbName}\"", "");
+
+                using (var adminConn = new Npgsql.NpgsqlConnection(rawConnectionString))
+                {
+                    await adminConn.OpenAsync(cts.Token);
+                    using var cmd = adminConn.CreateCommand();
+                    cmd.CommandText = $@"
+                        SELECT pg_terminate_backend(pid)
+                        FROM pg_stat_activity
+                        WHERE datname = '{dbName}'
+                          AND pid <> pg_backend_pid()";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                // Wait a bit to let the CDC process detect the broken connection
+                await Task.Delay(10_000, cts.Token);
+
+                // Now insert a row — the CDC process should reconnect and pick it up
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('AfterPgDown')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                bool arrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "AfterPgDown");
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(arrived, "Expected document to arrive after all PostgreSQL connections were terminated and CDC process recovered");
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.PostgreSql | RavenTestCategory.Cdc, NpgSqlRequired = true)]
+        [RequiresNpgSqlInlineData]
+        public async Task CanRecoverAfterReplicationSlotDroppedAndRecreated(MigrationProvider provider)
+        {
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
+            {
+                string configurationName = "cdc_slot_drop_test";
+                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+
+                var statsAfterLoad = store.Maintenance.Send(new GetStatisticsOperation());
+                Assert.True(statsAfterLoad.CountOfDocuments >= 5, $"Expected at least 5 documents after initial load, got {statsAfterLoad.CountOfDocuments}");
+
+                // Drop the replication slot — this simulates a severe network/connection error
+                // where the slot state is lost. The CDC process should detect the error,
+                // enter fallback mode, and recreate the slot on retry.
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+
+                    // First terminate the active backend holding the slot
+                    using (var termCmd = conn.CreateCommand())
+                    {
+                        termCmd.CommandText = @"
+                            SELECT pg_terminate_backend(active_pid)
+                            FROM pg_replication_slots
+                            WHERE active_pid IS NOT NULL AND slot_type = 'logical'";
+                        await termCmd.ExecuteNonQueryAsync(cts.Token);
+                    }
+
+                    // Give PostgreSQL a moment to release the slot
+                    await Task.Delay(2000, cts.Token);
+
+                    // Now drop the replication slot entirely
+                    using (var dropCmd = conn.CreateCommand())
+                    {
+                        dropCmd.CommandText = @"
+                            SELECT pg_drop_replication_slot(slot_name)
+                            FROM pg_replication_slots
+                            WHERE slot_type = 'logical'";
+                        try
+                        {
+                            await dropCmd.ExecuteNonQueryAsync(cts.Token);
+                        }
+                        catch (Npgsql.PostgresException ex) when (ex.SqlState == "42704")
+                        {
+                            // slot already gone, ignore
+                        }
+                    }
+                }
+
+                // Wait for the CDC process to detect the error and enter fallback/retry
+                await Task.Delay(15_000, cts.Token);
+
+                // Insert a new row — the process should have recreated the slot and picked up the change
+                await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
+                using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                {
+                    await conn.OpenAsync(cts.Token);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $@"INSERT INTO ""{schemaName}"".""customer"" (""firstname"") VALUES ('AfterSlotDrop')";
+                    await cmd.ExecuteNonQueryAsync(cts.Token);
+                }
+
+                bool arrived = await WaitForValueAsync(() =>
+                {
+                    using var session = store.OpenSession();
+                    return session.Advanced.RawQuery<Customer>("from Customer").ToList().Any(c => c.Firstname == "AfterSlotDrop");
+                }, true, timeout: 120_000, interval: 1000);
+
+                Assert.True(arrived, "Expected document to arrive after replication slot was dropped and CDC process recovered");
             }
         }
     }
