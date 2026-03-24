@@ -1176,15 +1176,20 @@ namespace SlowTests.Server.Documents.CDC
                 string configurationName = "cdc_connection_drop_test";
                 var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
-                // forcefully terminate the replication backend in PostgreSQL
+                // Scope the terminate to only this test's database to avoid interfering with parallel tests.
+                // Each test creates its own unique PostgreSQL database via WithSqlDatabase.
+                var pgDbName = new Npgsql.NpgsqlConnectionStringBuilder(connectionString).Database;
+
+                // forcefully terminate the replication backend for this test's database only
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
                     await conn.OpenAsync(cts.Token);
                     using var cmd = conn.CreateCommand();
-                    cmd.CommandText = @"
+                    cmd.CommandText = $@"
                         SELECT pg_terminate_backend(active_pid)
                         FROM pg_replication_slots
-                        WHERE active_pid IS NOT NULL AND slot_type = 'logical'";
+                        WHERE active_pid IS NOT NULL
+                          AND database = '{pgDbName}'";
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
@@ -1855,20 +1860,22 @@ namespace SlowTests.Server.Documents.CDC
                 var statsAfterLoad = store.Maintenance.Send(new GetStatisticsOperation());
                 Assert.True(statsAfterLoad.CountOfDocuments >= 5, $"Expected at least 5 documents after initial load, got {statsAfterLoad.CountOfDocuments}");
 
-                // Terminate ALL connections to the PostgreSQL database, simulating "PostgreSQL is down"
-                // by killing every backend connected to this specific database
-                var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
-                var dbName = builder.Database;
-                var rawConnectionString = connectionString.Replace($";Database=\"{dbName}\"", "");
+                // Terminate ALL connections to this test's PostgreSQL database, simulating "PostgreSQL is down"
+                // by killing every backend connected to this specific database.
+                // Each test creates its own unique database via WithSqlDatabase, so this is safe for parallel runs.
+                var pgBuilder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+                var pgDbName = pgBuilder.Database;
 
-                using (var adminConn = new Npgsql.NpgsqlConnection(rawConnectionString))
+                // Connect to the default 'postgres' database to issue the terminate command
+                pgBuilder.Database = "postgres";
+                using (var adminConn = new Npgsql.NpgsqlConnection(pgBuilder.ConnectionString))
                 {
                     await adminConn.OpenAsync(cts.Token);
                     using var cmd = adminConn.CreateCommand();
                     cmd.CommandText = $@"
                         SELECT pg_terminate_backend(pid)
                         FROM pg_stat_activity
-                        WHERE datname = '{dbName}'
+                        WHERE datname = '{pgDbName}'
                           AND pid <> pg_backend_pid()";
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
@@ -1912,40 +1919,72 @@ namespace SlowTests.Server.Documents.CDC
                 var statsAfterLoad = store.Maintenance.Send(new GetStatisticsOperation());
                 Assert.True(statsAfterLoad.CountOfDocuments >= 5, $"Expected at least 5 documents after initial load, got {statsAfterLoad.CountOfDocuments}");
 
+                // Scope all slot operations to this test's database to avoid interfering with parallel tests
+                var pgDbName = new Npgsql.NpgsqlConnectionStringBuilder(connectionString).Database;
+
                 // Drop the replication slot — this simulates a severe network/connection error
                 // where the slot state is lost. The CDC process should detect the error,
                 // enter fallback mode, and recreate the slot on retry.
+
+                // First, collect the slot names belonging to this test's database
+                var slotNames = new List<string>();
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
                     await conn.OpenAsync(cts.Token);
-
-                    // First terminate the active backend holding the slot
-                    using (var termCmd = conn.CreateCommand())
+                    using (var queryCmd = conn.CreateCommand())
                     {
-                        termCmd.CommandText = @"
-                            SELECT pg_terminate_backend(active_pid)
+                        queryCmd.CommandText = $@"
+                            SELECT slot_name
                             FROM pg_replication_slots
-                            WHERE active_pid IS NOT NULL AND slot_type = 'logical'";
-                        await termCmd.ExecuteNonQueryAsync(cts.Token);
+                            WHERE slot_type = 'logical'
+                              AND database = '{pgDbName}'";
+                        using var reader = await queryCmd.ExecuteReaderAsync(cts.Token);
+                        while (await reader.ReadAsync(cts.Token))
+                            slotNames.Add(reader.GetString(0));
                     }
+                }
 
-                    // Give PostgreSQL a moment to release the slot
-                    await Task.Delay(2000, cts.Token);
-
-                    // Now drop the replication slot entirely
-                    using (var dropCmd = conn.CreateCommand())
+                // Terminate and drop each slot individually with retries.
+                // The CDC process may reconnect and reclaim the slot between terminate
+                // and drop, so we must re-terminate on every retry attempt.
+                foreach (var slotName in slotNames)
+                {
+                    for (int attempt = 0; attempt < 30; attempt++)
                     {
-                        dropCmd.CommandText = @"
-                            SELECT pg_drop_replication_slot(slot_name)
-                            FROM pg_replication_slots
-                            WHERE slot_type = 'logical'";
+                        using var conn = new Npgsql.NpgsqlConnection(connectionString);
+                        await conn.OpenAsync(cts.Token);
+
+                        // Terminate the active backend holding this specific slot
+                        using (var termCmd = conn.CreateCommand())
+                        {
+                            termCmd.CommandText = $@"
+                                SELECT pg_terminate_backend(active_pid)
+                                FROM pg_replication_slots
+                                WHERE slot_name = '{slotName}'
+                                  AND active_pid IS NOT NULL";
+                            await termCmd.ExecuteNonQueryAsync(cts.Token);
+                        }
+
+                        // Small delay to let PostgreSQL clean up the terminated backend
+                        await Task.Delay(200, cts.Token);
+
                         try
                         {
+                            using var dropCmd = conn.CreateCommand();
+                            dropCmd.CommandText = $"SELECT pg_drop_replication_slot('{slotName}')";
                             await dropCmd.ExecuteNonQueryAsync(cts.Token);
+                            break; // success
+                        }
+                        catch (Npgsql.PostgresException ex) when (ex.SqlState == "55006")
+                        {
+                            // slot still active — the CDC process reconnected; retry
+                            if (attempt == 29)
+                                throw;
+                            await Task.Delay(300, cts.Token);
                         }
                         catch (Npgsql.PostgresException ex) when (ex.SqlState == "42704")
                         {
-                            // slot already gone, ignore
+                            break; // slot already gone
                         }
                     }
                 }
