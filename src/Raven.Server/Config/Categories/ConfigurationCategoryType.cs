@@ -46,6 +46,6 @@ namespace Raven.Server.Config.Categories
         Ai,
         [Description("Schema Validation")]
         SchemaValidation,
-        CncSink
+        CdcSink
     }
 }
