@@ -48,16 +48,16 @@ public sealed class UpdateCdcSinkProcessStateCommand : UpdateValueForDatabaseCom
             var databaseTask = record.CdcSinks.FirstOrDefault(x => x.Name == State.ConfigurationName);
 
             if (databaseTask == null)
-                throw new RachisApplyException($"Can't update state of Queue Sink '{State.ConfigurationName}' by node {State.NodeTag}, because its configuration can't be found");
+                throw new RachisApplyException($"Can't update state of Cdc Sink '{State.ConfigurationName}' by node {State.NodeTag}, because its configuration can't be found");
 
             var topology = record.Topology;
             var lastResponsibleNode = GetLastResponsibleNode(HasHighlyAvailableTasks, topology, State.NodeTag);
             if (topology.WhoseTaskIsIt(RachisState.Follower, databaseTask, lastResponsibleNode) != State.NodeTag)
-                throw new RachisApplyException($"Can't update state of Queue Sink {State.ConfigurationName} by node {State.NodeTag}, because it's not its task to update this Queue Sink");
+                throw new RachisApplyException($"Can't update state of Cdc Sink {State.ConfigurationName} by node {State.NodeTag}, because it's not its task to update this Cdc Sink");
 
 
 
-            var state = JsonDeserializationClient.CdcSinkProcessState(existingValue);
+            //var state = JsonDeserializationClient.CdcSinkProcessState(existingValue);
 
         }
 

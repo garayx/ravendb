@@ -533,7 +533,7 @@ namespace Raven.Server.SqlMigration
             };
         }
 
-        private static object ExtractReplicationValue(object value, string dataTypeName)
+        internal static object ExtractReplicationValue(object value, string dataTypeName)
         {
             if (value is null or DBNull)
                 return null;

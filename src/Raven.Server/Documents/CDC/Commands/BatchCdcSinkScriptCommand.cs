@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using NuGet.Protocol;
 using Raven.Client;
 using Raven.Server.Documents.CDC.Stats;
 using Raven.Server.Documents.Patch;
@@ -9,12 +10,14 @@ using Raven.Server.ServerWide.Context;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
 using Sparrow.Server.Logging;
+using static Raven.Server.Utils.MetricCacher.Keys;
 
 namespace Raven.Server.Documents.CDC.Commands;
 
 public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
 {
     private readonly List<CdcSinkProcess.CdcChangeItem> _messages;
+    private readonly PostgresqlCdcSink.Config _config;
     private readonly string _script = string.Empty;
     private readonly CdcSinkStatsScope _scriptProcessingScope;
     private readonly CdcSinkProcessStatistics _statistics;
@@ -41,6 +44,15 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
     internal BatchCdcSinkScriptCommand(List<CdcSinkProcess.CdcChangeItem> messages, bool initialLoad)
     {
         _messages = messages ?? throw new ArgumentException("Messages cannot be null", nameof(messages));
+        _scriptProcessingScope = null;
+        _statistics = null;
+        _logger = null;
+    }
+    // todo: egor this is same as above?
+    internal BatchCdcSinkScriptCommand(List<CdcSinkProcess.CdcChangeItem> messages, PostgresqlCdcSink.Config config, bool initialLoad)
+    {
+        _messages = messages ?? throw new ArgumentException("Messages cannot be null", nameof(messages));
+        _config = config;
         _scriptProcessingScope = null;
         _statistics = null;
         _logger = null;
@@ -142,6 +154,16 @@ public sealed class BatchCdcSinkScriptCommand : DocumentMergedTransactionCommand
                 _statistics?.RecordScriptExecutionError(e);
             }
         }
+
+        if (_config == null)
+        {
+            //TODO: egor handle that case in logical replication
+                        return processed;
+        }
+
+        using (var freshHilo = context.ReadObject(_config.ToJson(), _config.CdcConfigId, BlittableJsonDocumentBuilder.UsageMode.ToDisk))
+            context.DocumentDatabase.DocumentsStorage.Put(context, _config.CdcConfigId, null, freshHilo, nonPersistentFlags: NonPersistentDocumentFlags.SkipSchemaValidation);
+
 
         return processed;
     }

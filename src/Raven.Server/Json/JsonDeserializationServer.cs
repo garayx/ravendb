@@ -33,6 +33,7 @@ using Raven.Client.ServerWide.Tcp;
 using Raven.Server.Commercial;
 using Raven.Server.Dashboard;
 using Raven.Server.Dashboard.Cluster.Notifications.DatabaseNotifications;
+using Raven.Server.Documents.CDC;
 using Raven.Server.Documents.Commands;
 using Raven.Server.Documents.Commands.ETL;
 using Raven.Server.Documents.Commands.Indexes;
@@ -363,11 +364,12 @@ namespace Raven.Server.Json
         internal static readonly Func<BlittableJsonReaderObject, MistralAiSettings> MistralAiSettings = GenerateJsonDeserializationRoutine<MistralAiSettings>();
 
         internal static readonly Func<BlittableJsonReaderObject, StudioTasksHandler.AiModelsRequest> AiModelsRequest = GenerateJsonDeserializationRoutine<StudioTasksHandler.AiModelsRequest>();
-        
+
         internal static readonly Func<BlittableJsonReaderObject, AiAgentProcessorForTestConversation.AiAgentTestRequest> AiAgentTestRequest = GenerateJsonDeserializationRoutine<AiAgentProcessorForTestConversation.AiAgentTestRequest>();
 
         internal static readonly Func<BlittableJsonReaderObject, DatabaseNotificationsSummaryRequestConfig> NotificationsSummaryRequestConfig = GenerateJsonDeserializationRoutine<DatabaseNotificationsSummaryRequestConfig>();
-        
+        internal static readonly Func<BlittableJsonReaderObject, PostgresqlCdcSink.Config> PostgresqlCdcSinkConfig = GenerateJsonDeserializationRoutine<PostgresqlCdcSink.Config>();
+
         public sealed class Parameters
         {
             private Parameters()
@@ -402,6 +404,9 @@ namespace Raven.Server.Json
 
             public static readonly Func<BlittableJsonReaderObject, AdoptOrphanedRevisionsOperation.Parameters> AdoptOrphanedRevisionsConfigurationOperationParameters = GenerateJsonDeserializationRoutine<AdoptOrphanedRevisionsOperation.Parameters>();
             public static readonly Func<BlittableJsonReaderObject, StartSchemaValidationOperation.Parameters> ValidateSchemaOperationParameters = GenerateJsonDeserializationRoutine<StartSchemaValidationOperation.Parameters>();
+
+
+
         }
     }
 }

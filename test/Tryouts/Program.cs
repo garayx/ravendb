@@ -41,6 +41,17 @@ public static class Program
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
                     await test.CanSimpleImport_OneToOne(MigrationProvider.NpgSQL);
                 }
+
+
+                /*
+                 *                using (var testOutputHelper = new ConsoleTestOutputHelper())
+                   using (var test = new PostgreSqlCdcSinkTests(testOutputHelper))
+                   {
+                       DebuggerAttachedTimeout.DisableLongTimespan = true;
+                       await test.NestedCollection_InsertReplicatesAsNestedProperty(MigrationProvider.NpgSQL);
+                   }
+                 *
+                 */
             }
             catch (Exception e)
             {

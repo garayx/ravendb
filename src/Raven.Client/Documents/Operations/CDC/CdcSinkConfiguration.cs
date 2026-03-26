@@ -255,11 +255,16 @@ public class Collection2 : AbstractCollection
 
     public List<NestedCollection2> NestedCollections { get; set; } = new List<NestedCollection2>();
 
+    public bool InitialLoadCompleted { get; set; }
+    public List<string> LastKeyValues { get; set; } = new List<string>();
+
     public override DynamicJsonValue ToJson()
     {
         var json = base.ToJson();
         json[nameof(Patch)] = Patch;
         json[nameof(NestedCollections)] = new DynamicJsonArray(NestedCollections.Select(x => x.ToJson()));
+        json[nameof(InitialLoadCompleted)] = InitialLoadCompleted;
+        json[nameof(LastKeyValues)] = new DynamicJsonArray(LastKeyValues);
         return json;
     }
 }

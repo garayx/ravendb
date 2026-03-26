@@ -108,13 +108,13 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
     public CdcSinkConfiguration Configuration { get; }
 
     public CdcSinkScript Script { get; }
-
+ 
     public TimeSpan? FallbackTime { get; protected set; }
 
     protected abstract void Initialize();
-    protected abstract Task<ICdcSinkConsumer> CreateConsumerAsync();
     protected abstract Task HandleInitialLoadAsync();
-
+    protected abstract Task<ICdcSinkConsumer> CreateConsumerAsync();
+ 
     public OngoingTaskConnectionStatus GetConnectionStatus()
     {
         if (Configuration.Disabled || CancellationToken.IsCancellationRequested)
@@ -268,6 +268,7 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                     // TODO: egor I pass here always int.MaxValue as batch size, I think I have to commit the docs to database, on each commit command,
                                     // thats why I stop the replication batch (I cannot handle multiple batches as one, since I need to send "ack" (consumer.commit()))
                                     // to the postgresql
+                                    //TODO: reuse the code from https://github.com/ayende/cdc/blob/master/PostgresToRavenReplicator.cs#L367
                                     if (CanContinueBatch(stats, int.MaxValue/*messages.Count*/, context) == false)
                                     {
                                         break;
@@ -367,6 +368,11 @@ public abstract class CdcSinkProcess : IDisposable, ILowMemoryHandler
                                     LastLsn = (ulong)lastLsn
                                 });
 
+                                //TODO: egor this lsn will be saved in postgresql
+                                // TODO: egor we want to save it as a special doc that will hold the last LSN and replicate it through nodes
+                                // TODO: so we create a @raven-docs colleciton ? similar to hilo?
+                                // TODO: save the lsn inside the tx merger command as doc
+                                // TODO: egor maybe use identifier as doc propery to know what task it belong
                                 _consumer.Commit(lastLsn);
 
                                 Database.CdcSinkLoader.OnBatchCompleted(Configuration.Name, Script.Name, Statistics);

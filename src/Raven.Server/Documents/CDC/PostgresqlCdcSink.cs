@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Npgsql;
@@ -10,7 +13,9 @@ using Npgsql.Replication.PgOutput;
 using Npgsql.Replication.PgOutput.Messages;
 using NpgsqlTypes;
 using Raven.Client.Documents.Operations.CDC;
+using Raven.Client.Exceptions.Documents;
 using Raven.Server.Documents.CDC.Stats;
+using Raven.Server.Json;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.SqlMigration;
 using Raven.Server.SqlMigration.Model;
@@ -27,9 +32,19 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         _testTables = configuration.Settings.Collections;
 
         LastLsn = new NpgsqlTypes.NpgsqlLogSequenceNumber(processState.LastLsn);
-
+        CdcConfigId = RavenConfigIdPrefix + ComputeTablesHash();
         BuildNestedTableLookup();
     }
+
+    private string ComputeTablesHash()
+    {
+        var sortedTables = string.Join("_", _testTables.OrderBy(t => t.SourceTableName));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(sortedTables));
+        return Convert.ToHexString(bytes)[..16].ToLower();
+    }
+
+    public const string RavenConfigIdPrefix = "Raven/Config/Cdc/";
+    public string CdcConfigId;
 
     public List<Collection2> _testTables { get; set; }
 
@@ -233,7 +248,35 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         {
             return;
         }
+        //TODO: egor make config normal thing 
+        // TODO: egor unify all possible code with the old code
+        try
+        {
+            // this config is saved in document
+            var config = GetConfiguration();
+            if (config.Tables.All(t => t.InitialLoadCompleted))
+                return;
 
+            foreach (var table in config.Tables)
+            {
+                if (table.InitialLoadCompleted)
+                    continue;
+                Console.WriteLine("Starting initial load for table: " + table.Name);
+                config = await ProcessTableInitialLoad(table, config, CancellationToken);
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+
+        //await OldInitialLoadMethod();
+    }
+
+    private async Task OldInitialLoadMethod()
+    {
+        // TODO: egor old code, dont use it.
         try
         {
             await CleanupReplicationSlotsBySlotsNameAsync(CancellationToken);
@@ -258,6 +301,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
             await setSnapshotCmd.ExecuteNonQueryAsync(CancellationToken);
 
             int existingRowCount = 0;
+
             using (Database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
             {
                 using (var writer = new SqlMigrationWriter(context, Configuration.Settings.BatchSize))
@@ -425,6 +469,293 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         }
     }
 
+    public class Config : IDynamicJson
+    {
+        public Config()
+        {
+            // for serializer
+        }
+
+        public Config(ulong lastLsn, Collection2[] tables, string cdcConfigId)
+        {
+            LastLsn = lastLsn;
+            Tables = tables;
+            CdcConfigId = cdcConfigId;
+        }
+
+        public ulong LastLsn { get; set; }
+        public Collection2[] Tables { get; set; }
+        public string CdcConfigId { get; set; }
+
+        public void Deconstruct(out ulong LastLsn, out Collection2[] Tables)
+        {
+            LastLsn = this.LastLsn;
+            Tables = this.Tables;
+        }
+
+        public DynamicJsonValue ToJson()
+        {
+            
+            return new DynamicJsonValue
+            {
+                [nameof(LastLsn)] = LastLsn,
+                [nameof(Tables)] = new DynamicJsonArray(Tables.Select(t => t.ToJson())),
+                [nameof(CdcConfigId)] = CdcConfigId
+            };
+        }
+    }
+
+
+    private Config GetConfiguration()
+    {
+        Config config;
+        using (Database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+        using (context.OpenReadTransaction())
+        {
+
+            BlittableJsonReaderObject hiloDocReader = null;
+            try
+            {
+                hiloDocReader = Database.DocumentsStorage.Get(context, CdcConfigId)?.Data;
+            }
+            catch (DocumentConflictException e)
+            {
+                throw new InvalidDataException("Failed to fetch HiLo document due to a conflict on the document. " +
+                                               "This shouldn't happen, since it this conflict should've been resolved during replication. " +
+                                               "This exception should not happen and is likely a bug.", e);
+            }
+
+            if (hiloDocReader == null)
+            {
+                var tables = this._testTables.ToArray();
+                config = new Config(0, tables, CdcConfigId);
+
+                return config;
+            }
+            else
+            {
+                config = JsonDeserializationServer.PostgresqlCdcSinkConfig(hiloDocReader);
+                return config;
+            }
+        }
+    }
+
+    private async Task<Config> ProcessTableInitialLoad(Collection2 table, Config config, CancellationToken cancellationToken)
+    {
+
+    //    var keyColumns = await GetTableKeyColumns(table.SourceTableSchema, cancellationToken);
+        var tableSchema = _schema.GetTable(table.SourceTableSchema, table.SourceTableName);
+        var specialColumns = _schema.FindSpecialColumns(table.SourceTableSchema, table.SourceTableName);
+        var keyColumns = tableSchema.PrimaryKeyColumns.ToArray();
+        await using var conn = new NpgsqlConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
+        await conn.OpenAsync(cancellationToken);
+
+        await using var reader = await InitialLoadQuery(table, keyColumns, conn, cancellationToken);
+
+        var batch = new List<CdcChangeItem>(Configuration.Settings.BatchSize);
+
+        Task lastBatch = Task.CompletedTask;
+        //    _settings.TablesProcessingScripts.TryGetValue(table.Name, out var script);
+        var references = new List<ReferenceInformation>();
+
+
+        var f = true;
+        using (Database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var doc = new SqlMigrationDocument
+                {
+                    Object = GenericDatabaseMigrator.ExtractFromReader(reader, table.ColumnsMapping),
+                    Attachments = new Dictionary<string, byte[]>(),
+                    SpecialColumnsValues = GenericDatabaseMigrator.ExtractFromReader(reader, specialColumns),
+                };
+
+                var id = GenericDatabaseMigrator.GenerateDocumentId(table.Name, GenericDatabaseMigrator.GetColumns(doc.SpecialColumnsValues, tableSchema.PrimaryKeyColumns));
+                doc.SetCollectionAndId(table.Name, id);
+
+                GenericDatabaseMigrator.FillDocumentFields(doc.Object, doc.SpecialColumnsValues, references, "", doc.Attachments);
+
+                // Initialize empty arrays for nested collections
+                if (table.NestedCollections != null)
+                {
+                    foreach (var nested in table.NestedCollections)
+                    {
+                        doc.Object[nested.Name] = new DynamicJsonArray();
+                    }
+                }
+
+                var docBlittable = doc.ToBlittable(context);
+
+                batch.Add(new CdcChangeItem()
+                {
+                    ChangeType = CdcChangeType.Put,
+                    Document = docBlittable,
+                    Id = id
+                });
+
+                if (batch.Count >= Configuration.Settings.BatchSize)
+                {
+                    f = false;
+                    var lastKeyValues = keyColumns.Select(col => reader[col]?.ToString() ?? "").ToList();
+                    await lastBatch;
+                    config.Tables = config.Tables.Select(t =>
+                    {
+                        if (t.Name == table.Name)
+                        {
+                            t.LastKeyValues = lastKeyValues;
+                        }
+
+                        return t;
+                    }).ToArray();
+
+                    var b = batch.ToList();
+                    lastBatch = Task.Run(() =>
+                    {
+                        var command = new Commands.BatchCdcSinkScriptCommand(b, config, initialLoad: true);
+                        Database.TxMerger.EnqueueSync(command);
+                    }, cancellationToken);
+
+                    batch = [];
+                }
+            }
+
+            if (batch.Count > 0 || f)
+            {
+                await lastBatch;
+                config.Tables = config.Tables.Select(t =>
+                {
+                    if (t.Name == table.Name)
+                    {
+                        t.LastKeyValues = [];
+                        t.InitialLoadCompleted = true;
+                    }
+
+                    return t;
+                }).ToArray();
+
+                var command = new Commands.BatchCdcSinkScriptCommand(batch, config, initialLoad: true);
+                Database.TxMerger.EnqueueSync(command);
+            }
+        }
+
+
+        try
+        {
+            var c = config;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+
+
+        return config;
+    }
+
+    private async Task<string[]> GetTableKeyColumns(string tableName, CancellationToken cancellationToken)
+    {
+        await using var conn = new NpgsqlConnection(Configuration.Connection.PostgresqlConnectionSettings.ConnectionString);
+        await conn.OpenAsync(cancellationToken);
+
+        var query = @"
+            SELECT a.attname
+            FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = $1::regclass AND i.indisprimary
+            ORDER BY array_position(i.indkey, a.attnum)";
+
+        await using var cmd = new NpgsqlCommand(query, conn);
+        cmd.Parameters.AddWithValue(tableName);
+
+        var keyColumns = new List<string>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            keyColumns.Add(reader.GetString(0));
+        }
+
+        return keyColumns.ToArray();
+    }
+
+
+    private async Task<NpgsqlDataReader> InitialLoadQuery(Collection2 table, string[] keyColumns, NpgsqlConnection conn, CancellationToken cancellationToken)
+    {
+        var query = $"SELECT * FROM \"{table.SourceTableName}\"";
+        var parameters = new Dictionary<string, object>();
+
+        if (table.LastKeyValues.Count > 0)
+        {
+            // Get column types for proper parameter conversion
+            var columnTypes = await GetColumnTypes(table.Name, keyColumns, conn, cancellationToken);
+
+            var whereConditions = new List<string>();
+            for (int i = 0; i < keyColumns.Length; i++)
+            {
+                var paramName = $"@key{i}";
+                if (i == keyColumns.Length - 1)
+                {
+                    // Last key column: >=
+                    whereConditions.Add($"{keyColumns[i]} >= {paramName}");
+                }
+                else
+                {
+                    // Previous columns: =
+                    whereConditions.Add($"{keyColumns[i]} = {paramName}");
+                }
+
+                var stringValue = table.LastKeyValues[i];
+                var columnType = columnTypes[keyColumns[i]];
+                parameters[paramName] = GenericDatabaseMigrator.ExtractReplicationValue(stringValue, columnType);
+            }
+            query += " WHERE " + string.Join(" AND ", whereConditions);
+        }
+
+        if (keyColumns.Length == 0)
+        {
+            query += ";";
+        }
+        else
+        {
+            query += " ORDER BY " + string.Join(", ", keyColumns);
+        }
+
+        Console.WriteLine(query);
+        var cmd = new NpgsqlCommand(query, conn);
+        foreach (var param in parameters)
+        {
+            cmd.Parameters.AddWithValue(param.Key, param.Value);
+        }
+
+        return await cmd.ExecuteReaderAsync(cancellationToken);
+    }
+
+    private async Task<Dictionary<string, string>> GetColumnTypes(string tableName, string[] columnNames, NpgsqlConnection conn, CancellationToken cancellationToken)
+    {
+        var columnTypes = new Dictionary<string, string>();
+
+        var query = @"
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = @tableName
+            AND column_name = ANY(@columns)";
+
+        await using var cmd = new NpgsqlCommand(query, conn);
+        cmd.Parameters.AddWithValue("@tableName", tableName);
+        cmd.Parameters.AddWithValue("@columns", columnNames);
+
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var columnName = reader.GetString(0);
+            var dataType = reader.GetString(1);
+            columnTypes[columnName] = dataType;
+        }
+
+        return columnTypes;
+    }
+
     private static readonly NpgsqlLogSequenceNumber ZeroLsn = new NpgsqlLogSequenceNumber(0);
     protected static CdcBatchResult EmptyCdcBatch = new CdcBatchResult() { Status = CdcBatchStatus.EmptyBatch };
     protected static CdcBatchResult ContinueCdcBatch = new CdcBatchResult() { Status = CdcBatchStatus.DocumentsSent };
@@ -557,7 +888,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
                     Status = CdcBatchStatus.Commit,
                     LastLsn = commit.CommitLsn
                 };
-
+            //TODO: egor we don't care , should be made by user, we simply ignore the new columns, if column was removed? put null in the document?
             case RelationMessage relationMessage:
                 _schema = _dbDriver.FindSchema();
                 return ContinueCdcBatch;
@@ -568,6 +899,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
             case TruncateMessage truncateMessage:
                 return ContinueCdcBatch;
 
+            //TODO: egor we don't care , same as relationMessage
             case TypeMessage typeMessage:
                 _schema = _dbDriver.FindSchema();
                 return ContinueCdcBatch;
@@ -686,7 +1018,7 @@ public sealed class PostgresqlCdcSink : CdcSinkProcess
         var table = _testTables.FirstOrDefault(x => x.SourceTableName == relation.RelationName);
 
         if (table == null)
-            throw new InvalidOperationException($"Table not found for relation: {relation.RelationName}");
+            throw new InvalidOperationException($"Collection2 not found for relation: {relation.RelationName}");
 
         var tableSchema = _schema.GetTable(table.SourceTableSchema, table.SourceTableName);
         HashSet<string> specialColumns = _schema.FindSpecialColumns(table.SourceTableSchema, table.SourceTableName);

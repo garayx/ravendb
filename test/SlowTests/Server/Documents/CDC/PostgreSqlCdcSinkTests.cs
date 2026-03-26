@@ -1513,6 +1513,9 @@ namespace SlowTests.Server.Documents.CDC
                     Assert.Equal(1, cat1.Productcategory[0].Productid);
                     Assert.Equal(1, cat1.Productcategory[0].Categoryid);
                 }
+
+
+                WaitForUserToContinueTheTest(store, false);
             }
         }
 
