@@ -15,8 +15,10 @@ using Raven.Client.Documents.Operations.ETL.Queue;
 using Raven.Client.Documents.Operations.ETL.SQL;
 using Raven.Client.Util;
 using Raven.Server.Documents.CDC;
+using Raven.Server.Json;
 using Raven.Server.NotificationCenter;
 using Raven.Server.NotificationCenter.Notifications.Details;
+using Raven.Server.ServerWide.Context;
 using Raven.Server.SqlMigration;
 using Raven.Server.SqlMigration.Model;
 using Sparrow.Json;
@@ -25,6 +27,7 @@ using Tests.Infrastructure;
 using Tests.Infrastructure.ConnectionString;
 using Xunit;
 using Xunit.Abstractions;
+using static Raven.Server.Utils.MetricCacher.Keys;
 
 namespace SlowTests.Server.Documents.CDC
 {
@@ -157,7 +160,7 @@ namespace SlowTests.Server.Documents.CDC
             return (cdcConnectionString, connectionStringName, settings);
         }
 
-        protected async Task<(CdcSinkProcessState State, Raven.Server.Documents.DocumentDatabase Db)> SetupAndWaitForInitialLoad(
+        protected async Task<(PostgresqlCdcSink.Config State, Raven.Server.Documents.DocumentDatabase Db, CdcSinkConfiguration Config)> SetupAndWaitForInitialLoad(
             DocumentStore store,
             Raven.Server.Documents.DocumentDatabase db,
             string connectionString,
@@ -183,7 +186,7 @@ namespace SlowTests.Server.Documents.CDC
             store.Maintenance.Send(new AddCdcSinkOperation<SqlConnectionString>(config));
 
             Raven.Server.Documents.DocumentDatabase cdcDb = null;
-            CdcSinkProcessState state = null;
+            PostgresqlCdcSink.Config state = null;
 
             // In a cluster, the CDC task runs on a specific node — iterate all servers.
             // In single-node mode, Servers may be empty — fall back to the passed db instance.
@@ -199,8 +202,8 @@ namespace SlowTests.Server.Documents.CDC
                         if (database == null)
                             continue;
 
-                        var processState = CdcSinkProcess.GetProcessState(database, configurationName);
-                        if (processState.LastLsn > 0)
+                        var processState = GetCdcConfigState(database, config.CdcDocName);
+                        if (state.Tables.All(x => x.InitialLoadCompleted == true))
                         {
                             cdcDb = database;
                             state = processState;
@@ -210,8 +213,8 @@ namespace SlowTests.Server.Documents.CDC
                 }
                 else
                 {
-                    var processState = CdcSinkProcess.GetProcessState(db, configurationName);
-                    if (processState.LastLsn > 0)
+                    var processState = GetCdcConfigState(db, config.CdcDocName);
+                    if (state.Tables.All(x => x.InitialLoadCompleted == true))
                     {
                         cdcDb = db;
                         state = processState;
@@ -234,16 +237,30 @@ namespace SlowTests.Server.Documents.CDC
                 Assert.True(initialLoadDone, $"Expected at least {expectedMinDocuments} documents from initial load");
             }
 
-            return (state, cdcDb);
+            return (state, cdcDb, config);
         }
 
-        protected async Task WaitForLsnAdvance(Raven.Server.Documents.DocumentDatabase db, string configurationName, ulong previousLsn, int timeout = 60_000)
+
+        protected PostgresqlCdcSink.Config GetCdcConfigState(Raven.Server.Documents.DocumentDatabase database, string cdcConfigId)
+        {
+            using (database.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+            using (context.OpenReadTransaction())
+            {
+
+                BlittableJsonReaderObject data = null;
+                    data = database.DocumentsStorage.Get(context, cdcConfigId)?.Data;
+
+                return data == null ? new PostgresqlCdcSink.Config() : JsonDeserializationServer.PostgresqlCdcSinkConfig(data);
+            }
+        }
+
+        protected async Task WaitForLsnAdvance(Raven.Server.Documents.DocumentDatabase db, string cdcDocName, ulong previousLsn, int timeout = 60_000)
         {
             Assert.True(await WaitForValueAsync(() =>
             {
                 try
                 {
-                    var state = CdcSinkProcess.GetProcessState(db, configurationName);
+                    var state = GetCdcConfigState(db, cdcDocName);
                     return state.LastLsn > previousLsn;
                 }
                 catch

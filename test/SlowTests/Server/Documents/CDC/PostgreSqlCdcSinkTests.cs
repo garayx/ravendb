@@ -129,13 +129,13 @@ namespace SlowTests.Server.Documents.CDC
                 // assert initial load
                 // assert can add new doc via logical replication
 
-                CdcSinkProcessState state = null;
+                PostgresqlCdcSink.Config state = null;
                 ulong lsnBeforeInsert = ulong.MaxValue;
                 var res = await WaitForValueAsync(() =>
                 {
-                    state = CdcSinkProcess.GetProcessState(db, configurationName);
+                    state = GetCdcConfigState(db, config.CdcDocName);
                     lsnBeforeInsert = state.LastLsn;
-                    return state.LastLsn > 0;
+                    return state.Tables.All(x => x.InitialLoadCompleted == true);
                 }, true, timeout: 60_000, interval: 1000);
 
 
@@ -147,7 +147,7 @@ namespace SlowTests.Server.Documents.CDC
                 {
                     stats = store.Maintenance.Send(new GetStatisticsOperation());
 
-                    Assert.Equal(25, stats.CountOfDocuments);
+                    Assert.Equal(25 + 1, stats.CountOfDocuments); // + 1 cdc doc
                 }
 
                 // now lets add a new document to postgresql
@@ -183,10 +183,10 @@ namespace SlowTests.Server.Documents.CDC
                 Console.WriteLine();
                 Console.WriteLine("$$$ WAIT "+store.Urls.FirstOrDefault());
 
-                CdcSinkProcessState stateAfterInsert = null;
+                PostgresqlCdcSink.Config stateAfterInsert = null;
                 Assert.True(await WaitForValueAsync(() =>
                 {
-                    stateAfterInsert = CdcSinkProcess.GetProcessState(db, configurationName);
+                    stateAfterInsert = GetCdcConfigState(db, config.CdcDocName);
                     return stateAfterInsert.LastLsn > lsnBeforeInsert;
                 }, true, timeout: 60_000, interval: 1000), "Expected LSN to advance after inserting into PostgreSQL via CDC");
 
@@ -199,7 +199,7 @@ namespace SlowTests.Server.Documents.CDC
                 Assert.True(newDocArrived, "Expected a new document to arrive after inserting into PostgreSQL via CDC");
 
                 var updatedStats = store.Maintenance.Send(new GetStatisticsOperation());
-                Assert.Equal(26, updatedStats.CountOfDocuments);
+                Assert.Equal(26 + 1, updatedStats.CountOfDocuments); // +1 cdc doc
 
 
                 using (var session = store.OpenSession())
@@ -242,11 +242,13 @@ namespace SlowTests.Server.Documents.CDC
 
                 store.Maintenance.Send(new AddCdcSinkOperation<SqlConnectionString>(config));
 
-                CdcSinkProcessState state = null;
+                PostgresqlCdcSink.Config state = null;
                 var res = await WaitForValueAsync(() =>
                 {
-                    state = CdcSinkProcess.GetProcessState(db, configurationName);
-                    return state.LastLsn > 0;
+                    state = GetCdcConfigState(db, config.CdcDocName);
+
+                    //   return state.LastLsn > 0;
+                    return state.Tables.All(x => x.InitialLoadCompleted == true);
                 }, true, timeout: 60_000, interval: 1000);
 
                 Assert.NotNull(state);
@@ -266,7 +268,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeInsert);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeInsert);
 
                 bool newDocArrived = await WaitForValueAsync(() =>
                 {
@@ -299,7 +301,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_schema_change_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 DatabaseStatistics statsBeforeAlter = store.Maintenance.Send(new GetStatisticsOperation());
                 long previousCount = statsBeforeAlter.CountOfDocuments;
@@ -351,7 +353,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_disable_enable_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 // verify initial load worked by inserting a row before disable
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
@@ -365,7 +367,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforePreDisable);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforePreDisable);
 
                 bool preDisableArrived = await WaitForValueAsync(() =>
                 {
@@ -443,7 +445,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_update_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 // verify the original value
                 using (var session = store.OpenSession())
@@ -465,7 +467,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeUpdate);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeUpdate);
 
                 // wait for the update to be reflected in RavenDB
                 bool updated = await WaitForValueAsync(() =>
@@ -492,7 +494,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_multi_insert_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 DatabaseStatistics statsBeforeInsert = store.Maintenance.Send(new GetStatisticsOperation());
                 ulong lsnBeforeInsert = state.LastLsn;
@@ -530,7 +532,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeInsert);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeInsert);
 
                 // wait for all 3 new documents to arrive
                 bool allArrived = await WaitForValueAsync(() =>
@@ -580,7 +582,7 @@ namespace SlowTests.Server.Documents.CDC
 
                 string configurationName = "cdc_multi_collection_test";
                 // northwind has 5 customers + 4 products = 9 minimum documents
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
                     collections: collections, expectedMinDocuments: 9);
 
                 ulong lsnBeforeInserts = state.LastLsn;
@@ -607,7 +609,7 @@ namespace SlowTests.Server.Documents.CDC
                     }
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeInserts);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeInserts);
 
                 DatabaseStatistics statsAfter = null;
                 bool bothArrived = await WaitForValueAsync(() =>
@@ -640,7 +642,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_update_insert_tx_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 DatabaseStatistics statsBeforeTx = store.Maintenance.Send(new GetStatisticsOperation());
                 ulong lsnBeforeTx = state.LastLsn;
@@ -671,7 +673,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeTx);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeTx);
 
                 // verify both the update and the insert
                 bool updateReflected = await WaitForValueAsync(() =>
@@ -712,7 +714,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_no_duplicate_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 DatabaseStatistics statsAfterInitialLoad = store.Maintenance.Send(new GetStatisticsOperation());
                 long initialCount = statsAfterInitialLoad.CountOfDocuments;
@@ -729,7 +731,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeFirst);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeFirst);
 
                 bool firstArrived = await WaitForValueAsync(() =>
                 {
@@ -795,7 +797,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_delete_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
@@ -810,7 +812,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeInsert);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeInsert);
 
                 bool inserted = await WaitForValueAsync(() =>
                 {
@@ -828,7 +830,7 @@ namespace SlowTests.Server.Documents.CDC
                 }
 
                 DatabaseStatistics statsBeforeDelete = store.Maintenance.Send(new GetStatisticsOperation());
-                ulong lsnBeforeDelete = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBeforeDelete = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 var pgId = insertedId.Split('/')[1];
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
@@ -839,7 +841,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeDelete);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeDelete);
 
                 bool deleted = await WaitForValueAsync(() =>
                 {
@@ -867,7 +869,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_multi_delete_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
@@ -888,7 +890,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeInserts);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeInserts);
 
                 bool allInserted = await WaitForValueAsync(() =>
                 {
@@ -911,7 +913,7 @@ namespace SlowTests.Server.Documents.CDC
                 }
 
                 DatabaseStatistics statsBeforeDelete = store.Maintenance.Send(new GetStatisticsOperation());
-                ulong lsnBeforeDelete = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBeforeDelete = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
@@ -928,7 +930,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeDelete);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeDelete);
 
                 bool allDeleted = await WaitForValueAsync(() =>
                 {
@@ -958,7 +960,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_delete_insert_tx_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
                 // insert a fresh customer first so we have one with no FK references to delete
@@ -971,7 +973,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeInsert);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeInsert);
 
                 bool inserted = await WaitForValueAsync(() =>
                 {
@@ -992,7 +994,7 @@ namespace SlowTests.Server.Documents.CDC
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
                 DatabaseStatistics statsBeforeTx = store.Maintenance.Send(new GetStatisticsOperation());
-                ulong lsnBeforeTx = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBeforeTx = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 // delete the fresh customer and insert another one in the same transaction
                 var pgId = toDeleteId.Split('/')[1];
@@ -1018,7 +1020,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeTx);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeTx);
 
                 // net effect: count stays the same (-1 delete +1 insert)
                 bool countUnchanged = await WaitForValueAsync(() =>
@@ -1049,7 +1051,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_delete_insert_tx_test2";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
                 // insert a fresh customer with no FK references so we can safely delete+reinsert it
@@ -1063,14 +1065,14 @@ namespace SlowTests.Server.Documents.CDC
                     freshId = (int)await cmd.ExecuteScalarAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeSetup);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeSetup);
                 Assert.True(await WaitForValueAsync(() =>
                 {
                     using var session = store.OpenSession();
                     return session.Load<Customer>($"Customer/{freshId}")?.Firstname == "OrigName";
                 }, true, timeout: 60_000, interval: 1000), "Expected fresh customer to arrive");
 
-                ulong lsnBeforeTx = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBeforeTx = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 // delete + insert same id in a single transaction
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
@@ -1095,7 +1097,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeTx);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeTx);
 
                 bool updated = await WaitForValueAsync(() =>
                 {
@@ -1129,7 +1131,7 @@ namespace SlowTests.Server.Documents.CDC
                 }
 
                 string configurationName = "cdc_full_update_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 using (var session = store.OpenSession())
                 {
@@ -1148,7 +1150,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeUpdate);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeUpdate);
 
                 bool updated = await WaitForValueAsync(() =>
                 {
@@ -1174,7 +1176,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_connection_drop_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 // Scope the terminate to only this test's database to avoid interfering with parallel tests.
                 // Each test creates its own unique PostgreSQL database via WithSqlDatabase.
@@ -1227,7 +1229,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_multi_restart_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
@@ -1303,7 +1305,7 @@ namespace SlowTests.Server.Documents.CDC
                 }
 
                 string configurationName = "cdc_index_update_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 using (var session = store.OpenSession())
                 {
@@ -1322,7 +1324,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeUpdate);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeUpdate);
 
                 bool updated = await WaitForValueAsync(() =>
                 {
@@ -1400,7 +1402,7 @@ namespace SlowTests.Server.Documents.CDC
                 };
 
                 string configurationName = "cdc_nested_initial_load";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
                     collections: collections, expectedMinDocuments: 2);
 
                 // Category/1 should have 2 productcategory items (product 1 and 2)
@@ -1472,7 +1474,7 @@ namespace SlowTests.Server.Documents.CDC
                 };
 
                 string configurationName = "cdc_nested_insert";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
                     collections: collections, expectedMinDocuments: 2);
 
                 // No productcategory rows exist yet after initial load (none in insert.sql)
@@ -1495,7 +1497,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBefore);
 
                 // Category/1 should now have a Productcategory array with one item
                 bool nestedArrived = await WaitForValueAsync(() =>
@@ -1577,7 +1579,7 @@ namespace SlowTests.Server.Documents.CDC
                 };
 
                 string configurationName = "cdc_nested_delete";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
                     collections: collections, expectedMinDocuments: 2);
 
                 // Verify initial state: Category/1 has 2 nested items
@@ -1588,7 +1590,7 @@ namespace SlowTests.Server.Documents.CDC
                     Assert.Equal(2, cat1.Productcategory.Length);
                 }
 
-                ulong lsnBefore = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBefore = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 // Delete one productcategory row
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
@@ -1599,7 +1601,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBefore);
 
                 // Category/1 should now have only 1 nested item
                 bool nestedDeleted = await WaitForValueAsync(() =>
@@ -1631,7 +1633,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_delete_put_same_id";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
                 // insert a fresh customer with no FK references so we can safely delete+reinsert it
@@ -1645,14 +1647,14 @@ namespace SlowTests.Server.Documents.CDC
                     freshId = (int)await cmd.ExecuteScalarAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeSetup);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeSetup);
                 Assert.True(await WaitForValueAsync(() =>
                 {
                     using var session = store.OpenSession();
                     return session.Load<Customer>($"Customer/{freshId}")?.Firstname == "Original";
                 }, true, timeout: 60_000, interval: 1000), "Expected fresh customer to arrive");
 
-                ulong lsnBefore = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBefore = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
@@ -1676,7 +1678,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBefore);
 
                 bool updated = await WaitForValueAsync(() =>
                 {
@@ -1734,7 +1736,7 @@ namespace SlowTests.Server.Documents.CDC
                 };
 
                 string configurationName = "cdc_nested_delete_put";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
                     collections: collections, expectedMinDocuments: 2);
 
                 using (var session = store.OpenSession())
@@ -1744,7 +1746,7 @@ namespace SlowTests.Server.Documents.CDC
                     Assert.Equal(2, cat1.Productcategory.Length);
                 }
 
-                ulong lsnBefore = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBefore = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
                 {
@@ -1768,7 +1770,7 @@ namespace SlowTests.Server.Documents.CDC
                     await tx.CommitAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBefore);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBefore);
 
                 // Category/1 should now have 2 nested items: productid=2 (kept) and productid=3 (new)
                 bool nestedUpdated = await WaitForValueAsync(() =>
@@ -1796,7 +1798,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_update_after_local_delete";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 // Step 1: Verify the document arrived via initial load
                 using (var session = store.OpenSession())
@@ -1819,7 +1821,7 @@ namespace SlowTests.Server.Documents.CDC
                     Assert.Null(session.Load<Customer>("Customer/1"));
                 }
 
-                ulong lsnBeforeUpdate = CdcSinkProcess.GetProcessState(db, configurationName).LastLsn;
+                ulong lsnBeforeUpdate = GetCdcConfigState(db, config.CdcDocName).LastLsn;
 
                 // Step 3: Update the same row in PostgreSQL — this should recreate the document in RavenDB
                 using (var conn = new Npgsql.NpgsqlConnection(connectionString))
@@ -1830,7 +1832,7 @@ namespace SlowTests.Server.Documents.CDC
                     await cmd.ExecuteNonQueryAsync(cts.Token);
                 }
 
-                await WaitForLsnAdvance(db, configurationName, lsnBeforeUpdate);
+                await WaitForLsnAdvance(db, config.CdcDocName, lsnBeforeUpdate);
 
                 // The CDC update should recreate the document with the new value
                 bool recreated = await WaitForValueAsync(() =>
@@ -1857,7 +1859,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_pg_down_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 // Verify initial load completed
                 var statsAfterLoad = store.Maintenance.Send(new GetStatisticsOperation());
@@ -1917,7 +1919,7 @@ namespace SlowTests.Server.Documents.CDC
             using (WithSqlDatabase(provider, out var connectionString, out string schemaName, dataSet: "northwind", includeData: true))
             {
                 string configurationName = "cdc_slot_drop_test";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 var statsAfterLoad = store.Maintenance.Send(new GetStatisticsOperation());
                 Assert.True(statsAfterLoad.CountOfDocuments >= 5, $"Expected at least 5 documents after initial load, got {statsAfterLoad.CountOfDocuments}");

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Newtonsoft.Json;
 using Raven.Client.Documents.Operations.ETL.CDC;
 using Raven.Client.Documents.Operations.ETL.Queue;
@@ -20,6 +22,26 @@ public class CdcSinkConfiguration : IDynamicJson, IDatabaseTask
 {
     private bool _initialized;
 
+    internal string CdcDocName => RavenConfigIdPrefix + ComputeTablesHash(Settings.Collections);
+
+    public static string ComputeTablesHash(List<Collection2> testTables)
+    {
+        var sortedTables = string.Join("_", testTables.OrderBy(t => t.SourceTableName));
+
+        // Wrapping SHA256 in a using statement is a good practice in .NET Standard
+        using (var sha256 = SHA256.Create())
+        {
+            var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(sortedTables));
+
+            // BitConverter.ToString returns "XX-XX-XX...", so we strip the hyphens
+            var hexString = BitConverter.ToString(bytes).Replace("-", "");
+
+            // Take the first 16 characters and lowercase them
+            return hexString.Substring(0, 16).ToLower();
+        }
+    }
+
+    public const string RavenConfigIdPrefix = "Raven/Config/Cdc/";
 
     [ForceJsonSerialization]
     internal ulong LastLsn { get; set; }

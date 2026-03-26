@@ -44,9 +44,9 @@ namespace SlowTests.Server.Documents.CDC
                 var db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
                 string configurationName = "cdc_cluster_initial_load";
-                var (state, _) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, _, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
-                Assert.True(state.LastLsn > 0, "Expected LSN to be set after initial load");
+                Assert.True(state.Tables.All(x => x.InitialLoadCompleted == true), "Expected LSN to be set after initial load");
 
                 var stats = store.Maintenance.Send(new GetStatisticsOperation());
                 Assert.True(stats.CountOfDocuments >= 5, $"Expected at least 5 documents from initial load, got {stats.CountOfDocuments}");
@@ -74,7 +74,7 @@ namespace SlowTests.Server.Documents.CDC
                 var db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
                 string configurationName = "cdc_cluster_insert";
-                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, cdcDb, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
@@ -111,7 +111,7 @@ namespace SlowTests.Server.Documents.CDC
                 var db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
                 string configurationName = "cdc_cluster_update";
-                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, cdcDb, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 using (var session = store.OpenSession())
                 {
@@ -154,7 +154,7 @@ namespace SlowTests.Server.Documents.CDC
                 var db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
                 string configurationName = "cdc_cluster_delete";
-                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, cdcDb, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 await AdvanceCustomerSequence(connectionString, schemaName, cts.Token);
 
@@ -218,7 +218,7 @@ namespace SlowTests.Server.Documents.CDC
                 var db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
                 string configurationName = "cdc_cluster_failover";
-                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, cdcDb, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 // find the responsible node tag
                 var responsibleTag = cdcDb.ServerStore.NodeTag;
@@ -242,8 +242,8 @@ namespace SlowTests.Server.Documents.CDC
                             if (database.CdcSinkLoader == null)
                                 continue;
 
-                            var processState = CdcSinkProcess.GetProcessState(database, configurationName);
-                            if (processState.LastLsn > 0)
+                            var processState = GetCdcConfigState(database, config.CdcDocName);
+                            if (processState.Tables.All(x => x.InitialLoadCompleted == true))
                             {
                                 newResponsibleTag = server.ServerStore.NodeTag;
                                 return true;
@@ -302,7 +302,7 @@ namespace SlowTests.Server.Documents.CDC
                 var db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
                 string configurationName = "cdc_failover_mid_batch";
-                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, cdcDb, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 var responsibleTag = cdcDb.ServerStore.NodeTag;
                 var lsnBeforeInserts = state.LastLsn;
@@ -340,8 +340,8 @@ namespace SlowTests.Server.Documents.CDC
                             if (database?.CdcSinkLoader == null)
                                 continue;
 
-                            var processState = CdcSinkProcess.GetProcessState(database, configurationName);
-                            if (processState.LastLsn > 0)
+                            var processState = GetCdcConfigState(database, config.CdcDocName);
+                            if (processState.Tables.All(x => x.InitialLoadCompleted == true))
                                 return true;
                         }
                         catch
@@ -389,7 +389,7 @@ namespace SlowTests.Server.Documents.CDC
                 var db = await Databases.GetDocumentDatabaseInstanceFor(store);
 
                 string configurationName = "cdc_failover_pre_repl";
-                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
+                var (state, cdcDb, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName);
 
                 var responsibleTag = cdcDb.ServerStore.NodeTag;
 
@@ -518,7 +518,7 @@ namespace SlowTests.Server.Documents.CDC
                 };
 
                 string configurationName = "cdc_cluster_nested_failover";
-                var (state, cdcDb) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
+                var (state, cdcDb, config) = await SetupAndWaitForInitialLoad(store, db, connectionString, schemaName, configurationName,
                     collections: collections, expectedMinDocuments: 2);
 
                 // verify initial nested data arrived
@@ -547,8 +547,8 @@ namespace SlowTests.Server.Documents.CDC
                             if (database?.CdcSinkLoader == null)
                                 continue;
 
-                            var processState = CdcSinkProcess.GetProcessState(database, configurationName);
-                            if (processState.LastLsn > 0)
+                            var processState = GetCdcConfigState(database, config.CdcDocName);
+                            if (processState.Tables.All(x => x.InitialLoadCompleted == true))
                                 return true;
                         }
                         catch
