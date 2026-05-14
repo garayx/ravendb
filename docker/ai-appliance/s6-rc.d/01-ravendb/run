@@ -1,0 +1,9 @@
+#!/command/with-contenv sh
+set -e
+
+mkdir -p /var/lib/ai-appliance/ravendb
+
+# Config comes from RAVEN_* env vars set in the Dockerfile. Override on `docker
+# run -e ...` if needed (e.g. RAVEN_ServerUrl=http://0.0.0.0:8080 to expose the
+# port — only safe with mTLS, which the 8-week demo skips).
+exec dotnet /app/ravendb/Raven.Server.dll

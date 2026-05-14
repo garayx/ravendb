@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+set -e
+
+exec dotnet /app/web/Ai.Appliance.Web.dll
