@@ -1,3 +1,5 @@
+using Raven.Client.Documents.Operations.CdcSink.Schema;
+
 namespace Raven.AiAppliance.Wizard;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace Raven.AiAppliance.Wizard;
 /// in <c>ai-appliance-config</c>. Each wizard step overwrites its slice; no
 /// sessionId, no TTL, no GC (per Ayende RavenDB-26629).
 /// </summary>
-public sealed class WizardState
+internal sealed class WizardState
 {
     public const string DocumentId = "wizard-state";
 
@@ -15,10 +17,10 @@ public sealed class WizardState
     public ConnectResult? LastVerifyResult { get; set; }
     public DateTime? LastVerifyAt { get; set; }
 
-    // Re-type to CdcSinkSourceSchema (internal, accessed via InternalsVisibleTo)
-    // once feature/cdc is rebased in — that branch carries the new client-side
-    // CDC schema-discovery operation. Until then, store the schema as raw object
-    // to keep the appliance compiling without the missing type.
-    public object? LastDiscoveredSchema { get; set; }
+    // CdcSinkSourceSchema is internal in Raven.Client — accessible here via
+    // InternalsVisibleTo("Raven.AiAppliance"). Persisting it couples the
+    // wizard-state doc shape to the internal schema-discovery shape; accepted
+    // trade-off for in-tree code (forces the enclosing type to be internal too).
+    public CdcSinkSourceSchema? LastDiscoveredSchema { get; set; }
     public DateTime? LastDiscoverAt { get; set; }
 }

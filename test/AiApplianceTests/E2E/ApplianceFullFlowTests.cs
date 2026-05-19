@@ -69,8 +69,15 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
             out var pgConnStr, out _, dataSet: "northwind", includeData: true);
 
         // ---------- T5. Connect (CDC verify) ----------
-        var connectResp = await client.PostAsJsonAsync("/api/setup/connect",
-            new { provider = "Npgsql", connectionString = pgConnStr });
+        // Server-side /admin/cdc-sink/verify requires at least one TableNames entry — it does
+        // table-level CDC capability checks, not just server-level prerequisite checks.
+        // Northwind here uses singular names ("customer", "product", "category").
+        var connectResp = await client.PostAsJsonAsync("/api/setup/connect", new
+        {
+            provider         = "Npgsql",
+            connectionString = pgConnStr,
+            tableNames       = new[] { "customer", "product", "category" },
+        });
         Assert.True(connectResp.IsSuccessStatusCode,
             $"connect returned {connectResp.StatusCode}: {await connectResp.Content.ReadAsStringAsync()}");
         var verify = await connectResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -87,9 +94,9 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         var tableNames = schema.GetProperty("tables").EnumerateArray()
             .Select(t => t.GetProperty("sourceTableName").GetString()!.ToLowerInvariant())
             .ToHashSet();
-        Assert.Contains("orders", tableNames);
-        Assert.Contains("customers", tableNames);
-        Assert.Contains("products", tableNames);
+        Assert.NotEmpty(tableNames);
+        Assert.Contains("customer", tableNames);
+        Assert.Contains("product", tableNames);
 
         // ---------- T7. Map: POST a pre-built CdcSinkConfiguration for Northwind ----------
         var configFixturePath = Path.Combine(AppContext.BaseDirectory, "E2E", "Fixtures", "northwind-cdc-config.json");
