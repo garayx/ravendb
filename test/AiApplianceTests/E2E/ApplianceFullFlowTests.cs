@@ -32,8 +32,15 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
     public async Task EndToEnd_FullApplianceFlow_PostgresSourceToIFrameAgent_Works()
     {
         // ---------- T1. Mock license API serving the real setup-package zip ----------
-        var zipPath = Path.Combine(AppContext.BaseDirectory, "egor-ai.Cluster.Settings.zip");
-        Assert.True(File.Exists(zipPath), $"Setup-package zip fixture missing at {zipPath}");
+        // The zip carries a real license + admin cert and is never committed. Caller supplies its
+        // location via APPLIANCE_E2E_SETUP_PACKAGE_PATH. CI will substitute a synthetic mock zip
+        // through the same env var.
+        var zipPath = Environment.GetEnvironmentVariable("APPLIANCE_E2E_SETUP_PACKAGE_PATH");
+        Assert.False(string.IsNullOrWhiteSpace(zipPath),
+            "Set APPLIANCE_E2E_SETUP_PACKAGE_PATH to the absolute path of the setup-package zip " +
+            "(the one with your real RavenDB license + cert).");
+        Assert.True(File.Exists(zipPath),
+            $"APPLIANCE_E2E_SETUP_PACKAGE_PATH points at '{zipPath}' but no file is there.");
         var zipBytes = await File.ReadAllBytesAsync(zipPath);
 
         await using var licenseApi = await MockLicenseApi.StartAsync(HardcodedLicenseKey, zipBytes);

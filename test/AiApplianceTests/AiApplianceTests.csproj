@@ -40,9 +40,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="egor-ai.Cluster.Settings.zip">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!--
+      egor-ai.Cluster.Settings.zip is intentionally NOT copied here — it carries a real
+      license + admin cert and is never committed. The E2E test reads it at runtime from
+      the path in APPLIANCE_E2E_SETUP_PACKAGE_PATH.
+    -->
     <Content Include="E2E\Fixtures\northwind-cdc-config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
