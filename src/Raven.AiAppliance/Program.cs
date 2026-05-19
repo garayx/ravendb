@@ -27,13 +27,15 @@ builder.Logging.AddFilter("Polly", LogLevel.None);
 builder.Services.AddOptions<ApplianceOptions>()
     .Configure(options =>
     {
-        ReadEnv("RAVEN_AI_RAVEN_URL",      v => options.RavenUrl = v);
-        ReadEnv("RAVEN_AI_WEB_LISTEN_URL", v => options.WebListenUrl = v);
-        ReadEnv("RAVEN_AI_CONFIG_DB",      v => options.ConfigDatabase = v);
-        ReadEnv("RAVEN_AI_LLM_PROVIDER",   v => options.LlmProvider = v);
-        ReadEnv("RAVEN_AI_LLM_ENDPOINT",   v => options.LlmEndpoint = v);
-        ReadEnv("RAVEN_AI_LLM_MODEL",      v => options.LlmModel = v);
-        ReadEnv("RAVEN_AI_LLM_API_KEY",    v => options.LlmApiKey = v);
+        ReadEnv("RAVEN_AI_RAVEN_URL",            v => options.RavenUrl = v);
+        ReadEnv("RAVEN_AI_WEB_LISTEN_URL",       v => options.WebListenUrl = v);
+        ReadEnv("RAVEN_AI_CONFIG_DB",            v => options.ConfigDatabase = v);
+        ReadEnv("RAVEN_AI_SETUP_PACKAGE_PATH",   v => options.SetupPackagePath = v);
+        ReadEnv("RAVEN_AI_LICENSE_API_URL",      v => options.LicenseApiUrl = v);
+        ReadEnv("RAVEN_AI_LLM_PROVIDER",         v => options.LlmProvider = v);
+        ReadEnv("RAVEN_AI_LLM_ENDPOINT",         v => options.LlmEndpoint = v);
+        ReadEnv("RAVEN_AI_LLM_MODEL",            v => options.LlmModel = v);
+        ReadEnv("RAVEN_AI_LLM_API_KEY",          v => options.LlmApiKey = v);
     })
     .ValidateDataAnnotations()
     .ValidateOnStart();
@@ -42,9 +44,11 @@ builder.Services.AddSingleton<IDocumentStore>(sp =>
     RavenStoreFactory.Create(sp.GetRequiredService<IOptions<ApplianceOptions>>().Value));
 
 builder.Services.AddSingleton<IServerReady, ServerReadyFlag>();
+builder.Services.AddSingleton<IBootstrapState, BootstrapStateFlag>();
 builder.Services.AddSingleton<IAgentSchemaRegistry, AgentSchemaRegistry>();
 builder.Services.AddSingleton<IAgentSchema, DemoAgentSchema>();
 builder.Services.AddHostedService<RavenReadinessService>();
+builder.Services.AddHttpClient();
 
 builder.Services.AddResiliencePipeline(RavenReadinessService.PipelineName, (pipelineBuilder, ctx) =>
 {
@@ -69,6 +73,7 @@ var app = builder.Build();
 
 StaticAssetEndpoints.Map(app);
 HealthEndpoints.Map(app);
+BootstrapEndpoints.Map(app);
 ChatEndpoints.Map(app);
 
 app.Run();

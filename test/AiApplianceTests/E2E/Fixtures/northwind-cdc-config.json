@@ -1,0 +1,3 @@
+{
+  "_comment": "Placeholder. Replace with a real CdcSinkConfiguration for Northwind when the W3 Map slice lands. Until then the test fails at T7 with a 404 from /api/setup/map, which is the expected RED state."
+}

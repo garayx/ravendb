@@ -10,6 +10,22 @@ public sealed class ApplianceOptions
     [Required] public string WebListenUrl { get; set; } = "http://0.0.0.0:5000";
     [Required] public string ConfigDatabase { get; set; } = ApplianceDatabases.Config;
 
+    /// <summary>
+    /// Directory where the redeemed setup-package zip is unpacked and where the
+    /// appliance reads its on-boot configuration from (admin client cert, license,
+    /// RavenDB node settings). Empty / missing on first start puts the appliance
+    /// into NEEDS-ACTIVATION; a successful POST /api/bootstrap/redeem-license
+    /// populates it and flips to READY.
+    /// </summary>
+    public string SetupPackagePath { get; set; } = "/setup";
+
+    /// <summary>
+    /// Upstream license-redemption endpoint. POST /api/bootstrap/redeem-license
+    /// proxies <c>GET {LicenseApiUrl}/licenses/{key}</c> to fetch the signed
+    /// setup-package zip on first run. Tests point this at an in-process mock.
+    /// </summary>
+    public string LicenseApiUrl { get; set; } = "https://api.ravendb.net";
+
     public string LlmProvider { get; set; } = "openai";
     public string LlmEndpoint { get; set; } = "https://api.openai.com/v1/";
     public string LlmModel { get; set; } = "gpt-4o-mini";

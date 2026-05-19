@@ -3,16 +3,16 @@ using Raven.AiAppliance.Hosting;
 
 namespace Raven.AiAppliance.Infrastructure;
 
-internal sealed class RavenHealthCheck(IServerReady ready) : IHealthCheck
+internal sealed class RavenHealthCheck(IBootstrapState bootstrap) : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        if (ready.IsReady)
+        if (bootstrap.Phase == BootstrapPhase.Ready)
             return Task.FromResult(HealthCheckResult.Healthy());
 
-        var description = ready.LastError is { Length: > 0 } err
-            ? $"RavenDB not ready: {err}"
-            : "RavenDB not ready yet.";
+        var description = bootstrap.Reason is { Length: > 0 } reason
+            ? $"appliance not ready ({bootstrap.Phase.ToString().ToLowerInvariant()}): {reason}"
+            : $"appliance not ready: {bootstrap.Phase.ToString().ToLowerInvariant()}";
         return Task.FromResult(HealthCheckResult.Unhealthy(description));
     }
 }

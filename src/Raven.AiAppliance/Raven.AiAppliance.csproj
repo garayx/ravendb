@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Raven.Client\Raven.Client.csproj" />
+    <!-- Required for InternalsVisibleTo from Raven.Client: internal API references JsonOperationContext (Sparrow). -->
+    <ProjectReference Include="..\Sparrow\Sparrow.csproj" />
   </ItemGroup>
 
   <ItemGroup>

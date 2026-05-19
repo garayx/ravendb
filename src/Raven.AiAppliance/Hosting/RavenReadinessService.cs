@@ -11,6 +11,7 @@ public sealed class RavenReadinessService(
     IDocumentStore store,
     IOptions<ApplianceOptions> options,
     IServerReady ready,
+    IBootstrapState bootstrap,
     ResiliencePipelineProvider<string> pipelines,
     ILogger<RavenReadinessService> logger) : BackgroundService
 {
@@ -46,6 +47,7 @@ public sealed class RavenReadinessService(
                 opts.RavenUrl, opts.ConfigDatabase, created ? "created" : "already present");
 
             ready.MarkReady();
+            bootstrap.MarkReady();
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -55,6 +57,7 @@ public sealed class RavenReadinessService(
         {
             logger.LogError(ex, "RavenDB readiness probe gave up after {Timeout}.", opts.ReadinessOverallTimeout);
             ready.MarkFailed(ex.Message);
+            bootstrap.MarkFailed(ex.Message);
         }
     }
 }
