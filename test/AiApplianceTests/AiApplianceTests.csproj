@@ -63,5 +63,11 @@
     <EmbeddedResource Include="..\SlowTests\Data\npgsql.northwind.insert.sql">
       <LogicalName>SlowTests.Data.npgsql.northwind.insert.sql</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="..\SlowTests\Data\npgsql.northwind-full.create.sql">
+      <LogicalName>SlowTests.Data.npgsql.northwind-full.create.sql</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\SlowTests\Data\npgsql.northwind-full.insert.sql">
+      <LogicalName>SlowTests.Data.npgsql.northwind-full.insert.sql</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

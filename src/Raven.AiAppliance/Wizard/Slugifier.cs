@@ -34,10 +34,14 @@ internal static class Slugifier
         var lastWasDash = false;
         foreach (var rune in appName.Trim())
         {
-            // ASCII-only: non-ASCII letters (e.g. "é", CJK) are dropped, not
-            // transliterated. Keeps URL segments and RavenDB database names
-            // free of any character that needs URL-encoding or shell-quoting.
-            // If transliteration is wanted later, swap this for ICU.
+            // ASCII-only: anything outside [A-Za-z0-9] -- including non-ASCII
+            // letters (e.g. "é", CJK), punctuation, whitespace -- is treated
+            // as a separator and may emit a single dash between two retained
+            // ASCII runs ("naïve" -> "na-ve", not "nave"). Sequential
+            // separators collapse to one dash; leading/trailing dashes are
+            // stripped. Keeps URL segments and RavenDB database names free of
+            // any character that needs URL-encoding or shell-quoting. If true
+            // transliteration is wanted later, swap this for ICU.
             if (rune is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9')
             {
                 sb.Append(char.ToLowerInvariant(rune));
