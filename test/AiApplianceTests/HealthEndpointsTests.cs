@@ -15,18 +15,18 @@ public class HealthEndpointsTests : IClassFixture<HealthEndpointsTests.Factory>
     public HealthEndpointsTests(Factory factory) => _factory = factory;
 
     [Fact]
-    public async Task Returns_503_before_readiness_flag_is_set()
+    public async Task Returns_503_before_bootstrap_phase_is_ready()
     {
-        _factory.Ready.MarkFailed("not yet");
+        _factory.Bootstrap.MarkFailed("not yet");
         var client = _factory.CreateClient();
         var response = await client.GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
     [Fact]
-    public async Task Returns_200_once_readiness_flag_flips()
+    public async Task Returns_200_once_bootstrap_phase_is_ready()
     {
-        _factory.Ready.MarkReady();
+        _factory.Bootstrap.MarkReady();
         var client = _factory.CreateClient();
         var response = await client.GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -34,15 +34,16 @@ public class HealthEndpointsTests : IClassFixture<HealthEndpointsTests.Factory>
 
     public sealed class Factory : WebApplicationFactory<Program>
     {
-        public IServerReady Ready { get; } = new ServerReadyFlag();
+        // RavenHealthCheck reads IBootstrapState (not IServerReady) — controlling
+        // that flag is what flips /healthz between 503 and 200.
+        public IBootstrapState Bootstrap { get; } = new BootstrapStateFlag();
 
         protected override IHost CreateHost(IHostBuilder builder)
         {
             builder.ConfigureServices(services =>
             {
-                // Replace the registered flag with our controllable instance.
-                services.RemoveAll<IServerReady>();
-                services.AddSingleton<IServerReady>(Ready);
+                services.RemoveAll<IBootstrapState>();
+                services.AddSingleton<IBootstrapState>(Bootstrap);
 
                 // Drop only RavenReadinessService — RemoveAll<IHostedService>()
                 // would also kill GenericWebHostService and leave the test host

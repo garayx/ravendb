@@ -12,9 +12,12 @@ using Raven.Client.Documents.Operations.ETL.SQL;
 
 namespace Raven.AiAppliance.Endpoints;
 
-/// Stage C.1 wizard backend endpoints. Live only once the appliance is in
-/// <see cref="BootstrapPhase.Ready"/>; gated by the same /healthz check that
-/// guards the whole post-bootstrap surface.
+/// Stage C.1 wizard backend endpoints. Mapped unconditionally — there is no
+/// endpoint-level <see cref="BootstrapPhase"/> gate yet, so callers must
+/// respect <c>/api/bootstrap/status</c> and only POST here once the appliance
+/// reports <c>Ready</c>. A middleware-based gate that returns 503 for
+/// non-bootstrap routes while <see cref="BootstrapPhase"/> != Ready is a
+/// follow-up.
 public static class WizardEndpoints
 {
     /// Fixed-name connection string used by the wizard to probe a source DB
