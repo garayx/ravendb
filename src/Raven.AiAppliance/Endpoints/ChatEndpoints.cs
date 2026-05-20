@@ -22,10 +22,11 @@ public static class ChatEndpoints
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        // Default JavaScriptEncoder escapes HTML-sensitive characters (e.g.
-        // `<` -> `<`). Safe to fall back to default — NDJSON consumers
-        // run through JSON.parse which decodes the escaped forms transparently,
-        // so no information is lost on the wire. Avoids XSS exposure if any
+        // Default JavaScriptEncoder escapes HTML-sensitive characters: a
+        // literal '<' is emitted in the JSON output as the six-character
+        // escape sequence backslash-u-0-0-3-C, which JSON.parse decodes back
+        // to '<' transparently on the client. Safe to fall back to default —
+        // no information is lost on the wire; avoids XSS exposure if any
         // downstream consumer ever embeds chat output into an HTML context.
         // Demo answer types use public fields, not properties, so the RavenDB
         // schema generator can read the initializers. System.Text.Json needs
