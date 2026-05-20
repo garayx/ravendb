@@ -25,11 +25,19 @@ public static class WizardEndpoints
     /// overwritten on each Connect call.
     private const string WizardSourceProbeName = "_wizard-source-probe";
 
-    private static readonly HashSet<string> SupportedProviders = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    /// CDC-supported subset of <see cref="SqlProvider"/>. The CDC server-side
+    /// (<c>CdcSinkSchemaDiscovery</c>) accepts only these three enum values;
+    /// the rest of <see cref="SqlProvider"/> (Oracle / OleDb / SqlServerCe) is
+    /// recognized by Raven.Client but not supported by CDC. Kept here instead
+    /// of duplicating factory-name strings — <see cref="SqlProviderParser"/>
+    /// already owns the string-to-enum mapping.
+    /// </summary>
+    private static readonly HashSet<SqlProvider> CdcSupportedProviders = new()
     {
-        "Npgsql",
-        "System.Data.SqlClient",
-        "MySql.Data.MySqlClient",
+        SqlProvider.Npgsql,
+        SqlProvider.SqlClient,
+        SqlProvider.MySqlConnectorFactory,
     };
 
     public static void Map(WebApplication app)
@@ -76,8 +84,10 @@ public static class WizardEndpoints
 
         await PersistAsync(store, opts.ConfigDatabase, state =>
         {
+            // Don't persist the raw ConnectionString — credentials are kept
+            // only on the registered _wizard-source-probe SqlConnectionString
+            // (one source of truth) to minimise exposure.
             state.Provider         = body.Provider;
-            state.ConnectionString = body.ConnectionString;
             state.LastVerifyResult = result;
             state.LastVerifyAt     = DateTime.UtcNow;
         }, ct);
@@ -120,8 +130,8 @@ public static class WizardEndpoints
 
         await PersistAsync(store, opts.ConfigDatabase, state =>
         {
+            // ConnectionString deliberately not persisted — see Connect handler note.
             state.Provider             = body.Provider;
-            state.ConnectionString     = body.ConnectionString;
             state.LastDiscoveredSchema = schema;
             state.LastDiscoverAt       = DateTime.UtcNow;
         }, ct);
@@ -137,11 +147,27 @@ public static class WizardEndpoints
             return true;
         }
 
-        if (!SupportedProviders.Contains(body.Provider))
+        // Resolve the factory-name string via Raven.Client's canonical parser
+        // (covers both legacy + modern driver names, e.g. System.Data.SqlClient
+        // *and* Microsoft.Data.SqlClient both -> SqlProvider.SqlClient). Then
+        // narrow to the CDC-supported enum subset — Oracle/OleDb/SqlServerCe
+        // are valid SqlProvider values but the CDC sink doesn't support them.
+        SqlProvider parsed;
+        try
+        {
+            parsed = SqlProviderParser.GetSupportedProvider(body.Provider);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or NotImplementedException)
+        {
+            error = Results.BadRequest(new { error = $"unsupported provider '{body.Provider}': {ex.Message}" });
+            return true;
+        }
+
+        if (!CdcSupportedProviders.Contains(parsed))
         {
             error = Results.BadRequest(new
             {
-                error = $"unsupported provider '{body.Provider}'. Supported: {string.Join(", ", SupportedProviders)}",
+                error = $"provider '{body.Provider}' (parses as {parsed}) is recognized by Raven.Client but not supported by CDC. Supported: {string.Join(", ", CdcSupportedProviders)}.",
             });
             return true;
         }

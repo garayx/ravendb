@@ -12,7 +12,12 @@ internal sealed class WizardState
     public const string DocumentId = "wizard-state";
 
     public string? Provider { get; set; }
-    public string? ConnectionString { get; set; }
+
+    // ConnectionString is intentionally NOT persisted here. Credentials live
+    // only on the registered SqlConnectionString named "_wizard-source-probe"
+    // in the config DB — one source of truth. Provision (next slice) reads
+    // that registered connection string when transplanting it into the
+    // per-app DB.
 
     public ConnectResult? LastVerifyResult { get; set; }
     public DateTime? LastVerifyAt { get; set; }
