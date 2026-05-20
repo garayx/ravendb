@@ -108,18 +108,26 @@ public static class WizardEndpoints
         var opts = options.Value;
         await RavenStoreFactory.EnsureDatabaseAsync(store, opts.ConfigDatabase, ct);
 
+        // Upsert the probe (idempotent — same shape Connect uses) so the
+        // schema-discovery call can use the *named* SqlConnectionString
+        // overload. That avoids sending the raw credentials inline a second
+        // time, and guarantees Discover uses the same connection string the
+        // probe is registered with (no drift if the caller passes different
+        // bytes to Connect vs Discover).
+        var sqlConnectionString = new SqlConnectionString
+        {
+            Name             = WizardSourceProbeName,
+            FactoryName      = body!.Provider,
+            ConnectionString = body.ConnectionString,
+        };
+        await store.Maintenance.ForDatabase(opts.ConfigDatabase).SendAsync(
+            new PutConnectionStringOperation<SqlConnectionString>(sqlConnectionString), ct);
+
         CdcSinkSourceSchema schema;
         try
         {
             schema = await store.Maintenance.ForDatabase(opts.ConfigDatabase).SendAsync(
-                new GetCdcSinkSchemaOperation(
-                    new SqlConnectionString
-                    {
-                        Name             = WizardSourceProbeName,
-                        FactoryName      = body!.Provider,
-                        ConnectionString = body.ConnectionString,
-                    }),
-                ct);
+                new GetCdcSinkSchemaOperation(WizardSourceProbeName), ct);
         }
         catch (Exception ex)
         {
@@ -191,5 +199,5 @@ public static class WizardEndpoints
     }
 
     /// Logger category marker.
-    public sealed class WizardLogger;
+    internal sealed class WizardLogger;
 }

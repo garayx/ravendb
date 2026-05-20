@@ -23,7 +23,7 @@ public static class BootstrapEndpoints
     private static IResult GetStatus(IBootstrapState state) =>
         Results.Ok(new
         {
-            state = PhaseToWire(state.Phase),
+            state = state.Phase.ToWire(),
             reason = state.Reason,
         });
 
@@ -116,14 +116,6 @@ public static class BootstrapEndpoints
         }
     }
 
-    private static string PhaseToWire(BootstrapPhase phase) => phase switch
-    {
-        BootstrapPhase.NeedsActivation => "needs-activation",
-        BootstrapPhase.Redeeming       => "redeeming",
-        BootstrapPhase.Ready           => "ready",
-        _ => phase.ToString().ToLowerInvariant(),
-    };
-
     /// Logger category marker — keeps the ILogger generic-arg out of the public surface.
-    public sealed class BootstrapLicenseLogger;
+    internal sealed class BootstrapLicenseLogger;
 }

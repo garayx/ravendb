@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Options;
-using Polly;
 using Polly.Registry;
 using Raven.AiAppliance.Infrastructure;
 using Raven.Client.Documents;

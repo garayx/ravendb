@@ -35,6 +35,25 @@ public interface IBootstrapState
     void MarkFailed(string reason);
 }
 
+/// <summary>
+/// Single source of truth for the kebab-case wire spelling of each
+/// <see cref="BootstrapPhase"/> value. Shared by /api/bootstrap/status and the
+/// /healthz description so the two stay in lock-step. (Both used to derive
+/// their string from <c>Phase.ToString().ToLowerInvariant()</c> independently,
+/// which produced `needsactivation` for one and `needs-activation` for the
+/// other — drift the user could see.)
+/// </summary>
+public static class BootstrapPhaseExtensions
+{
+    public static string ToWire(this BootstrapPhase phase) => phase switch
+    {
+        BootstrapPhase.NeedsActivation => "needs-activation",
+        BootstrapPhase.Redeeming       => "redeeming",
+        BootstrapPhase.Ready           => "ready",
+        _ => phase.ToString().ToLowerInvariant(),
+    };
+}
+
 public sealed class BootstrapStateFlag : IBootstrapState
 {
     private int _phase = (int)BootstrapPhase.NeedsActivation;
