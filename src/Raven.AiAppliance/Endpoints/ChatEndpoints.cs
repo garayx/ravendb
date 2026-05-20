@@ -70,6 +70,19 @@ public static class ChatEndpoints
             return;
         }
 
+        // Pin client-supplied conversation IDs to the "chats/" prefix.
+        // Without this, a caller could pass `conversationId: "users/admin"`
+        // and overwrite an unrelated document. Empty/missing → "chats/" lets
+        // RavenDB auto-allocate. Otherwise the value must begin with "chats/".
+        var conversationId = string.IsNullOrWhiteSpace(body.ConversationId)
+            ? "chats/"
+            : body.ConversationId;
+        if (!conversationId.StartsWith("chats/", StringComparison.Ordinal))
+        {
+            await WriteBadRequestAsync(ctx, "conversationId must start with 'chats/'");
+            return;
+        }
+
         ctx.Response.ContentType = "application/x-ndjson; charset=utf-8";
         ctx.Response.Headers["Cache-Control"] = "no-cache";
         ctx.Response.Headers["X-Accel-Buffering"] = "no";
@@ -85,7 +98,7 @@ public static class ChatEndpoints
 
             var conversation = store.AI.Conversation(
                 agentId:         schema.Identifier,
-                conversationId:  string.IsNullOrWhiteSpace(body.ConversationId) ? "chats/" : body.ConversationId,
+                conversationId:  conversationId,
                 creationOptions: creationOptions);
 
             conversation.AddUserPrompt(body.Prompt);

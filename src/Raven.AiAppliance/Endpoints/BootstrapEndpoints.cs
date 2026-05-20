@@ -63,18 +63,42 @@ public static class BootstrapEndpoints
                 return Results.Problem(detail: msg, statusCode: (int)upstream.StatusCode);
             }
 
-            var zipBytes = await upstream.Content.ReadAsByteArrayAsync(ct);
-
-            Directory.CreateDirectory(opts.SetupPackagePath);
-            using (var ms = new MemoryStream(zipBytes))
-            using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
+            // Stream the zip to a temp file (capped) instead of buffering in
+            // memory — a misbehaving / malicious upstream returning a huge
+            // archive would otherwise OOM the appliance. The cap also bounds
+            // disk usage. Real production setup packages are <100 KB; a 32 MB
+            // cap gives 300× headroom.
+            const long MaxSetupPackageBytes = 32L * 1024 * 1024;
+            var tempZipPath = Path.Combine(Path.GetTempPath(), $"setup-package-{Guid.NewGuid():N}.zip");
+            long downloadedBytes;
+            try
             {
-                archive.ExtractToDirectory(opts.SetupPackagePath, overwriteFiles: true);
+                await using (var upstreamStream = await upstream.Content.ReadAsStreamAsync(ct))
+                await using (var tempFile = File.Create(tempZipPath))
+                {
+                    var buffer = new byte[81920];
+                    int read;
+                    while ((read = await upstreamStream.ReadAsync(buffer, ct)) > 0)
+                    {
+                        if (tempFile.Position + read > MaxSetupPackageBytes)
+                            throw new InvalidOperationException(
+                                $"setup package exceeds the {MaxSetupPackageBytes:N0} byte cap; aborting download.");
+                        await tempFile.WriteAsync(buffer.AsMemory(0, read), ct);
+                    }
+                    downloadedBytes = tempFile.Position;
+                }
+
+                Directory.CreateDirectory(opts.SetupPackagePath);
+                ZipFile.ExtractToDirectory(tempZipPath, opts.SetupPackagePath, overwriteFiles: true);
+            }
+            finally
+            {
+                try { File.Delete(tempZipPath); } catch { /* best effort */ }
             }
 
             logger.LogInformation(
                 "Setup package redeemed and unpacked to {Path} ({Bytes} bytes).",
-                opts.SetupPackagePath, zipBytes.Length);
+                opts.SetupPackagePath, downloadedBytes);
 
             bootstrap.MarkReady();
             return Results.Ok(new { state = "ready" });
