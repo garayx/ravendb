@@ -78,19 +78,23 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         var healthAfter = await client.GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.OK, healthAfter.StatusCode);
 
-        // ---------- T4. Source Postgres with Northwind data ----------
+        // ---------- T4. Source Postgres with the full canonical Northwind ----------
+        // The `northwind-full` dataset (test/SlowTests/Data/npgsql.northwind-full.{create,insert}.sql)
+        // is the standard 830-orders / 91-customers / 77-products dump, table
+        // names are lowercase plural ("customers", "orders", "products"), all
+        // columns snake_case.
         using var sqlTeardown = WithSqlDatabase(MigrationProvider.NpgSQL,
-            out var pgConnStr, out _, dataSet: "northwind", includeData: true);
+            out var pgConnStr, out _, dataSet: "northwind-full", includeData: true);
 
         // ---------- T5. Connect (CDC verify) ----------
-        // Server-side /admin/cdc-sink/verify requires at least one TableNames entry — it does
-        // table-level CDC capability checks, not just server-level prerequisite checks.
-        // Northwind here uses singular names ("customer", "product", "category").
+        // Server-side /admin/cdc-sink/verify requires at least one TableNames
+        // entry -- it does table-level CDC capability checks, not just
+        // server-level prerequisite checks.
         var connectResp = await client.PostAsJsonAsync("/api/setup/connect", new
         {
             provider         = "Npgsql",
             connectionString = pgConnStr,
-            tableNames       = new[] { "customer", "product", "category" },
+            tableNames       = new[] { "customers", "orders", "products" },
         });
         Assert.True(connectResp.IsSuccessStatusCode,
             $"connect returned {connectResp.StatusCode}: {await connectResp.Content.ReadAsStringAsync()}");
@@ -109,8 +113,9 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
             .Select(t => t.GetProperty("sourceTableName").GetString()!.ToLowerInvariant())
             .ToHashSet();
         Assert.NotEmpty(tableNames);
-        Assert.Contains("customer", tableNames);
-        Assert.Contains("product", tableNames);
+        Assert.Contains("customers", tableNames);
+        Assert.Contains("orders",    tableNames);
+        Assert.Contains("products",  tableNames);
 
         // ---------- T7. Map: POST a pre-built CdcSinkConfiguration for Northwind ----------
         var configFixturePath = Path.Combine(AppContext.BaseDirectory, "E2E", "Fixtures", "northwind-cdc-config.json");
@@ -124,10 +129,10 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
             $"map returned {mapResp.StatusCode}: {await mapResp.Content.ReadAsStringAsync()}");
 
         // ---------- T8. Test-mapping ----------
-        // Northwind table names are lowercased by Postgres (unquoted CREATE TABLE).
-        // "customer" exists in our Map fixture and has rows (npgsql.northwind.insert.sql).
+        // "customers" exists in the Map fixture and has 91 rows in the
+        // northwind-full dataset.
         var testResp = await client.PostAsJsonAsync("/api/setup/test-mapping",
-            new { sourceTableName = "customer", maxRows = 50 });
+            new { sourceTableName = "customers", maxRows = 50 });
         Assert.True(testResp.IsSuccessStatusCode,
             $"test-mapping returned {testResp.StatusCode}: {await testResp.Content.ReadAsStringAsync()}");
         var testResult = await testResp.Content.ReadFromJsonAsync<TestCdcSinkMappingResult>();
@@ -147,15 +152,12 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         Assert.False(string.IsNullOrEmpty(slug));
 
         // ---------- T10. Wait for initial load ----------
-        // The bundled npgsql.northwind fixture is tiny -- 3 orders, 4 customers,
-        // 3 products. T10's original "expectedCount: 800" was inherited from the
-        // canonical 830-row Northwind dataset; we don't ship that here. Assert
-        // ">= 1" so any non-empty initial-load proves the CDC pipeline ran, and
-        // the assertion survives future fixture growth.
+        // The northwind-full dataset has 830 orders; 800 is a comfortable
+        // floor that still proves the bulk of the dump made it through CDC.
         await WaitForPerAppCdcInitialLoadAsync(store, perAppDatabase: slug!, configName: $"{slug}-cdc", timeoutMs: 120_000);
-        var ordersCount = await WaitForPerAppDocumentCountAsync(store, perAppDatabase: slug!, collectionName: "Orders", expectedCount: 1, timeoutMs: 30_000);
-        Assert.True(ordersCount >= 1,
-            $"expected >=1 Orders document after initial load, got {ordersCount}");
+        var ordersCount = await WaitForPerAppDocumentCountAsync(store, perAppDatabase: slug!, collectionName: "Orders", expectedCount: 800, timeoutMs: 30_000);
+        Assert.True(ordersCount >= 800,
+            $"expected >=800 Orders after initial load, got {ordersCount}");
 
         // ---------- T11. AI agent ----------
         var agentResp = await client.PostAsJsonAsync($"/api/apps/{slug}/setup/agent",
