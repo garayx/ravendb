@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using AiApplianceTests.E2E.Fixtures;
+using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.CdcSink.Test;
 using Raven.Server.SqlMigration;
 using SlowTests.Server.Documents.CdcSink;
@@ -140,17 +141,24 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         Assert.True(provisionResp.IsSuccessStatusCode,
             $"provision returned {provisionResp.StatusCode}: {await provisionResp.Content.ReadAsStringAsync()}");
         var provisionJson = await provisionResp.Content.ReadFromJsonAsync<JsonElement>();
-        var appId = provisionJson.GetProperty("appId").GetString();
-        Assert.False(string.IsNullOrEmpty(appId));
+        var appDocId = provisionJson.GetProperty("id").GetString();
+        var slug     = provisionJson.GetProperty("slug").GetString();
+        Assert.False(string.IsNullOrEmpty(appDocId));
+        Assert.False(string.IsNullOrEmpty(slug));
 
         // ---------- T10. Wait for initial load ----------
-        await WaitForCdcInitialLoadAsync(store, "northwind-demo-cdc", timeoutMs: 120_000);
-        var ordersCount = await WaitForDocumentCountAsync(store, "Orders", expectedCount: 800, timeoutMs: 30_000);
-        Assert.True(ordersCount >= 800,
-            $"expected >=800 Orders after initial load, got {ordersCount}");
+        // The bundled npgsql.northwind fixture is tiny -- 3 orders, 4 customers,
+        // 3 products. T10's original "expectedCount: 800" was inherited from the
+        // canonical 830-row Northwind dataset; we don't ship that here. Assert
+        // ">= 1" so any non-empty initial-load proves the CDC pipeline ran, and
+        // the assertion survives future fixture growth.
+        await WaitForPerAppCdcInitialLoadAsync(store, perAppDatabase: slug!, configName: $"{slug}-cdc", timeoutMs: 120_000);
+        var ordersCount = await WaitForPerAppDocumentCountAsync(store, perAppDatabase: slug!, collectionName: "Orders", expectedCount: 1, timeoutMs: 30_000);
+        Assert.True(ordersCount >= 1,
+            $"expected >=1 Orders document after initial load, got {ordersCount}");
 
         // ---------- T11. AI agent ----------
-        var agentResp = await client.PostAsJsonAsync($"/api/apps/{appId}/setup/agent",
+        var agentResp = await client.PostAsJsonAsync($"/api/apps/{slug}/setup/agent",
             new { framing = "customer-support" });
         Assert.True(agentResp.IsSuccessStatusCode,
             $"agent returned {agentResp.StatusCode}: {await agentResp.Content.ReadAsStringAsync()}");
@@ -159,7 +167,7 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         Assert.False(string.IsNullOrEmpty(agentId));
 
         // ---------- T12. iFrame channel ----------
-        var channelResp = await client.PostAsJsonAsync($"/api/apps/{appId}/setup/channel",
+        var channelResp = await client.PostAsJsonAsync($"/api/apps/{slug}/setup/channel",
             new { type = "iframe", agentId, allowedOrigins = new[] { "http://localhost" } });
         Assert.True(channelResp.IsSuccessStatusCode,
             $"channel returned {channelResp.StatusCode}: {await channelResp.Content.ReadAsStringAsync()}");
@@ -174,6 +182,47 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
             Console.WriteLine("Test parked. Ctrl+C to exit.");
             await Task.Delay(Timeout.Infinite);
         }
+    }
+
+    /// <summary>
+    /// Per-app variant of <see cref="WaitForCdcInitialLoadAsync(IDocumentStore, string, int)"/>.
+    /// The base helper resolves the in-process DocumentDatabase from the store's
+    /// default DB; we need to target the per-app DB Provision just created.
+    /// </summary>
+    private async Task WaitForPerAppCdcInitialLoadAsync(IDocumentStore store, string perAppDatabase, string configName, int timeoutMs)
+    {
+        var db = await Databases.GetDocumentDatabaseInstanceFor(store, perAppDatabase);
+        var process = db.CdcSinkLoader.Processes.FirstOrDefault(p => p.Name == configName);
+        if (process == null)
+            throw new InvalidOperationException($"CDC Sink process '{configName}' not found on '{perAppDatabase}'");
+
+        var completed = await Task.WhenAny(process.InitialLoadCompleted, Task.Delay(timeoutMs));
+        if (completed != process.InitialLoadCompleted)
+            throw new TimeoutException($"CDC Sink '{configName}' on '{perAppDatabase}' initial load did not complete within {timeoutMs}ms");
+
+        await process.InitialLoadCompleted; // propagate exception if any
+    }
+
+    /// <summary>
+    /// Per-app variant of <see cref="WaitForDocumentCountAsync(IDocumentStore, string, int, int)"/>.
+    /// Opens the session against the per-app database explicitly.
+    /// </summary>
+    private static async Task<int> WaitForPerAppDocumentCountAsync(IDocumentStore store, string perAppDatabase, string collectionName, int expectedCount, int timeoutMs)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var count = 0;
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            using (var session = store.OpenAsyncSession(perAppDatabase))
+            {
+                count = await session.Query<dynamic>(collectionName: collectionName).CountAsync();
+                if (count >= expectedCount)
+                    return count;
+            }
+
+            await Task.Delay(250);
+        }
+        return count;
     }
 
     private static async Task WaitForBootstrapStateAsync(HttpClient client, string expected, int timeoutMs)

@@ -1,5 +1,5 @@
 {
-  "_comment": "Minimal Northwind CdcSinkConfiguration for the W3 Map step of the E2E test. Postgres lowercases unquoted identifiers; the fixture in test/SlowTests/Data/npgsql.northwind.create.sql declares Customer/Product unquoted so their stored names are 'customer' / 'product' with columns 'id' / 'firstname' / 'pic' and 'id' / 'unitprice' / 'isdiscontinued'. Validation requires every primary-key column to also appear in Columns.",
+  "_comment": "Minimal Northwind CdcSinkConfiguration for the W3 Map step of the E2E test. Postgres lowercases unquoted identifiers; the fixture in test/SlowTests/Data/npgsql.northwind.create.sql declares Customer/Product unquoted so their stored names are 'customer' / 'product'. 'Order' is the only quoted table -- declared as \"Order\" so its stored name is 'Order' (capital O preserved). Columns inside \"Order\" are unquoted so lowercased to id/orderdate/customerid/totalamount. Validation requires every primary-key column to also appear in Columns.",
   "Name": "wizard-cdc",
   "ConnectionStringName": "_wizard-source-probe",
   "Tables": [
@@ -22,6 +22,18 @@
         { "Column": "id",             "Name": "Id" },
         { "Column": "unitprice",      "Name": "UnitPrice" },
         { "Column": "isdiscontinued", "Name": "IsDiscontinued" }
+      ]
+    },
+    {
+      "CollectionName": "Orders",
+      "SourceTableSchema": "public",
+      "SourceTableName": "Order",
+      "PrimaryKeyColumns": ["id"],
+      "Columns": [
+        { "Column": "id",          "Name": "Id" },
+        { "Column": "orderdate",   "Name": "OrderDate" },
+        { "Column": "customerid",  "Name": "CustomerId" },
+        { "Column": "totalamount", "Name": "TotalAmount" }
       ]
     }
   ]
