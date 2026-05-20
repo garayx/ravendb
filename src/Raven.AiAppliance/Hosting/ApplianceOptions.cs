@@ -20,11 +20,19 @@ public sealed class ApplianceOptions
     public string SetupPackagePath { get; set; } = "/setup";
 
     /// <summary>
+    /// Default upstream license-redemption endpoint. Production uses this as-is;
+    /// tests and local dev override via <c>RAVEN_AI_LICENSE_API_URL</c>. Exposed
+    /// as a constant so the dev-mode startup warning in <c>Program.cs</c> can
+    /// compare against the same string without drifting.
+    /// </summary>
+    public const string DefaultLicenseApiUrl = "https://api.ravendb.net";
+
+    /// <summary>
     /// Upstream license-redemption endpoint. POST /api/bootstrap/redeem-license
     /// proxies <c>GET {LicenseApiUrl}/licenses/{key}</c> to fetch the signed
     /// setup-package zip on first run. Tests point this at an in-process mock.
     /// </summary>
-    public string LicenseApiUrl { get; set; } = "https://api.ravendb.net";
+    public string LicenseApiUrl { get; set; } = DefaultLicenseApiUrl;
 
     // Used by AiAgentRegistrar.BuildAiConnectionString — .ToLowerInvariant() on
     // LlmProvider, raw string consumers for the others. An empty env-var binding

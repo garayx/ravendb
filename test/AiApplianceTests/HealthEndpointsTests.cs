@@ -1,20 +1,21 @@
 using System.Net;
+using FastTests;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Raven.AiAppliance.Hosting;
+using Tests.Infrastructure;
 using Xunit;
 
 namespace AiApplianceTests;
 
-public class HealthEndpointsTests : IClassFixture<HealthEndpointsTests.Factory>
+public class HealthEndpointsTests(ITestOutputHelper output, HealthEndpointsTests.Factory factory)
+    : RavenTestBase(output), IClassFixture<HealthEndpointsTests.Factory>
 {
-    private readonly Factory _factory;
+    private readonly Factory _factory = factory;
 
-    public HealthEndpointsTests(Factory factory) => _factory = factory;
-
-    [Fact]
+    [RavenFact(RavenTestCategory.Monitoring)]
     public async Task Returns_503_before_bootstrap_phase_is_ready()
     {
         _factory.Bootstrap.MarkFailed("not yet");
@@ -23,7 +24,7 @@ public class HealthEndpointsTests : IClassFixture<HealthEndpointsTests.Factory>
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
-    [Fact]
+    [RavenFact(RavenTestCategory.Monitoring)]
     public async Task Returns_200_once_bootstrap_phase_is_ready()
     {
         _factory.Bootstrap.MarkReady();

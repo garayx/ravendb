@@ -1,20 +1,22 @@
+using FastTests;
 using Raven.AiAppliance.Agents;
 using Raven.AiAppliance.Schema;
 using Raven.Client.Documents.AI;
+using Tests.Infrastructure;
 using Xunit;
 
 namespace AiApplianceTests;
 
-public class AgentSchemaRegistryTests
+public class AgentSchemaRegistryTests(ITestOutputHelper output) : NoDisposalNeeded(output)
 {
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void Empty_registry_resolves_to_empty_All()
     {
         var registry = new AgentSchemaRegistry([]);
         Assert.Empty(registry.All);
     }
 
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void TryGet_returns_false_for_unknown_identifier()
     {
         var registry = new AgentSchemaRegistry([new FakeSchema("a")]);
@@ -22,7 +24,7 @@ public class AgentSchemaRegistryTests
         Assert.Null(s);
     }
 
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void TryGet_resolves_registered_schemas_case_insensitively()
     {
         var fake = new FakeSchema("Demo-Agent");
@@ -31,14 +33,14 @@ public class AgentSchemaRegistryTests
         Assert.Same(fake, s);
     }
 
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void Require_throws_when_identifier_is_missing()
     {
         var registry = new AgentSchemaRegistry([new FakeSchema("a")]);
         Assert.Throws<KeyNotFoundException>(() => registry.Require("b"));
     }
 
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void Duplicate_identifier_in_DI_is_a_startup_error()
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>

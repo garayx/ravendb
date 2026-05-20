@@ -1,11 +1,13 @@
+using FastTests;
 using Raven.AiAppliance.Hosting;
+using Tests.Infrastructure;
 using Xunit;
 
 namespace AiApplianceTests;
 
-public class ServerReadyFlagTests
+public class ServerReadyFlagTests(ITestOutputHelper output) : NoDisposalNeeded(output)
 {
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void Starts_not_ready()
     {
         IServerReady flag = new ServerReadyFlag();
@@ -13,7 +15,7 @@ public class ServerReadyFlagTests
         Assert.Null(flag.LastError);
     }
 
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void MarkReady_flips_state_and_clears_error()
     {
         IServerReady flag = new ServerReadyFlag();
@@ -23,7 +25,7 @@ public class ServerReadyFlagTests
         Assert.Null(flag.LastError);
     }
 
-    [Fact]
+    [RavenFact(RavenTestCategory.Core)]
     public void MarkFailed_records_error_and_resets_ready()
     {
         IServerReady flag = new ServerReadyFlag();

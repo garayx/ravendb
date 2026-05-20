@@ -79,6 +79,21 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+// Dev-mode safeguard: a forgetful local run with no RAVEN_AI_LICENSE_API_URL
+// override will hit the real api.ravendb.net on first /api/bootstrap/redeem-license
+// and hang (no test license to redeem). Warn loudly at startup so the operator
+// notices before triggering activation; in Production we trust the default.
+{
+    var opts = app.Services.GetRequiredService<IOptions<ApplianceOptions>>().Value;
+    if (app.Environment.IsDevelopment() &&
+        string.Equals(opts.LicenseApiUrl, ApplianceOptions.DefaultLicenseApiUrl, StringComparison.OrdinalIgnoreCase))
+    {
+        app.Logger.LogWarning(
+            "LicenseApiUrl is set to the production default ({Default}); set RAVEN_AI_LICENSE_API_URL to a mock or staging endpoint for local development.",
+            ApplianceOptions.DefaultLicenseApiUrl);
+    }
+}
+
 StaticAssetEndpoints.Map(app);
 HealthEndpoints.Map(app);
 BootstrapEndpoints.Map(app);
