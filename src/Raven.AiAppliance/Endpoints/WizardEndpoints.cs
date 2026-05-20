@@ -51,6 +51,7 @@ public static class WizardEndpoints
         group.MapPost("/discover",     DiscoverAsync);
         group.MapPost("/map",          MapAsync);
         group.MapPost("/test-mapping", TestMappingAsync);
+        group.MapPost("/provision",    ProvisionAsync);
     }
 
     private static async Task<IResult> ConnectAsync(
@@ -251,6 +252,128 @@ public static class WizardEndpoints
         }
 
         return Results.Ok(result);
+    }
+
+    /// <summary>
+    /// W6 Provision. Creates the per-app RavenDB database, transplants the
+    /// source SQL connection string from the wizard probe into it, installs
+    /// the CDC Sink task with the wizard's stored Map configuration, and
+    /// persists an <see cref="App"/> registry document on the config DB. The
+    /// per-app database name equals the derived <c>slug</c>; RavenDB's
+    /// cluster-wide-atomic <c>CreateDatabaseOperation</c> is the uniqueness
+    /// gate (no separate compare-exchange needed). Best-effort on partial
+    /// failures — operator cleans up orphans via Studio if any step after
+    /// step 3 (per-app DB created) fails.
+    /// </summary>
+    private static async Task<IResult> ProvisionAsync(
+        ProvisionRequest body,
+        IDocumentStore store,
+        IOptions<ApplianceOptions> options,
+        ILogger<WizardLogger> logger,
+        CancellationToken ct)
+    {
+        if (body is null || string.IsNullOrWhiteSpace(body.AppName))
+            return Results.BadRequest(new { error = "appName is required" });
+
+        var slug = Slugifier.ToSlug(body.AppName);
+        if (string.IsNullOrEmpty(slug))
+            return Results.BadRequest(new
+            {
+                error = $"appName '{body.AppName}' has no ASCII alphanumeric characters; cannot derive slug.",
+            });
+
+        var opts = options.Value;
+        await RavenStoreFactory.EnsureDatabaseAsync(store, opts.ConfigDatabase, ct);
+
+        // Read LastMapConfiguration NoTracking — we'll mutate Name in-place
+        // before installing on the per-app DB, and the no-tracking option
+        // keeps that mutation from drifting back into wizard-state on a
+        // session SaveChanges.
+        CdcSinkConfiguration cdcConfig;
+        using (var session = store.OpenAsyncSession(new global::Raven.Client.Documents.Session.SessionOptions
+        {
+            Database = opts.ConfigDatabase,
+            NoTracking = true,
+        }))
+        {
+            var state = await session.LoadAsync<WizardState>(WizardState.DocumentId, ct);
+            if (state?.LastMapConfiguration is null)
+                return Results.BadRequest(new { error = "no map configuration found; call /api/setup/map first" });
+
+            cdcConfig = state.LastMapConfiguration;
+        }
+
+        // Create the per-app DB. CreateDatabaseOperation is cluster-wide-atomic
+        // on the DB name, so this call IS the slug-uniqueness gate. A losing
+        // racer (or a stale orphan from a partial-failure prior run) sees
+        // false / ConcurrencyException -> 409.
+        bool created;
+        try
+        {
+            created = await RavenStoreFactory.EnsureDatabaseAsync(store, slug, ct);
+        }
+        catch (ConcurrencyException)
+        {
+            return Results.Conflict(new { error = $"database '{slug}' already exists" });
+        }
+        if (!created)
+            return Results.Conflict(new { error = $"database '{slug}' already exists" });
+
+        // Transplant the source SqlConnectionString from the config DB probe
+        // to the per-app DB. The CDC task references the CS by name, so the
+        // name on the per-app DB must match cdcConfig.ConnectionStringName
+        // (W3 default is _wizard-source-probe). Credentials read fresh from
+        // the registered probe — we never store them on the wizard-state doc.
+        var probes = await store.Maintenance.ForDatabase(opts.ConfigDatabase).SendAsync(
+            new GetConnectionStringsOperation(WizardSourceProbeName, ConnectionStringType.Sql), ct);
+
+        if (probes.SqlConnectionStrings is null ||
+            !probes.SqlConnectionStrings.TryGetValue(WizardSourceProbeName, out var probeCs))
+        {
+            return Results.BadRequest(new
+            {
+                error = $"probe connection string '{WizardSourceProbeName}' is not registered on the config DB; call /api/setup/connect first.",
+            });
+        }
+
+        var transplantedCs = new SqlConnectionString
+        {
+            Name             = cdcConfig.ConnectionStringName,
+            FactoryName      = probeCs.FactoryName,
+            ConnectionString = probeCs.ConnectionString,
+        };
+        await store.Maintenance.ForDatabase(slug).SendAsync(
+            new PutConnectionStringOperation<SqlConnectionString>(transplantedCs), ct);
+
+        // Install CDC Sink task on the per-app DB. Server-side AddCdcSinkOperation
+        // auto-starts the initial load (see CdcSinkProcess.HandleInitialLoad).
+        cdcConfig.Name = $"{slug}-cdc";
+        await store.Maintenance.ForDatabase(slug).SendAsync(new AddCdcSinkOperation(cdcConfig), ct);
+
+        // Register the App on the config DB. Id is auto-assigned via HiLo
+        // (apps/1-A, apps/2-A, ...). OCC.Writes is harmless for inserts — HiLo
+        // guarantees the id is fresh — but keeps the convention consistent with
+        // PersistAsync.
+        var app = new App
+        {
+            Slug        = slug,
+            AppName     = body.AppName,
+            Database    = slug,
+            CdcTaskName = cdcConfig.Name,
+            CreatedAt   = DateTime.UtcNow,
+        };
+
+        using (var session = store.OpenAsyncSession(opts.ConfigDatabase))
+        {
+            session.Advanced.OptimisticConcurrencyMode = OptimisticConcurrencyMode.Writes;
+            await session.StoreAsync(app, id: "apps/", ct);
+            await session.SaveChangesAsync(ct);
+        }
+
+        logger.LogInformation("Provisioned app slug={Slug} id={Id} cdcTask={CdcTaskName}",
+            app.Slug, app.Id, app.CdcTaskName);
+
+        return Results.Ok(new { id = app.Id, slug = app.Slug });
     }
 
     private static bool TryRejectInvalidRequest(ConnectRequest? body, out IResult error)
