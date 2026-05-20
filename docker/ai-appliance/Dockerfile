@@ -22,8 +22,14 @@
 # auth on top. External exposure is controlled by whether the host port is
 # published, not by the server's bind address.
 
-ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
-ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
+# Pin base images to specific patch versions matching the repo's pinned
+# toolchain: global.json declares SDK 10.0.300, and Raven.AiAppliance.csproj
+# pins RuntimeFrameworkVersion to 10.0.8. Floating `:10.0` tags would let CI
+# and local rebuilds pick up patch-level changes that diverge from those
+# pins. Bump these together with the corresponding global.json /
+# RuntimeFrameworkVersion changes.
+ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.300
+ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0.8
 ARG S6_OVERLAY_VERSION=3.2.1.0
 
 # -----------------------------------------------------------------------------

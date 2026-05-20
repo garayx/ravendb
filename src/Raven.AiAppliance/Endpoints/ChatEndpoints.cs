@@ -56,6 +56,14 @@ public static class ChatEndpoints
         {
             body = await ctx.Request.ReadFromJsonAsync<ChatRequest>(ctx.RequestAborted);
         }
+        catch (OperationCanceledException) when (ctx.RequestAborted.IsCancellationRequested)
+        {
+            // Client disconnected before the body was fully read. Don't try to
+            // write a 400 — the response is already aborted, and WriteAsJsonAsync
+            // would throw a second exception that flooded the logs in earlier
+            // versions of this handler.
+            return;
+        }
         catch (Exception e)
         {
             await WriteBadRequestAsync(ctx, $"invalid JSON body: {e.Message}");
