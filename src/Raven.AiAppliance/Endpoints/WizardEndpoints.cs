@@ -11,6 +11,8 @@ using Raven.Client.Documents.Operations.CdcSink.Schema;
 using Raven.Client.Documents.Operations.CdcSink.Test;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.ETL.SQL;
+using Raven.Client.Documents.Session;
+using Raven.Client.Exceptions;
 
 namespace Raven.AiAppliance.Endpoints;
 
@@ -288,18 +290,43 @@ public static class WizardEndpoints
         return false;
     }
 
+    /// <summary>
+    /// Load-mutate-store the singleton <see cref="WizardState"/> doc with
+    /// optimistic concurrency. A losing writer (operator double-click on a
+    /// wizard step, or a slow Connect finishing after a fast Map) gets one
+    /// retry — enough to absorb the realistic collision without livelocking
+    /// on a pathological loop.
+    /// </summary>
     private static async Task PersistAsync(
         IDocumentStore store,
         string configDb,
         Action<WizardState> mutate,
         CancellationToken ct)
     {
-        using var session = store.OpenAsyncSession(configDb);
-        var state = await session.LoadAsync<WizardState>(WizardState.DocumentId, ct)
-                    ?? new WizardState();
-        mutate(state);
-        await session.StoreAsync(state, WizardState.DocumentId, ct);
-        await session.SaveChangesAsync(ct);
+        const int MaxAttempts = 2;
+        for (var attempt = 1; ; attempt++)
+        {
+            using var session = store.OpenAsyncSession(configDb);
+            session.Advanced.OptimisticConcurrencyMode = OptimisticConcurrencyMode.Writes;
+
+            var state = await session.LoadAsync<WizardState>(WizardState.DocumentId, ct)
+                        ?? new WizardState();
+            mutate(state);
+            await session.StoreAsync(state, WizardState.DocumentId, ct);
+
+            try
+            {
+                await session.SaveChangesAsync(ct);
+                return;
+            }
+            catch (ConcurrencyException) when (attempt < MaxAttempts)
+            {
+                // Lost the race with a parallel writer; reload + reapply the
+                // mutation against the latest revision. One retry is enough —
+                // the only realistic collision is a double-click on the same
+                // wizard step.
+            }
+        }
     }
 
     /// Logger category marker.
