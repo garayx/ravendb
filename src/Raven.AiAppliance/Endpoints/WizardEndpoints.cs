@@ -6,6 +6,7 @@ using Raven.AiAppliance.Hosting;
 using Raven.AiAppliance.Infrastructure;
 using Raven.AiAppliance.Wizard;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Operations.CdcSink;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.ETL.SQL;
@@ -45,6 +46,7 @@ public static class WizardEndpoints
         var group = app.MapGroup("/api/setup");
         group.MapPost("/connect",  ConnectAsync);
         group.MapPost("/discover", DiscoverAsync);
+        group.MapPost("/map",      MapAsync);
     }
 
     private static async Task<IResult> ConnectAsync(
@@ -145,6 +147,52 @@ public static class WizardEndpoints
         }, ct);
 
         return Results.Ok(schema);
+    }
+
+    /// <summary>
+    /// W3 Map. Accepts a CdcSinkConfiguration JSON (manual or import path),
+    /// applies forgiving defaults for the wizard-context fields (Name +
+    /// ConnectionStringName), validates it, and persists to wizard-state for
+    /// W4 Test-mapping / W6 Provision to read back. No LLM path (AI-suggest)
+    /// in this slice.
+    /// </summary>
+    private static async Task<IResult> MapAsync(
+        CdcSinkConfiguration body,
+        IDocumentStore store,
+        IOptions<ApplianceOptions> options,
+        ILogger<WizardLogger> logger,
+        CancellationToken ct)
+    {
+        if (body is null)
+            return Results.BadRequest(new { error = "request body required" });
+
+        // Forgiving defaults — caller supplies Tables, wizard fills the
+        // scaffolding. Provision (W6) renames `Name` to the per-app value;
+        // ConnectionStringName defaults to the probe Connect/Discover
+        // already register on the config DB.
+        if (string.IsNullOrWhiteSpace(body.Name))
+            body.Name = "wizard-cdc";
+        if (string.IsNullOrWhiteSpace(body.ConnectionStringName))
+            body.ConnectionStringName = WizardSourceProbeName;
+
+        // validateConnection: false — Map doesn't bind a real SqlConnectionString
+        // to the config object. The probe is on the config DB; the per-app CS is
+        // set up at Provision time.
+        if (!body.Validate(out var errors, validateName: true, validateConnection: false))
+        {
+            logger.LogInformation("Map: configuration rejected by Validate ({Count} errors)", errors.Count);
+            return Results.BadRequest(new { errors });
+        }
+
+        var opts = options.Value;
+        await RavenStoreFactory.EnsureDatabaseAsync(store, opts.ConfigDatabase, ct);
+        await PersistAsync(store, opts.ConfigDatabase, state =>
+        {
+            state.LastMapConfiguration = body;
+            state.LastMapAt            = DateTime.UtcNow;
+        }, ct);
+
+        return Results.Ok(body);
     }
 
     private static bool TryRejectInvalidRequest(ConnectRequest? body, out IResult error)

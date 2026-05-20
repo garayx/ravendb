@@ -1,3 +1,28 @@
 {
-  "_comment": "Placeholder. Replace with a real CdcSinkConfiguration for Northwind when the W3 Map slice lands. Until then the test fails at T7 with a 404 from /api/setup/map, which is the expected RED state."
+  "_comment": "Minimal Northwind CdcSinkConfiguration for the W3 Map step of the E2E test. Postgres lowercases unquoted identifiers; the fixture in test/SlowTests/Data/npgsql.northwind.create.sql declares Customer/Product unquoted so their stored names are 'customer' / 'product' with columns 'id' / 'firstname' / 'pic' and 'id' / 'unitprice' / 'isdiscontinued'. Validation requires every primary-key column to also appear in Columns.",
+  "Name": "wizard-cdc",
+  "ConnectionStringName": "_wizard-source-probe",
+  "Tables": [
+    {
+      "CollectionName": "Customers",
+      "SourceTableSchema": "public",
+      "SourceTableName": "customer",
+      "PrimaryKeyColumns": ["id"],
+      "Columns": [
+        { "Column": "id",        "Name": "Id" },
+        { "Column": "firstname", "Name": "FirstName" }
+      ]
+    },
+    {
+      "CollectionName": "Products",
+      "SourceTableSchema": "public",
+      "SourceTableName": "product",
+      "PrimaryKeyColumns": ["id"],
+      "Columns": [
+        { "Column": "id",             "Name": "Id" },
+        { "Column": "unitprice",      "Name": "UnitPrice" },
+        { "Column": "isdiscontinued", "Name": "IsDiscontinued" }
+      ]
+    }
+  ]
 }

@@ -1,3 +1,4 @@
+using Raven.Client.Documents.Operations.CdcSink;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
 
 namespace Raven.AiAppliance.Wizard;
@@ -28,4 +29,12 @@ internal sealed class WizardState
     // trade-off for in-tree code (forces the enclosing type to be internal too).
     public CdcSinkSourceSchema? LastDiscoveredSchema { get; set; }
     public DateTime? LastDiscoverAt { get; set; }
+
+    // The map config the admin built / pasted in W3. W4 Test-mapping reads
+    // this back when proxying to /admin/cdc-sink/test; W6 Provision reads it
+    // when registering the actual CDC Sink task on the per-app DB.
+    // CdcSinkConfiguration is public in Raven.Client, so no friend-visibility
+    // gymnastics needed here.
+    public CdcSinkConfiguration? LastMapConfiguration { get; set; }
+    public DateTime? LastMapAt { get; set; }
 }
