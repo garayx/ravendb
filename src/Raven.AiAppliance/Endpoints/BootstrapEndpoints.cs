@@ -29,13 +29,79 @@ public static class BootstrapEndpoints
 
     /// <summary>
     /// First-run activation. Fetches the setup-package zip from the configured
-    /// license upstream and unpacks it into <see cref="ApplianceOptions.SetupPackagePath"/>.
-    /// Production-side cert reload + RavenDB restart is a follow-up; for now we
-    /// flip <see cref="IBootstrapState"/> to Ready once the package is on disk
-    /// so the wizard endpoints become live. Tests inject the appliance's
-    /// IDocumentStore separately, so no in-process RavenDB restart is needed
-    /// for the E2E happy path.
+    /// license upstream and unpacks it into <see cref="ApplianceOptions.SetupPackagePath"/>,
+    /// then flips <see cref="IBootstrapState"/> to Ready so the wizard endpoints
+    /// become live.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>What this does today</b> — the upstream at
+    /// <see cref="ApplianceOptions.LicenseApiUrl"/> returns a pre-baked setup-package
+    /// zip (mocked in tests via <c>MockLicenseApi</c>; in the demo the operator drops
+    /// the zip at the path in <c>APPLIANCE_E2E_SETUP_PACKAGE_PATH</c>). The appliance
+    /// unpacks it on disk and trusts whatever certs/license/settings are inside.
+    /// </para>
+    /// <para>
+    /// <b>Production gap (Phase 5 / Stage A)</b> — the upstream must dynamically
+    /// construct a per-license-key setup package containing all of the following.
+    /// None of this is implemented yet on the appliance-builder website (Track J);
+    /// the demo bridges it with a hand-rolled zip.
+    /// </para>
+    /// <list type="number">
+    ///   <item><description>
+    ///     DNS registration of <c>&lt;appname&gt;.ravendb.run</c> (subdomain + A record)
+    ///     so the cert + URLs resolve before the appliance boots.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Wildcard certificate from Let's Encrypt for <c>*.&lt;appname&gt;.ravendb.run</c>
+    ///     via ACME-DNS challenge, written into the zip as
+    ///     <c>cluster.server.certificate.&lt;domain&gt;.pfx</c> +
+    ///     <c>admin.client.certificate.&lt;domain&gt;.pfx</c>. RavenDB's Setup Wizard
+    ///     already produces this layout — see
+    ///     <c>Raven.Server/Commercial/LetsEncrypt/SettingsZipFileHelper.cs</c>.
+    ///   </description></item>
+    ///   <item><description>
+    ///     URL mappings for the dashboard and RavenDB Studio (sidecar
+    ///     <c>appliance.json</c>) so the appliance reads them at boot.
+    ///   </description></item>
+    ///   <item><description>
+    ///     The signed <c>license.json</c> so RavenDB picks it up at start (no separate
+    ///     in-process redeem step on the RavenDB side).
+    ///   </description></item>
+    ///   <item><description>
+    ///     A pre-generated RavenDB <c>settings.json</c> binding on
+    ///     <c>&lt;appname&gt;.ravendb.run:443</c> with TLS + Security.Certificate.Path
+    ///     pointing at the unpacked PFX. The current
+    ///     <c>docker/ai-appliance/ravendb-settings.json</c> is a demo placeholder
+    ///     (Unsecured, public <c>0.0.0.0:8080</c>).
+    ///   </description></item>
+    /// </list>
+    /// <para>
+    /// <b>Production gap (appliance-side)</b> — once the package is on disk this
+    /// method just flips bootstrap to Ready. A real activation needs to additionally:
+    /// </para>
+    /// <list type="number">
+    ///   <item><description>
+    ///     Hot-reload Kestrel's TLS cert from the new PFX so the appliance's
+    ///     <c>:443</c> listener starts serving the right chain.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Restart / rebind the in-process RavenDB so it picks up the new
+    ///     <c>settings.json</c>, cert path, and license. RavenDB doesn't re-read
+    ///     settings on the fly today.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Re-create the appliance's <see cref="Raven.Client.Documents.IDocumentStore"/>
+    ///     against the now-secured RavenDB URL with the admin client cert.
+    ///   </description></item>
+    /// </list>
+    /// <para>
+    /// The E2E test sidesteps both gaps: <c>WebApplicationFactory</c> injects an
+    /// <c>IDocumentStore</c> built by <c>RavenTestBase</c>, and the bundled demo zip
+    /// carries pre-arranged certs the operator already trusts. Don't read the
+    /// happy-path E2E pass as evidence the production gaps are closed.
+    /// </para>
+    /// </remarks>
     private static async Task<IResult> RedeemLicenseAsync(
         RedeemLicenseRequest body,
         IBootstrapState bootstrap,
@@ -126,6 +192,12 @@ public static class BootstrapEndpoints
                 "Setup package redeemed and unpacked to {Path} ({Bytes} bytes).",
                 opts.SetupPackagePath, downloadedBytes);
 
+            // Production gap (appliance-side): MarkReady() here only flips the
+            // bootstrap state machine. Hot-reloading Kestrel's TLS cert from the
+            // new PFX, restarting in-process RavenDB against the new
+            // settings.json, and re-creating the IDocumentStore against the
+            // now-secured URL are all deferred — see the <remarks> on this
+            // method for the full enumeration.
             bootstrap.MarkReady();
             return Results.Ok(new { state = "ready" });
         }
