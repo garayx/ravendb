@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using AiApplianceTests.E2E.Fixtures;
+using Raven.Client.Documents.Operations.CdcSink.Test;
 using Raven.Server.SqlMigration;
 using SlowTests.Server.Documents.CdcSink;
 using Tests.Infrastructure;
@@ -122,12 +123,16 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
             $"map returned {mapResp.StatusCode}: {await mapResp.Content.ReadAsStringAsync()}");
 
         // ---------- T8. Test-mapping ----------
+        // Northwind table names are lowercased by Postgres (unquoted CREATE TABLE).
+        // "customer" exists in our Map fixture and has rows (npgsql.northwind.insert.sql).
         var testResp = await client.PostAsJsonAsync("/api/setup/test-mapping",
-            new { sourceTableName = "orders", maxRows = 50 });
+            new { sourceTableName = "customer", maxRows = 50 });
         Assert.True(testResp.IsSuccessStatusCode,
             $"test-mapping returned {testResp.StatusCode}: {await testResp.Content.ReadAsStringAsync()}");
-        var testJson = await testResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(testJson.GetProperty("rows").GetArrayLength() > 0, "expected non-empty test-mapping result");
+        var testResult = await testResp.Content.ReadFromJsonAsync<TestCdcSinkMappingResult>();
+        Assert.NotNull(testResult);
+        Assert.True(testResult!.Results.Count > 0,
+            $"expected non-empty test-mapping result; errors=[{string.Join("; ", testResult.Errors)}]");
 
         // ---------- T9. Provision ----------
         var provisionResp = await client.PostAsJsonAsync("/api/setup/provision",

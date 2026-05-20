@@ -8,6 +8,7 @@ using Raven.AiAppliance.Wizard;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.CdcSink;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
+using Raven.Client.Documents.Operations.CdcSink.Test;
 using Raven.Client.Documents.Operations.ConnectionStrings;
 using Raven.Client.Documents.Operations.ETL.SQL;
 
@@ -44,9 +45,10 @@ public static class WizardEndpoints
     public static void Map(WebApplication app)
     {
         var group = app.MapGroup("/api/setup");
-        group.MapPost("/connect",  ConnectAsync);
-        group.MapPost("/discover", DiscoverAsync);
-        group.MapPost("/map",      MapAsync);
+        group.MapPost("/connect",      ConnectAsync);
+        group.MapPost("/discover",     DiscoverAsync);
+        group.MapPost("/map",          MapAsync);
+        group.MapPost("/test-mapping", TestMappingAsync);
     }
 
     private static async Task<IResult> ConnectAsync(
@@ -193,6 +195,60 @@ public static class WizardEndpoints
         }, ct);
 
         return Results.Ok(body);
+    }
+
+    /// <summary>
+    /// W4 Test-mapping. Reads wizard-state.LastMapConfiguration back, builds a
+    /// TestCdcSinkMappingRequest with sane defaults, and forwards to the
+    /// server's /admin/cdc-sink/test endpoint via TestCdcSinkMappingOperation
+    /// (internal in Raven.Client; reachable here via InternalsVisibleTo). The
+    /// server resolves the source-DB credentials by name from the registered
+    /// _wizard-source-probe SqlConnectionString — no credentials re-sent.
+    /// </summary>
+    private static async Task<IResult> TestMappingAsync(
+        TestMappingRequest body,
+        IDocumentStore store,
+        IOptions<ApplianceOptions> options,
+        ILogger<WizardLogger> logger,
+        CancellationToken ct)
+    {
+        if (body is null || string.IsNullOrWhiteSpace(body.SourceTableName))
+            return Results.BadRequest(new { error = "sourceTableName is required" });
+
+        var opts = options.Value;
+        await RavenStoreFactory.EnsureDatabaseAsync(store, opts.ConfigDatabase, ct);
+
+        WizardState? state;
+        using (var session = store.OpenAsyncSession(opts.ConfigDatabase))
+            state = await session.LoadAsync<WizardState>(WizardState.DocumentId, ct);
+
+        if (state?.LastMapConfiguration is null)
+            return Results.BadRequest(new { error = "no map configuration found; call /api/setup/map first" });
+
+        var request = new TestCdcSinkMappingRequest
+        {
+            Configuration     = state.LastMapConfiguration,
+            SourceTableSchema = body.SourceTableSchema,
+            SourceTableName   = body.SourceTableName,
+            RowSelector       = TestCdcSinkRowSelector.First,
+            Operation         = TestCdcSinkOperation.Upsert,
+            MaxRows           = body.MaxRows ?? 50,
+        };
+
+        TestCdcSinkMappingResult result;
+        try
+        {
+            result = await store.Maintenance.ForDatabase(opts.ConfigDatabase).SendAsync(
+                new TestCdcSinkMappingOperation(request), ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "TestMapping: SendAsync threw");
+            result = new TestCdcSinkMappingResult();
+            result.Errors.Add($"Test mapping threw: {ex.Message}");
+        }
+
+        return Results.Ok(result);
     }
 
     private static bool TryRejectInvalidRequest(ConnectRequest? body, out IResult error)
