@@ -64,13 +64,20 @@ RUN apt-get update \
 
 # Install s6-overlay v3 (noarch + x86_64). Two-tarball layout per
 # https://github.com/just-containers/s6-overlay#usage.
-RUN curl -fsSL -o /tmp/s6.noarch.tar.xz \
-        "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" \
-    && curl -fsSL -o /tmp/s6.arch.tar.xz \
-        "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz" \
-    && tar -C / -Jxpf /tmp/s6.noarch.tar.xz \
-    && tar -C / -Jxpf /tmp/s6.arch.tar.xz \
-    && rm /tmp/s6.noarch.tar.xz /tmp/s6.arch.tar.xz
+#
+# Download both tarballs alongside their upstream-published .sha256 files
+# (keeping the original filenames via `curl -O` so `sha256sum -c` matches the
+# entries in the checksum files), verify, then extract. Catches corrupted
+# downloads and any MITM that doesn't also own the GitHub release's TLS chain.
+RUN cd /tmp \
+    && curl -fsSLO "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" \
+    && curl -fsSLO "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz.sha256" \
+    && curl -fsSLO "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz" \
+    && curl -fsSLO "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz.sha256" \
+    && sha256sum -c s6-overlay-noarch.tar.xz.sha256 s6-overlay-x86_64.tar.xz.sha256 \
+    && tar -C / -Jxpf s6-overlay-noarch.tar.xz \
+    && tar -C / -Jxpf s6-overlay-x86_64.tar.xz \
+    && rm s6-overlay-noarch.tar.xz s6-overlay-noarch.tar.xz.sha256 s6-overlay-x86_64.tar.xz s6-overlay-x86_64.tar.xz.sha256
 
 COPY --from=ravendb-build /publish/raven /app/ravendb
 COPY --from=web-build     /publish/web   /app/web
