@@ -10,10 +10,12 @@ public static class RavenStoreFactory
 {
     public static IDocumentStore Create(ApplianceOptions options)
     {
-        if (string.IsNullOrWhiteSpace(options.RavenUrl))
-            throw new ArgumentException("RavenUrl must not be empty.", nameof(options));
-        if (string.IsNullOrWhiteSpace(options.ConfigDatabase))
-            throw new ArgumentException("ConfigDatabase must not be empty.", nameof(options));
+        // Specific paramName per field so the stack trace pinpoints the bad
+        // setting (vs. "options" which would just say "the whole options bag
+        // is wrong"). Belt-and-braces alongside the [Required] data-annotation
+        // checks that run on IOptions binding.
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.RavenUrl, nameof(ApplianceOptions.RavenUrl));
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.ConfigDatabase, nameof(ApplianceOptions.ConfigDatabase));
 
         var store = new DocumentStore
         {

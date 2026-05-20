@@ -47,7 +47,12 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         var setupRoot = NewDataPath(forceCreateDir: true, prefix: "egor-ai-setup");
 
         // ---------- T2. Appliance starts in NEEDS-ACTIVATION ----------
-        using var store = GetDocumentStore();
+        // Single owner: the WAF registers `store` as a singleton in its DI
+        // container, which disposes IDisposable singletons during host shutdown
+        // — so no `using` here. (RavenTestBase tracks the store separately for
+        // class teardown; that's a second touch but DocumentStore.Dispose is
+        // idempotent, so it's a no-op when the WAF got there first.)
+        var store = GetDocumentStore();
         using var factory = new ApplianceWebApplicationFactory(
             licenseApiUrl: licenseApi.BaseAddress,
             setupPackagePath: setupRoot,
