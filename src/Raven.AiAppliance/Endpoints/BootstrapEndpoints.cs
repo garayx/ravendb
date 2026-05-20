@@ -48,7 +48,18 @@ public static class BootstrapEndpoints
             return Results.BadRequest(new { error = "licenseKey is required" });
 
         var opts = options.Value;
-        bootstrap.MarkRedeeming();
+
+        // CAS guard against operator double-click — two concurrent POSTs
+        // would otherwise both fetch + extract into /setup/, interleaving
+        // zips and racing the IDocumentStore reload.
+        if (!bootstrap.TryMarkRedeeming())
+        {
+            return Results.Conflict(new
+            {
+                error = "redemption already in progress or completed",
+                state = bootstrap.Phase.ToWire(),
+            });
+        }
 
         try
         {
@@ -100,7 +111,15 @@ public static class BootstrapEndpoints
             }
             finally
             {
-                try { File.Delete(tempZipPath); } catch { /* best effort */ }
+                // Best-effort cleanup. Narrow to the two exceptions File.Delete
+                // can legitimately throw on a stray temp file (the path is
+                // ours, no malformed-path risks) — anything else is unexpected
+                // and worth letting bubble.
+                try { File.Delete(tempZipPath); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogDebug(ex, "Failed to delete temp zip {Path}", tempZipPath);
+                }
             }
 
             logger.LogInformation(
@@ -114,6 +133,18 @@ public static class BootstrapEndpoints
         {
             bootstrap.MarkFailed("redemption cancelled");
             throw;
+        }
+        catch (InvalidDataException ex)
+        {
+            // ZipFile.ExtractToDirectory throws InvalidDataException for a
+            // corrupt / non-zip payload. That's an upstream-bad-bytes problem,
+            // not an appliance failure — surface as 502 Bad Gateway so the
+            // caller can distinguish "license server returned garbage" from
+            // "the appliance itself is broken".
+            var detail = $"invalid setup package: {ex.Message}";
+            logger.LogWarning(ex, "License redemption: upstream returned an invalid zip.");
+            bootstrap.MarkFailed(detail);
+            return Results.Problem(detail: detail, statusCode: StatusCodes.Status502BadGateway);
         }
         catch (Exception ex)
         {

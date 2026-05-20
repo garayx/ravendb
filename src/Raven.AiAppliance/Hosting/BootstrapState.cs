@@ -30,7 +30,17 @@ public interface IBootstrapState
     BootstrapPhase Phase { get; }
     string? Reason { get; }
 
-    void MarkRedeeming();
+    /// <summary>
+    /// Attempts to transition from <see cref="BootstrapPhase.NeedsActivation"/>
+    /// to <see cref="BootstrapPhase.Redeeming"/>. Returns <c>true</c> if this
+    /// caller won the race; <c>false</c> if another redemption is already in
+    /// flight or has completed. Implementations must use an atomic
+    /// compare-and-swap so concurrent <c>POST /api/bootstrap/redeem-license</c>
+    /// calls (e.g. an operator double-click) don't both extract zips into
+    /// <c>/setup/</c>.
+    /// </summary>
+    bool TryMarkRedeeming();
+
     void MarkReady();
     void MarkFailed(string reason);
 }
@@ -62,10 +72,20 @@ public sealed class BootstrapStateFlag : IBootstrapState
     public BootstrapPhase Phase => (BootstrapPhase)Volatile.Read(ref _phase);
     public string? Reason => Volatile.Read(ref _reason);
 
-    public void MarkRedeeming()
+    public bool TryMarkRedeeming()
     {
+        // CAS NeedsActivation -> Redeeming. Only the winner clears _reason and
+        // returns true; concurrent callers observe Redeeming/Ready and bail.
+        var previous = Interlocked.CompareExchange(
+            ref _phase,
+            (int)BootstrapPhase.Redeeming,
+            (int)BootstrapPhase.NeedsActivation);
+
+        if (previous != (int)BootstrapPhase.NeedsActivation)
+            return false;
+
         Volatile.Write(ref _reason, null);
-        Volatile.Write(ref _phase, (int)BootstrapPhase.Redeeming);
+        return true;
     }
 
     public void MarkReady()

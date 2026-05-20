@@ -61,4 +61,16 @@ public sealed class RavenReadinessService(
             bootstrap.MarkFailed(ex.Message);
         }
     }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        // Host shutdown: ensure /healthz flips back to 503 the moment the
+        // service is told to stop, even if ExecuteAsync is still mid-probe.
+        // Idempotent — if we're already past MarkReady() the next observer
+        // sees `shutting down` instead of stale `ready`. (MarkFailed reverts
+        // the phase to NeedsActivation; that's fine on the way out.)
+        bootstrap.MarkFailed("shutting down");
+        ready.MarkFailed("shutting down");
+        await base.StopAsync(cancellationToken);
+    }
 }
