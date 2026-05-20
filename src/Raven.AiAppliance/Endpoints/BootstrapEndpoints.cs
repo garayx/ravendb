@@ -89,6 +89,13 @@ public static class BootstrapEndpoints
                 }
 
                 Directory.CreateDirectory(opts.SetupPackagePath);
+                // Zip Slip protection: ZipFile.ExtractToDirectory in .NET 9+
+                // (we target net10.0) resolves each entry's destination via
+                // Path.GetFullPath against the target dir and throws IOException
+                // if the resolved path escapes the destination — so `../` and
+                // absolute-path entries from a hostile / corrupted zip are
+                // rejected before any file is written. No manual entry-name
+                // validation needed.
                 ZipFile.ExtractToDirectory(tempZipPath, opts.SetupPackagePath, overwriteFiles: true);
             }
             finally

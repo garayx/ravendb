@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
@@ -23,7 +22,11 @@ public static class ChatEndpoints
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        // Default JavaScriptEncoder escapes HTML-sensitive characters (e.g.
+        // `<` -> `<`). Safe to fall back to default — NDJSON consumers
+        // run through JSON.parse which decodes the escaped forms transparently,
+        // so no information is lost on the wire. Avoids XSS exposure if any
+        // downstream consumer ever embeds chat output into an HTML context.
         // Demo answer types use public fields, not properties, so the RavenDB
         // schema generator can read the initializers. System.Text.Json needs
         // opt-in to serialize them.
