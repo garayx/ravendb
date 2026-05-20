@@ -26,11 +26,18 @@ public sealed class ApplianceOptions
     /// </summary>
     public string LicenseApiUrl { get; set; } = "https://api.ravendb.net";
 
-    public string LlmProvider { get; set; } = "openai";
-    public string LlmEndpoint { get; set; } = "https://api.openai.com/v1/";
-    public string LlmModel { get; set; } = "gpt-4o-mini";
+    // Used by AiAgentRegistrar.BuildAiConnectionString — .ToLowerInvariant() on
+    // LlmProvider, raw string consumers for the others. An empty env-var binding
+    // (e.g. RAVEN_AI_LLM_PROVIDER=) would NPE the registrar; [Required] on a
+    // string rejects null AND empty by default, surfacing the misconfig at
+    // startup instead of at first agent registration.
+    // LlmApiKey is intentionally left optional — OpenAI requires it, Ollama
+    // doesn't; per-provider enforcement lives in BuildAiConnectionString.
+    [Required] public string LlmProvider { get; set; } = "openai";
+    [Required] public string LlmEndpoint { get; set; } = "https://api.openai.com/v1/";
+    [Required] public string LlmModel { get; set; } = "gpt-4o-mini";
     public string LlmApiKey { get; set; } = "";
-    public string LlmConnectionStringName { get; set; } = "appliance-llm";
+    [Required] public string LlmConnectionStringName { get; set; } = "appliance-llm";
 
     /// <summary>
     /// Silent grace period before the first readiness probe fires. RavenDB
