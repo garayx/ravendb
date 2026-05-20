@@ -54,6 +54,13 @@ builder.Services.AddResiliencePipeline(RavenReadinessService.PipelineName, (pipe
 {
     var opts = ctx.ServiceProvider.GetRequiredService<IOptions<ApplianceOptions>>().Value;
     pipelineBuilder
+        // Innermost: per-attempt timeout. Polly's TimeoutStrategy raises
+        // TimeoutRejectedException (not OperationCanceledException), so the
+        // retry above will treat a slow probe as retryable instead of giving up.
+        .AddTimeout(new TimeoutStrategyOptions { Timeout = opts.ReadinessAttemptTimeout })
+        // Middle: retry transient errors and per-attempt timeouts. Excludes
+        // OperationCanceledException — that only flows when the outer
+        // stoppingToken is cancelled (host shutdown), where retrying is wrong.
         .AddRetry(new RetryStrategyOptions
         {
             ShouldHandle = new PredicateBuilder().Handle<Exception>(ex => ex is not OperationCanceledException),
@@ -63,6 +70,7 @@ builder.Services.AddResiliencePipeline(RavenReadinessService.PipelineName, (pipe
             MaxDelay = TimeSpan.FromSeconds(2),
             MaxRetryAttempts = int.MaxValue,
         })
+        // Outermost: overall budget across all retry attempts.
         .AddTimeout(new TimeoutStrategyOptions { Timeout = opts.ReadinessOverallTimeout });
 });
 

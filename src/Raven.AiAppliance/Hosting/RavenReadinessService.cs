@@ -36,9 +36,11 @@ public sealed class RavenReadinessService(
 
             await pipeline.ExecuteAsync(async ct =>
             {
-                using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                attemptCts.CancelAfter(opts.ReadinessAttemptTimeout);
-                await store.Maintenance.Server.SendAsync(new GetBuildNumberOperation(), attemptCts.Token);
+                // Per-attempt timeout is enforced by the pipeline's inner
+                // AddTimeout strategy (see Program.cs). It raises
+                // TimeoutRejectedException — which the surrounding retry handles
+                // — so a single slow probe no longer aborts the whole flow.
+                await store.Maintenance.Server.SendAsync(new GetBuildNumberOperation(), ct);
             }, stoppingToken);
 
             var created = await RavenStoreFactory.EnsureDatabaseAsync(store, opts.ConfigDatabase, stoppingToken);

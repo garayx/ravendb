@@ -3,7 +3,10 @@ set -e
 
 mkdir -p /var/lib/ai-appliance/ravendb
 
-# Config comes from RAVEN_* env vars set in the Dockerfile. Override on `docker
-# run -e ...` if needed (e.g. RAVEN_ServerUrl=http://0.0.0.0:8080 to expose the
-# port — only safe with mTLS, which the 8-week demo skips).
+# RavenDB config comes from the settings.json overlay baked into the image
+# (docker/ai-appliance/ravendb-settings.json, copied to /app/ravendb/settings.json
+# during the build). The Dockerfile's ENV block defines RAVEN_AI_* vars for the
+# *appliance*, not RAVEN_* for RavenDB itself. Operators can still override
+# RavenDB at `docker run -e RAVEN_ServerUrl=...` time (RavenDB env-var binding
+# wins over settings.json) — only safe with mTLS, which the 8-week demo skips.
 exec dotnet /app/ravendb/Raven.Server.dll
