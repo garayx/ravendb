@@ -1,14 +1,11 @@
-import { createBootstrapQueries, createBootstrapService } from "@/api/bootstrap-service";
+import { createBootstrapQueries } from "@/api/bootstrap-service";
 import { createChatService } from "@/api/chat-service";
-import { createAppsService, createAppsQueries } from "@/api/apps-service";
+import { createAppsQueries } from "@/api/apps-service";
+import { createServerApi, type ServerApi } from "@/api/generated/server-api";
 import { createApiClient, type ApiClient, type ApiClientOptions } from "@/api/http-client";
-import { createSetupService } from "@/api/setup-service";
 
-export type ApiServices = {
-    bootstrap: ReturnType<typeof createBootstrapService>;
-    apps: ReturnType<typeof createAppsService>;
+export type ApiServices = Omit<ServerApi, "chat"> & {
     chat: ReturnType<typeof createChatService>;
-    setup: ReturnType<typeof createSetupService>;
 };
 
 export type ApiQueries = {
@@ -24,11 +21,10 @@ export type Api = {
 
 export function createApi(options?: ApiClientOptions): Api {
     const client = createApiClient(options);
+    const generatedServices = createServerApi(client);
     const services = {
-        bootstrap: createBootstrapService(client),
-        apps: createAppsService(client),
+        ...generatedServices,
         chat: createChatService(client),
-        setup: createSetupService(client),
     };
 
     return {
