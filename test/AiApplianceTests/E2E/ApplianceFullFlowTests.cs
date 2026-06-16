@@ -34,10 +34,12 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
     [RavenFact(RavenTestCategory.AiAppliance | RavenTestCategory.Sinks, NpgSqlRequired = true)]
     public async Task EndToEnd_FullApplianceFlow_PostgresSourceToIFrameAgent_Works()
     {
-        // ---------- T1. Mock license API serving the real setup-package zip ----------
-        // The zip carries a real license + admin cert and is never committed. Caller supplies its
-        // location via APPLIANCE_E2E_SETUP_PACKAGE_PATH. CI will substitute a synthetic mock zip
-        // through the same env var.
+        // ---------- T1. Pre-built setup-package zip (demo short-circuit) ----------
+        // This test exercises the CDC -> agent -> iFrame demo flow, not the activation mechanism;
+        // it activates via the supported demo SetupPackageZipPath short-circuit (a pre-built zip
+        // carrying a real license + admin cert, supplied via APPLIANCE_E2E_SETUP_PACKAGE_PATH and
+        // never committed). The token -> {license, domain} -> Let's Encrypt provisioning path is
+        // covered separately by ApplianceLetsEncryptProvisioningTests.
         var zipPath = Environment.GetEnvironmentVariable("APPLIANCE_E2E_SETUP_PACKAGE_PATH");
         if (string.IsNullOrWhiteSpace(zipPath))
         {
@@ -51,7 +53,6 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         // absent prerequisite — keep that a hard failure.
         Assert.True(File.Exists(zipPath),
             $"APPLIANCE_E2E_SETUP_PACKAGE_PATH points at '{zipPath}' but no file is there.");
-        var zipBytes = await File.ReadAllBytesAsync(zipPath);
 
         // T14 asserts a real streamed agent reply, so the agent's AI connection
         // string (T11a) needs a live OpenAI key. Same env var the rest of the
@@ -63,7 +64,6 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
                 "connection string and T14 asserts a real streamed reply through it.");
         }
 
-        await using var licenseApi = await MockLicenseApi.StartAsync(HardcodedLicenseKey, zipBytes);
         var setupRoot = NewDataPath(forceCreateDir: true, prefix: "egor-ai-setup");
 
         // ---------- T2. Appliance starts in NEEDS-ACTIVATION ----------
@@ -74,9 +74,10 @@ public class ApplianceFullFlowTests(ITestOutputHelper output) : CdcSinkIntegrati
         // idempotent, so it's a no-op when the WAF got there first.)
         var store = GetDocumentStore();
         using var factory = new ApplianceWebApplicationFactory(
-            licenseApiUrl: licenseApi.BaseAddress,
+            licenseApiUrl: "http://unused-the-demo-zip-short-circuits-redemption",
             setupPackagePath: setupRoot,
-            applianceStore: store);
+            applianceStore: store,
+            configureOptions: opts => opts.SetupPackageZipPath = zipPath);
         var client = factory.CreateClient();
 
         // The JSON status API returns the BootstrapPhase enum as its PascalCase

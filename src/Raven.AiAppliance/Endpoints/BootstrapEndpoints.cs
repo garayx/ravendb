@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Raven.AiAppliance.Bootstrap;
 using Raven.AiAppliance.Contracts;
 using Raven.AiAppliance.Hosting;
 
@@ -45,16 +46,15 @@ public static class BootstrapEndpoints
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Demo vs. production source of the setup package.</b> The 8-week demo
-    /// mounts a pre-built zip at the path in <c>RAVEN_AI_SETUP_PACKAGE_ZIP</c>
-    /// (set by the Dockerfile, populated by <c>up.ps1</c> from
-    /// <c>$env:APPLIANCE_E2E_SETUP_PACKAGE_PATH</c>). When the file exists the
-    /// HTTP call is skipped and the license-key value is logged but otherwise
-    /// unused. Production will POST the key to <see cref="ApplianceOptions.LicenseApiUrl"/>
-    /// and receive only <c>license.json</c> + <c>app-name</c>; the appliance
-    /// then runs LE provisioning locally — DNS registration, ACME challenge,
-    /// cert generation, <c>settings.json</c> write — before reaching the same
-    /// restart sequence below.
+    /// <b>Source of the setup package.</b> A pre-built zip mounted at the path in
+    /// <c>RAVEN_AI_SETUP_PACKAGE_ZIP</c> short-circuits the resolve+provision flow (legacy demo
+    /// fallback). Otherwise the key is resolved to <c>{license, domain}</c> via
+    /// <see cref="ILicenseDomainResolver"/> (<see cref="ApplianceOptions.LicenseApiUrl"/>;
+    /// api.ravendb.net's Quill endpoint in production, a mock in the demo/tests), and
+    /// <see cref="ISetupPackageProvisioner"/> drives RavenDB's headless setup-wizard endpoint —
+    /// DNS registration, ACME challenge, cert generation, <c>settings.json</c> write — which
+    /// returns the setup package. Either way the package then flows through the same
+    /// extract + restart sequence below.
     /// </para>
     /// <para>
     /// <b>Remaining gap (Kestrel cert).</b> RavenDB picks up the new
@@ -68,7 +68,8 @@ public static class BootstrapEndpoints
         RedeemLicenseRequest body,
         IBootstrapState bootstrap,
         IOptions<ApplianceOptions> options,
-        IHttpClientFactory httpClientFactory,
+        ILicenseDomainResolver licenseResolver,
+        ISetupPackageProvisioner setupProvisioner,
         IHostApplicationLifetime lifetime,
         ILogger<BootstrapLicenseLogger> logger,
         CancellationToken ct)
@@ -88,14 +89,12 @@ public static class BootstrapEndpoints
                 bootstrap.Phase));
         }
 
-        HttpClient? http = null;
-        HttpResponseMessage? upstreamResponse = null;
         try
         {
-            // Demo path: a pre-baked zip mounted into the container short-circuits
-            // the HTTP call. The license-key value is logged but otherwise unused;
-            // production hits the license API to fetch license.json + app-name
-            // and runs LE provisioning locally (no zip involved).
+            // Demo path: a pre-baked zip mounted into the container short-circuits the
+            // resolve+provision flow. Otherwise resolve the token to {license, domain} via the
+            // license API (api.ravendb.net Quill in production, a mock in the demo/tests), then
+            // have RavenDB run the Let's Encrypt setup wizard and hand back the setup package.
             Stream upstreamStream;
             if (!string.IsNullOrEmpty(opts.SetupPackageZipPath) && File.Exists(opts.SetupPackageZipPath))
             {
@@ -106,20 +105,11 @@ public static class BootstrapEndpoints
             }
             else
             {
-                http = httpClientFactory.CreateClient();
-                var url = $"{opts.LicenseApiUrl.TrimEnd('/')}/licenses/{Uri.EscapeDataString(body.LicenseKey)}";
-                // http and upstreamResponse are disposed in the outer finally;
-                // a throw from GetAsync (DNS, TLS, socket) lands there too,
-                // unlike the pre-fix code which leaked both.
-                upstreamResponse = await http.GetAsync(url, ct);
-                if (!upstreamResponse.IsSuccessStatusCode)
-                {
-                    var msg = $"license api returned {(int)upstreamResponse.StatusCode} {upstreamResponse.ReasonPhrase}";
-                    logger.LogWarning("License redemption failed: {Reason}", msg);
-                    bootstrap.MarkFailed(msg);
-                    return Results.Problem(detail: msg, statusCode: (int)upstreamResponse.StatusCode);
-                }
-                upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
+                var licenseAndDomain = await licenseResolver.ResolveAsync(body.LicenseKey, ct);
+                logger.LogInformation(
+                    "Resolved license token to domain {Domain}; provisioning the setup package via the setup wizard.",
+                    licenseAndDomain.Domain);
+                upstreamStream = await setupProvisioner.ProvisionAsync(licenseAndDomain, ct);
             }
 
             // Stream the zip to a temp file (capped) instead of buffering in
@@ -257,19 +247,30 @@ public static class BootstrapEndpoints
             bootstrap.MarkFailed(detail);
             return Results.Problem(detail: detail, statusCode: StatusCodes.Status502BadGateway);
         }
+        catch (LicenseResolutionException ex)
+        {
+            // The license API couldn't produce {license, domain}. Echo its HTTP status when it
+            // was an unsuccessful response (e.g. 404 unknown token); otherwise it's a transport /
+            // malformed-payload failure — surface as 502 Bad Gateway so the caller can tell
+            // "license server said no" from "the appliance is broken".
+            var status = ex.StatusCode.HasValue ? (int)ex.StatusCode.Value : StatusCodes.Status502BadGateway;
+            logger.LogWarning(ex, "License redemption failed resolving the token.");
+            bootstrap.MarkFailed(ex.Message);
+            return Results.Problem(detail: ex.Message, statusCode: status);
+        }
+        catch (SetupPackageProvisioningException ex)
+        {
+            // RavenDB's setup wizard failed to produce a package (LE/claim error, or the local
+            // server unreachable mid-activation). Surface as 502 Bad Gateway.
+            logger.LogError(ex, "License redemption failed provisioning the setup package.");
+            bootstrap.MarkFailed(ex.Message);
+            return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "License redemption threw.");
             bootstrap.MarkFailed(ex.Message);
             return Results.Problem(detail: ex.Message, statusCode: 500);
-        }
-        finally
-        {
-            // HTTP plumbing disposal on every exit path — including a throw
-            // from http.GetAsync (DNS / TLS / socket) which would otherwise
-            // skip the inline disposals.
-            upstreamResponse?.Dispose();
-            http?.Dispose();
         }
     }
 

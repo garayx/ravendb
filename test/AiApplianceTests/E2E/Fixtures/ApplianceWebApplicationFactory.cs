@@ -21,17 +21,20 @@ internal sealed class ApplianceWebApplicationFactory : WebApplicationFactory<Pro
     private readonly string _setupPackagePath;
     private readonly IDocumentStore _applianceStore;
     private readonly Action<ApplianceOptions>? _configureOptions;
+    private readonly Action<IServiceCollection>? _configureServices;
 
     public ApplianceWebApplicationFactory(
         string licenseApiUrl,
         string setupPackagePath,
         IDocumentStore applianceStore,
-        Action<ApplianceOptions>? configureOptions = null)
+        Action<ApplianceOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         _licenseApiUrl = licenseApiUrl;
         _setupPackagePath = setupPackagePath;
         _applianceStore = applianceStore;
         _configureOptions = configureOptions;
+        _configureServices = configureServices;
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
@@ -53,6 +56,10 @@ internal sealed class ApplianceWebApplicationFactory : WebApplicationFactory<Pro
                 .ToList();
             foreach (var d in toRemove)
                 services.Remove(d);
+
+            // Test-supplied overrides (e.g. fake ILicenseDomainResolver / ISetupPackageProvisioner)
+            // run last so they win over Program's registrations.
+            _configureServices?.Invoke(services);
         });
 
         var host = base.CreateHost(builder);

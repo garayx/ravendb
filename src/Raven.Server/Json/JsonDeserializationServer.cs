@@ -221,6 +221,8 @@ namespace Raven.Server.Json
 
         public static readonly Func<BlittableJsonReaderObject, UnsecuredSetupInfo> UnsecuredSetupInfo = GenerateJsonDeserializationRoutine<UnsecuredSetupInfo>();
 
+        public static readonly Func<BlittableJsonReaderObject, ApplianceProvisionSetupInfo> ApplianceProvisionSetupInfo = GenerateJsonDeserializationRoutine<ApplianceProvisionSetupInfo>();
+
         public static readonly Func<BlittableJsonReaderObject, SourceSqlDatabase> SourceSqlDatabase = GenerateJsonDeserializationRoutine<SourceSqlDatabase>();
 
         public static readonly Func<BlittableJsonReaderObject, RestoreSettings> RestoreSettings = GenerateJsonDeserializationRoutine<RestoreSettings>();

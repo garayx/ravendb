@@ -10,6 +10,7 @@ using Polly.Retry;
 using Polly.Timeout;
 using Raven.AiAppliance.Agents;
 using Raven.AiAppliance.AiHelper;
+using Raven.AiAppliance.Bootstrap;
 using Raven.AiAppliance.Endpoints;
 using Raven.AiAppliance.Hosting;
 using Raven.AiAppliance.Infrastructure;
@@ -86,6 +87,21 @@ builder.Services.AddSingleton<IAgentRouter, AgentRouter>();
 if (!isOpenApiDocumentGeneration)
     builder.Services.AddHostedService<RavenReadinessService>();
 builder.Services.AddHttpClient();
+
+// First-run activation seams. The token is resolved to {license, domain} against the license
+// API (Quill on api.ravendb.net in prod, a mock in the demo/tests), then RavenDB's headless
+// setup-wizard endpoint turns that into a Let's Encrypt-backed setup package. Tests replace
+// these with fakes; the demo can still short-circuit both via RAVEN_AI_SETUP_PACKAGE_ZIP.
+builder.Services.AddHttpClient<ILicenseDomainResolver, QuillLicenseDomainResolver>(static (sp, http) =>
+{
+    var opts = sp.GetRequiredService<IOptions<ApplianceOptions>>().Value;
+    http.BaseAddress = new Uri(opts.LicenseApiUrl);
+});
+builder.Services.AddHttpClient<ISetupPackageProvisioner, RavenServerSetupPackageProvisioner>(static (sp, http) =>
+{
+    var opts = sp.GetRequiredService<IOptions<ApplianceOptions>>().Value;
+    http.BaseAddress = new Uri(opts.RavenUrl);
+});
 
 // AI Helper: identity provider (license.json + admin-thumbprint) and the AI-Helper
 // client. In demo mode, the same local setup-package zip that makes the bootstrap
