@@ -3,12 +3,11 @@
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.301
 ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0.9-noble
 ARG NODE_IMAGE=node:24-bookworm-slim
-ARG RAVENDB_IMAGE=ravendb/ravendb-nightly:7.2-latest
 ARG PNPM_VERSION=11.2.2
 ARG S6_OVERLAY_VERSION=3.2.1.0
 
-# Stage 0: alias the published RavenDB image
-FROM ${RAVENDB_IMAGE} AS ravendb
+# Stage 0: alias the Node base so the ravendb-build stage can borrow its node runtime.
+FROM ${NODE_IMAGE} AS node
 
 
 # Stage 1: build the backend just enough to emit the OpenAPI doc (consumed by Stage 2).
@@ -69,6 +68,47 @@ RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked \
 COPY --from=quill-frontend-build /workspace/src/Raven.Quill.Web/dist /publish/web/wwwroot
 
 
+# Stage 3b: build RavenDB server + Studio from THIS branch's source (replaces the v7.2 nightly, so the
+# server carries the feature/ai-appliance licensing changes).
+FROM ${SDK_IMAGE} AS ravendb-build
+ARG TARGETARCH
+WORKDIR /src
+
+# Studio's `npm run typings` shells out to TypingsGenerator (.NET), so this stage needs Node next to
+# the SDK. Borrow the pinned node runtime (same Debian base) instead of pulling NodeSource.
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+
+# node-gyp native builds during `npm ci` need python3/make/g++ (the SDK base image lacks them).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+# TypingsGenerator must be built before the Studio npm build regenerates its TypeScript typings.
+RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked \
+    dotnet build tools/TypingsGenerator/TypingsGenerator.csproj -c Release --nologo
+
+# Build Studio -> Raven.Studio.zip (webpack production build; runs typings via the dll built above).
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    cd src/Raven.Studio \
+    && npm ci \
+    && npm run release
+
+# Publish the server (framework-dependent, net10, linux RID) and drop the Studio zip beside Raven.Server.dll.
+RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked \
+    . docker/quill/scripts/dotnet-rid.sh \
+    && dotnet publish src/Raven.Server/Raven.Server.csproj \
+        -c Release \
+        -r "$DOTNET_RID" \
+        --self-contained false \
+        -o /publish/ravendb \
+        --nologo \
+    && cp src/Raven.Studio/wwwroot/dist/Raven.Studio.zip /publish/ravendb/
+
+
 # Stage 4: runtime - aspnet base + s6-overlay supervising RavenDB, the web app, and nginx.
 FROM ${RUNTIME_IMAGE} AS runtime
 ARG S6_OVERLAY_VERSION
@@ -102,8 +142,8 @@ tar -C / -Jxpf "s6-overlay-${S6_ARCH}.tar.xz"
 rm s6-overlay-*
 EOF
 
-COPY --from=ravendb   /usr/lib/ravendb/server /app/ravendb
-COPY --from=web-build /publish/web            /app/web
+COPY --from=ravendb-build /publish/ravendb /app/ravendb
+COPY --from=web-build     /publish/web     /app/web
 COPY docker/quill/ravendb-settings.json /app/ravendb/settings.json
 COPY docker/quill/nginx.conf /etc/nginx/nginx.conf
 
