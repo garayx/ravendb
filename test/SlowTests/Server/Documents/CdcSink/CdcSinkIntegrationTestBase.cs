@@ -30,8 +30,11 @@ namespace SlowTests.Server.Documents.CdcSink
         {
             var files = ddl.GetFiles();
 
-            foreach (var file in files.Where(f => f.Key != CdcSinkDdlResult.ForeignKeysFileName).OrderBy(f => f.Key, StringComparer.Ordinal))
+            foreach (var file in files.Where(f => f.Key is not (CdcSinkDdlResult.PartitionsFileName or CdcSinkDdlResult.ForeignKeysFileName)).OrderBy(f => f.Key, StringComparer.Ordinal))
                 ExecuteSqlQuery(provider, connectionString, file.Value);
+
+            if (files.TryGetValue(CdcSinkDdlResult.PartitionsFileName, out var partitions))
+                ExecuteSqlQuery(provider, connectionString, partitions);
 
             if (files.TryGetValue(CdcSinkDdlResult.ForeignKeysFileName, out var foreignKeys))
                 ExecuteSqlQuery(provider, connectionString, foreignKeys);

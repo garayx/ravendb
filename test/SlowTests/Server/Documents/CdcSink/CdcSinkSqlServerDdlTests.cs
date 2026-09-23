@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
@@ -96,6 +97,85 @@ namespace SlowTests.Server.Documents.CdcSink
 
             var target = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(targetConnectionString)));
             Assert.Equal(source.GetFiles(), target.GetFiles());
+        }
+
+        [RavenFact(RavenTestCategory.Sinks, MsSqlRequired = true)]
+        public async Task ExportsColumnstoreAndXmlIndexes()
+        {
+            using var sourceTeardown = WithSqlDatabase(MigrationProvider.MsSQL, out var sourceConnectionString, out _, dataSet: null, includeData: false);
+            using var targetTeardown = WithSqlDatabase(MigrationProvider.MsSQL, out var targetConnectionString, out _, dataSet: null, includeData: false);
+            ExecuteSqlQuery(MigrationProvider.MsSQL, sourceConnectionString, @"
+                CREATE TABLE dbo.sales (id INT NOT NULL CONSTRAINT pk_sales PRIMARY KEY CLUSTERED, amount DECIMAL(10,2) NOT NULL, region NVARCHAR(50) NOT NULL);
+                CREATE NONCLUSTERED COLUMNSTORE INDEX ncci_sales ON dbo.sales (amount, region);
+
+                CREATE TABLE dbo.facts (id INT NOT NULL, value FLOAT NOT NULL);
+                CREATE CLUSTERED COLUMNSTORE INDEX cci_facts ON dbo.facts;
+
+                CREATE TABLE dbo.docs (id INT NOT NULL CONSTRAINT pk_docs PRIMARY KEY CLUSTERED, body XML NULL);
+                CREATE PRIMARY XML INDEX pxml_docs_body ON dbo.docs (body);
+                CREATE XML INDEX sxml_docs_body_path ON dbo.docs (body) USING XML INDEX pxml_docs_body FOR PATH;");
+
+            using var store = GetDocumentStore();
+            var source = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(sourceConnectionString)));
+            var files = source.GetFiles();
+
+            Assert.Contains("CREATE NONCLUSTERED COLUMNSTORE INDEX [ncci_sales] ON [dbo].[sales] ([amount], [region]);", files["dbo/sales.sql"]);
+            Assert.Contains("CREATE CLUSTERED COLUMNSTORE INDEX [cci_facts] ON [dbo].[facts];", files["dbo/facts.sql"]);
+
+            var docs = files["dbo/docs.sql"];
+            var primary = docs.IndexOf("CREATE PRIMARY XML INDEX [pxml_docs_body] ON [dbo].[docs] ([body]);", StringComparison.Ordinal);
+            var secondary = docs.IndexOf("CREATE XML INDEX [sxml_docs_body_path] ON [dbo].[docs] ([body]) USING XML INDEX [pxml_docs_body] FOR PATH;", StringComparison.Ordinal);
+            Assert.True(primary >= 0, docs);
+            Assert.True(secondary > primary, docs);
+
+            ApplyDdlExport(MigrationProvider.MsSQL, targetConnectionString, source);
+            var target = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(targetConnectionString)));
+            Assert.Equal(files, target.GetFiles());
+        }
+
+        [RavenFact(RavenTestCategory.Sinks, MsSqlRequired = true)]
+        public async Task ExportsOrderedClusteredColumnstoreIndex()
+        {
+            using var sourceTeardown = WithSqlDatabase(MigrationProvider.MsSQL, out var sourceConnectionString, out _, dataSet: null, includeData: false);
+            using var targetTeardown = WithSqlDatabase(MigrationProvider.MsSQL, out var targetConnectionString, out _, dataSet: null, includeData: false);
+
+            int majorVersion;
+            using (var connection = new Microsoft.Data.SqlClient.SqlConnection(sourceConnectionString))
+            {
+                connection.Open();
+                using var cmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS int)", connection);
+                majorVersion = (int)cmd.ExecuteScalar();
+            }
+            Assert.SkipWhen(majorVersion < 16, $"Ordered clustered columnstore indexes require SQL Server 2022+, server major version is {majorVersion}.");
+
+            ExecuteSqlQuery(MigrationProvider.MsSQL, sourceConnectionString, @"
+                CREATE TABLE dbo.facts (id INT NOT NULL, created DATE NOT NULL, value FLOAT NOT NULL);
+                CREATE CLUSTERED COLUMNSTORE INDEX cci_facts ON dbo.facts ORDER (created, id);");
+
+            using var store = GetDocumentStore();
+            var source = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(sourceConnectionString)));
+            var files = source.GetFiles();
+
+            Assert.Contains("CREATE CLUSTERED COLUMNSTORE INDEX [cci_facts] ON [dbo].[facts] ORDER ([created], [id]);", files["dbo/facts.sql"]);
+
+            ApplyDdlExport(MigrationProvider.MsSQL, targetConnectionString, source);
+            var target = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(targetConnectionString)));
+            Assert.Equal(files, target.GetFiles());
+        }
+
+        [RavenFact(RavenTestCategory.Sinks, MsSqlRequired = true)]
+        public async Task FailsOnIndexTypesThatCannotBeScripted()
+        {
+            using var teardown = WithSqlDatabase(MigrationProvider.MsSQL, out var connectionString, out _, dataSet: null, includeData: false);
+            ExecuteSqlQuery(MigrationProvider.MsSQL, connectionString, @"
+                CREATE TABLE dbo.places (id INT NOT NULL CONSTRAINT pk_places PRIMARY KEY CLUSTERED, location GEOGRAPHY NULL);
+                CREATE SPATIAL INDEX six_places_location ON dbo.places (location);");
+
+            using var store = GetDocumentStore();
+            var e = await Assert.ThrowsAnyAsync<Exception>(() => store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(connectionString))));
+
+            Assert.Contains("[dbo].[places].[six_places_location]", e.Message);
+            Assert.Contains("SPATIAL", e.Message);
         }
 
         [RavenFact(RavenTestCategory.Sinks, MsSqlRequired = true)]

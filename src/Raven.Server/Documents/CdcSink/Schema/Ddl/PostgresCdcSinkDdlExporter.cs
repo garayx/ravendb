@@ -35,21 +35,33 @@ SELECT a.attrelid, a.attname, format_type(a.atttypid, a.atttypmod) AS typename, 
        pg_get_expr(d.adbin, d.adrelid) AS defexpr,
        CASE WHEN a.attcollation <> 0 AND a.attcollation <> t.typcollation
             THEN quote_ident(cn.nspname) || '.' || quote_ident(co.collname) END AS collation,
-       CASE WHEN a.attidentity = '' AND d.adbin IS NOT NULL
-            THEN pg_get_serial_sequence(quote_ident(n.nspname) || '.' || quote_ident(c.relname), a.attname) END AS serialseq
+       c.relname::text AS tablename,
+       seq.deptype, seq.seqschema, seq.seqname, seq.seqtype,
+       seq.seqstart, seq.seqincrement, seq.seqmin, seq.seqmax, seq.seqcache, seq.seqcycle
   FROM pg_attribute a
   JOIN pg_class c ON c.oid = a.attrelid
-  JOIN pg_namespace n ON n.oid = c.relnamespace
   JOIN pg_type t ON t.oid = a.atttypid
   LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
   LEFT JOIN pg_collation co ON co.oid = a.attcollation
   LEFT JOIN pg_namespace cn ON cn.oid = co.collnamespace
+  LEFT JOIN LATERAL (
+       SELECT dep.deptype::text AS deptype, sn.nspname::text AS seqschema, sc.relname::text AS seqname,
+              format_type(s.seqtypid, NULL) AS seqtype,
+              s.seqstart, s.seqincrement, s.seqmin, s.seqmax, s.seqcache, s.seqcycle
+         FROM pg_depend dep
+         JOIN pg_sequence s ON s.seqrelid = dep.objid
+         JOIN pg_class sc ON sc.oid = s.seqrelid
+         JOIN pg_namespace sn ON sn.oid = sc.relnamespace
+        WHERE dep.classid = 'pg_class'::regclass AND dep.refclassid = 'pg_class'::regclass
+          AND dep.refobjid = a.attrelid AND dep.refobjsubid = a.attnum AND dep.deptype IN ('a', 'i')
+        ORDER BY dep.objid
+        LIMIT 1) seq ON true
  WHERE a.attrelid = ANY(@oids) AND a.attnum > 0 AND NOT a.attisdropped
  ORDER BY a.attrelid, a.attnum";
 
     private const string SelectConstraintsQueryTemplate = @"
 SELECT c.conrelid, c.conname, c.contype::text AS contype, pg_get_constraintdef(c.oid, true) AS condef,
-       c.convalidated, c.coninhcount > 0 AS hasparent, {0} AS inherited
+       c.convalidated, {0} AS inherited
   FROM pg_constraint c
  WHERE c.conrelid = ANY(@oids) AND c.contype IN ('p', 'u', 'c', 'x', 'f')
  ORDER BY c.conrelid,
@@ -65,11 +77,11 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
    AND NOT EXISTS (SELECT 1 FROM pg_inherits h WHERE h.inhrelid = i.indexrelid)
  ORDER BY i.indrelid, ic.relname";
 
-    private static readonly Dictionary<long, string> SerialTypes = new()
+    private static readonly Dictionary<long, (string Name, long MaxValue)> SerialTypes = new()
     {
-        [21] = "smallserial",
-        [23] = "serial",
-        [20] = "bigserial",
+        [21] = ("smallserial", short.MaxValue),
+        [23] = ("serial", int.MaxValue),
+        [20] = ("bigserial", long.MaxValue),
     };
 
     public PostgresCdcSinkDdlExporter() : base(CdcSinkSchemaDiscovery.NpgsqlFactory)
@@ -107,6 +119,10 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
                 tableConstraints,
                 indexes.TryGetValue(oid, out var idx) ? idx : new List<string>());
 
+            if (relation.IsPartition)
+                script.Partitions.Append("ALTER TABLE ").Append(relation.PartitionParent)
+                    .Append(" ATTACH PARTITION ").Append(relation.QualifiedName).Append(' ').Append(relation.PartitionBound).AppendLine(";");
+
             foreach (var fk in tableConstraints.Where(x => x.Type == "f" && x.Inherited == false))
                 script.ForeignKeys.Append("ALTER TABLE ").Append(relation.QualifiedName)
                     .Append(" ADD CONSTRAINT ").Append(QuoteIdentifier(fk.Name)).Append(' ').Append(fk.Definition).AppendLine(";");
@@ -121,15 +137,17 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
         var definitions = new List<string>();
         var deferredConstraints = new List<PgConstraint>();
 
-        if (relation.IsPartition == false)
-        {
-            foreach (var column in columns)
-                definitions.Add(BuildColumnDefinition(column));
-        }
+        var customSerials = columns.Where(c => c.IsSerial && c.IsDefaultSerial == false).ToList();
+        foreach (var column in customSerials)
+            sb.Append("CREATE SEQUENCE ").Append(column.Sequence.QuotedName).Append(" AS ").Append(column.Sequence.TypeName)
+                .Append(' ').Append(column.Sequence.Options).AppendLine(";");
+
+        foreach (var column in columns)
+            definitions.Add(BuildColumnDefinition(column));
 
         foreach (var constraint in constraints)
         {
-            if (constraint.Type == "f" || constraint.Inherited || (relation.IsPartition && constraint.HasParent))
+            if (constraint.Type == "f" || constraint.Inherited)
                 continue;
 
             if (constraint.Validated == false)
@@ -147,18 +165,7 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
         else if (relation.Persistence == 'u')
             sb.Append("UNLOGGED ");
         sb.Append("TABLE ").Append(relation.QualifiedName);
-
-        if (relation.IsPartition)
-        {
-            sb.Append(" PARTITION OF ").Append(relation.PartitionParent);
-            if (definitions.Count > 0)
-                AppendDefinitions(sb, definitions);
-            sb.Append(' ').Append(relation.PartitionBound);
-        }
-        else
-        {
-            AppendDefinitions(sb, definitions);
-        }
+        AppendDefinitions(sb, definitions);
 
         if (relation.PartitionKey != null)
             sb.Append(" PARTITION BY ").Append(relation.PartitionKey);
@@ -172,6 +179,10 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
 
         sb.AppendLine(";");
 
+        foreach (var column in customSerials)
+            sb.Append("ALTER SEQUENCE ").Append(column.Sequence.QuotedName).Append(" OWNED BY ")
+                .Append(relation.QualifiedName).Append('.').Append(QuoteIdentifier(column.Name)).AppendLine(";");
+
         foreach (var constraint in deferredConstraints)
             sb.Append("ALTER TABLE ").Append(relation.QualifiedName).Append(" ADD CONSTRAINT ")
                 .Append(QuoteIdentifier(constraint.Name)).Append(' ').Append(constraint.Definition).AppendLine(";");
@@ -180,6 +191,13 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
             sb.Append(relation.Kind == 'p' ? index.Replace(" ON ONLY ", " ON ") : index).AppendLine(";");
 
         return sb.ToString();
+    }
+
+    private static void AppendIdentity(StringBuilder sb, PgColumn column)
+    {
+        sb.Append(column.Identity == "a" ? " GENERATED ALWAYS AS IDENTITY" : " GENERATED BY DEFAULT AS IDENTITY");
+        if (column.Sequence != null)
+            sb.Append(" (SEQUENCE NAME ").Append(column.Sequence.QuotedName).Append(' ').Append(column.Sequence.Options).Append(')');
     }
 
     private static void AppendDefinitions(StringBuilder sb, List<string> definitions)
@@ -200,9 +218,8 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
         var sb = new StringBuilder();
         sb.Append(QuoteIdentifier(column.Name));
 
-        if (column.SerialSequence != null && SerialTypes.TryGetValue(column.TypeOid, out var serialType)
-            && column.Default != null && column.Default.StartsWith("nextval(", StringComparison.Ordinal))
-            return sb.Append(' ').Append(serialType).ToString();
+        if (column.IsDefaultSerial)
+            return sb.Append(' ').Append(SerialTypes[column.TypeOid].Name).ToString();
 
         sb.Append(' ').Append(column.TypeName);
 
@@ -211,10 +228,8 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
 
         if (column.Generated == "s")
             sb.Append(" GENERATED ALWAYS AS (").Append(column.Default).Append(") STORED");
-        else if (column.Identity == "a")
-            sb.Append(" GENERATED ALWAYS AS IDENTITY");
-        else if (column.Identity == "d")
-            sb.Append(" GENERATED BY DEFAULT AS IDENTITY");
+        else if (column.Identity is "a" or "d")
+            AppendIdentity(sb, column);
         else if (column.Default != null)
             sb.Append(" DEFAULT ").Append(column.Default);
 
@@ -295,7 +310,20 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
                 Generated = reader.GetString(6),
                 Default = reader.IsDBNull(7) ? null : reader.GetString(7),
                 Collation = reader.IsDBNull(8) ? null : reader.GetString(8),
-                SerialSequence = reader.IsDBNull(9) ? null : reader.GetString(9),
+                TableName = reader.GetString(9),
+                Sequence = reader.IsDBNull(10) ? null : new PgSequence
+                {
+                    IsSerialOwned = reader.GetString(10) == "a",
+                    Schema = reader.GetString(11),
+                    Name = reader.GetString(12),
+                    TypeName = reader.GetString(13),
+                    Start = reader.GetInt64(14),
+                    Increment = reader.GetInt64(15),
+                    Min = reader.GetInt64(16),
+                    Max = reader.GetInt64(17),
+                    Cache = reader.GetInt64(18),
+                    Cycle = reader.GetBoolean(19),
+                },
             });
         }
 
@@ -323,8 +351,7 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
                 Type = reader.GetString(2),
                 Definition = reader.GetString(3),
                 Validated = reader.GetBoolean(4),
-                HasParent = reader.GetBoolean(5),
-                Inherited = reader.GetBoolean(6),
+                Inherited = reader.GetBoolean(5),
             });
         }
 
@@ -375,7 +402,37 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
         public string Generated { get; init; }
         public string Default { get; init; }
         public string Collation { get; init; }
-        public string SerialSequence { get; init; }
+        public string TableName { get; init; }
+        public PgSequence Sequence { get; init; }
+
+        public bool IsSerial => Sequence is { IsSerialOwned: true } && Identity == "" && Default != null && Default.StartsWith("nextval(", StringComparison.Ordinal);
+
+        public bool IsDefaultSerial =>
+            IsSerial &&
+            SerialTypes.TryGetValue(TypeOid, out var serial) &&
+            Sequence.TypeName == TypeName &&
+            Sequence.Name == $"{TableName}_{Name}_seq" &&
+            Sequence.Start == 1 && Sequence.Increment == 1 && Sequence.Min == 1 &&
+            Sequence.Max == serial.MaxValue && Sequence.Cache == 1 && Sequence.Cycle == false;
+    }
+
+    private sealed class PgSequence
+    {
+        public bool IsSerialOwned { get; init; }
+        public string Schema { get; init; }
+        public string Name { get; init; }
+        public string TypeName { get; init; }
+        public long Start { get; init; }
+        public long Increment { get; init; }
+        public long Min { get; init; }
+        public long Max { get; init; }
+        public long Cache { get; init; }
+        public bool Cycle { get; init; }
+
+        public string QuotedName => QuoteIdentifier(Schema) + "." + QuoteIdentifier(Name);
+
+        public string Options =>
+            $"START WITH {Start} INCREMENT BY {Increment} MINVALUE {Min} MAXVALUE {Max} CACHE {Cache} {(Cycle ? "CYCLE" : "NO CYCLE")}";
     }
 
     private sealed class PgConstraint
@@ -384,7 +441,6 @@ SELECT i.indrelid, pg_get_indexdef(i.indexrelid) AS indexdef
         public string Type { get; init; }
         public string Definition { get; init; }
         public bool Validated { get; init; }
-        public bool HasParent { get; init; }
         public bool Inherited { get; init; }
     }
 }

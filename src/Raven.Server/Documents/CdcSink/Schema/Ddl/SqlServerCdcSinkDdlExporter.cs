@@ -52,17 +52,40 @@ SELECT cc.parent_object_id, cc.name, cc.definition
  WHERE t.is_ms_shipped = 0
  ORDER BY cc.parent_object_id, cc.name";
 
-    private const string SelectIndexesQuery = @"
-SELECT i.object_id, i.name, i.is_unique, i.type_desc, i.filter_definition,
-       col.name AS column_name, ic.is_descending_key, ic.is_included_column
+    private const string SelectServerMajorVersionQuery = "SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS int)";
+
+    private const string SelectIndexesQueryTemplate = @"
+SELECT i.object_id, i.name, i.is_unique, i.type, i.filter_definition,
+       col.name AS column_name, ic.is_descending_key, ic.is_included_column, ic.key_ordinal, ic.index_column_id,
+       {0} AS column_store_order_ordinal,
+       xi.xml_index_type, xi.secondary_type_desc, pxi.name AS primary_xml_index_name
   FROM sys.indexes i
   JOIN sys.tables t ON t.object_id = i.object_id
   JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
   JOIN sys.columns col ON col.object_id = ic.object_id AND col.column_id = ic.column_id
+  LEFT JOIN sys.xml_indexes xi ON xi.object_id = i.object_id AND xi.index_id = i.index_id
+  LEFT JOIN sys.indexes pxi ON pxi.object_id = xi.object_id AND pxi.index_id = xi.using_xml_index_id
  WHERE t.is_ms_shipped = 0
    AND i.is_primary_key = 0 AND i.is_unique_constraint = 0 AND i.is_hypothetical = 0
-   AND i.type IN (1, 2)
+   AND (i.type IN (1, 2, 5, 6) OR (i.type = 3 AND xi.xml_index_type IN (0, 1)))
  ORDER BY i.object_id, i.name, ic.is_included_column, ic.key_ordinal, ic.index_column_id";
+
+    private const string SelectUnsupportedObjectsQuery = @"
+SELECT t.object_id, SCHEMA_NAME(t.schema_id) AS schema_name, t.name AS table_name, i.name AS object_name, i.type_desc AS object_type
+  FROM sys.indexes i
+  JOIN sys.tables t ON t.object_id = i.object_id
+  LEFT JOIN sys.xml_indexes xi ON xi.object_id = i.object_id AND xi.index_id = i.index_id
+ WHERE t.is_ms_shipped = 0 AND i.is_hypothetical = 0 AND i.type > 0 AND t.is_memory_optimized = 0
+   AND (i.type NOT IN (1, 2, 3, 5, 6) OR (i.type = 3 AND xi.xml_index_type NOT IN (0, 1)))
+UNION ALL
+SELECT t.object_id, SCHEMA_NAME(t.schema_id), t.name, N'full-text index', N'FULLTEXT'
+  FROM sys.fulltext_indexes fi
+  JOIN sys.tables t ON t.object_id = fi.object_id
+ WHERE t.is_ms_shipped = 0
+UNION ALL
+SELECT t.object_id, SCHEMA_NAME(t.schema_id), t.name, N'table', N'MEMORY_OPTIMIZED'
+  FROM sys.tables t
+ WHERE t.is_ms_shipped = 0 AND t.is_memory_optimized = 1";
 
     private const string SelectForeignKeysQuery = @"
 SELECT fk.parent_object_id, fk.name, SCHEMA_NAME(rt.schema_id) AS referenced_schema, rt.name AS referenced_table,
@@ -133,8 +156,23 @@ SELECT fk.parent_object_id, fk.name, SCHEMA_NAME(rt.schema_id) AS referenced_sch
                 GetList(checkConstraints, objectId).Add($"CONSTRAINT {QuoteIdentifier(reader.GetString(1))} CHECK {reader.GetString(2)}");
         }, ct);
 
+        var unsupported = new List<string>();
+        await ReadAsync(conn, SelectUnsupportedObjectsQuery, reader =>
+        {
+            if (selected.ContainsKey(reader.GetInt32(0)))
+                unsupported.Add($"{QualifiedName(reader.GetString(1), reader.GetString(2))}.{QuoteIdentifier(reader.GetString(3))} ({reader.GetString(4)})");
+        }, ct);
+
+        if (unsupported.Count > 0)
+            throw new NotSupportedException(
+                "DDL export cannot script the following SQL Server objects, so the export was aborted instead of silently omitting them: " +
+                string.Join(", ", unsupported) + ".");
+
+        var serverMajorVersion = await ReadIntScalarAsync(conn, SelectServerMajorVersionQuery, ct);
+        var indexesQuery = string.Format(SelectIndexesQueryTemplate, serverMajorVersion >= 16 ? "ic.column_store_order_ordinal" : "CAST(0 AS tinyint)");
+
         var indexes = new Dictionary<int, List<TableIndex>>();
-        await ReadAsync(conn, SelectIndexesQuery, reader =>
+        await ReadAsync(conn, indexesQuery, reader =>
         {
             var objectId = reader.GetInt32(0);
             if (selected.ContainsKey(objectId) == false)
@@ -145,15 +183,24 @@ SELECT fk.parent_object_id, fk.name, SCHEMA_NAME(rt.schema_id) AS referenced_sch
             var index = list.LastOrDefault();
             if (index == null || index.Name != name)
             {
-                index = new TableIndex(name, reader.GetBoolean(2), reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4));
+                index = new TableIndex(
+                    name,
+                    reader.GetBoolean(2),
+                    reader.GetByte(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(11) ? null : reader.GetByte(11),
+                    reader.IsDBNull(12) ? null : reader.GetString(12),
+                    reader.IsDBNull(13) ? null : reader.GetString(13));
                 list.Add(index);
             }
 
-            var column = QuoteIdentifier(reader.GetString(5));
-            if (reader.GetBoolean(7))
-                index.IncludedColumns.Add(column);
-            else
-                index.KeyColumns.Add(column + (reader.GetBoolean(6) ? " DESC" : " ASC"));
+            index.Columns.Add(new TableIndexColumn(
+                QuoteIdentifier(reader.GetString(5)),
+                reader.GetBoolean(6),
+                reader.GetBoolean(7),
+                reader.GetByte(8),
+                reader.GetInt32(9),
+                reader.GetByte(10)));
         }, ct);
 
         var foreignKeys = new Dictionary<int, List<ForeignKey>>();
@@ -205,7 +252,7 @@ SELECT fk.parent_object_id, fk.name, SCHEMA_NAME(rt.schema_id) AS referenced_sch
 
             if (indexes.TryGetValue(objectId, out var tableIndexes))
             {
-                foreach (var index in tableIndexes)
+                foreach (var index in tableIndexes.OrderBy(i => i.IsSecondaryXml ? 1 : 0).ThenBy(i => i.Name, StringComparer.Ordinal))
                     sb.AppendLine(index.ToSql(qualifiedName));
             }
 
@@ -308,6 +355,12 @@ SELECT fk.parent_object_id, fk.name, SCHEMA_NAME(rt.schema_id) AS referenced_sch
         return (await cmd.ExecuteScalarAsync(ct)) as string;
     }
 
+    private static async Task<int> ReadIntScalarAsync(SqlConnection conn, string query, CancellationToken ct)
+    {
+        await using var cmd = new SqlCommand(query, conn);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
+    }
+
     private static async Task ReadAsync(SqlConnection conn, string query, Action<SqlDataReader> onRow, CancellationToken ct)
     {
         await using var cmd = new SqlCommand(query, conn);
@@ -332,23 +385,53 @@ SELECT fk.parent_object_id, fk.name, SCHEMA_NAME(rt.schema_id) AS referenced_sch
             $"CONSTRAINT {QuoteIdentifier(Name)} {(IsPrimaryKey ? "PRIMARY KEY" : "UNIQUE")} {IndexType} ({string.Join(", ", Columns)})";
     }
 
-    private sealed record TableIndex(string Name, bool IsUnique, string IndexType, string Filter)
-    {
-        public List<string> KeyColumns { get; } = new();
+    private sealed record TableIndexColumn(string Name, bool IsDescending, bool IsIncluded, byte KeyOrdinal, int IndexColumnId, byte ColumnStoreOrderOrdinal);
 
-        public List<string> IncludedColumns { get; } = new();
+    private sealed record TableIndex(string Name, bool IsUnique, byte Type, string Filter, byte? XmlIndexType, string SecondaryXmlType, string PrimaryXmlIndexName)
+    {
+        private const byte Clustered = 1;
+        private const byte Xml = 3;
+        private const byte ClusteredColumnstore = 5;
+        private const byte NonClusteredColumnstore = 6;
+
+        public List<TableIndexColumn> Columns { get; } = new();
+
+        public bool IsSecondaryXml => Type == Xml && XmlIndexType == 1;
 
         public string ToSql(string qualifiedTableName)
         {
             var sb = new StringBuilder("CREATE ");
-            if (IsUnique)
-                sb.Append("UNIQUE ");
-            sb.Append(IndexType).Append(" INDEX ").Append(QuoteIdentifier(Name))
-                .Append(" ON ").Append(qualifiedTableName)
-                .Append(" (").Append(string.Join(", ", KeyColumns)).Append(')');
-            if (IncludedColumns.Count > 0)
-                sb.Append(" INCLUDE (").Append(string.Join(", ", IncludedColumns)).Append(')');
-            if (Filter != null)
+            switch (Type)
+            {
+                case ClusteredColumnstore:
+                    sb.Append("CLUSTERED COLUMNSTORE INDEX ").Append(QuoteIdentifier(Name)).Append(" ON ").Append(qualifiedTableName);
+                    var order = Columns.Where(c => c.ColumnStoreOrderOrdinal > 0).OrderBy(c => c.ColumnStoreOrderOrdinal).Select(c => c.Name).ToList();
+                    if (order.Count > 0)
+                        sb.Append(" ORDER (").Append(string.Join(", ", order)).Append(')');
+                    break;
+                case NonClusteredColumnstore:
+                    sb.Append("NONCLUSTERED COLUMNSTORE INDEX ").Append(QuoteIdentifier(Name)).Append(" ON ").Append(qualifiedTableName)
+                        .Append(" (").Append(string.Join(", ", Columns.OrderBy(c => c.IndexColumnId).Select(c => c.Name))).Append(')');
+                    break;
+                case Xml:
+                    sb.Append(IsSecondaryXml ? "XML INDEX " : "PRIMARY XML INDEX ").Append(QuoteIdentifier(Name))
+                        .Append(" ON ").Append(qualifiedTableName).Append(" (").Append(Columns[0].Name).Append(')');
+                    if (IsSecondaryXml)
+                        sb.Append(" USING XML INDEX ").Append(QuoteIdentifier(PrimaryXmlIndexName)).Append(" FOR ").Append(SecondaryXmlType);
+                    break;
+                default:
+                    if (IsUnique)
+                        sb.Append("UNIQUE ");
+                    sb.Append(Type == Clustered ? "CLUSTERED" : "NONCLUSTERED").Append(" INDEX ").Append(QuoteIdentifier(Name))
+                        .Append(" ON ").Append(qualifiedTableName)
+                        .Append(" (").Append(string.Join(", ", Columns.Where(c => c.IsIncluded == false).Select(c => c.Name + (c.IsDescending ? " DESC" : " ASC")))).Append(')');
+                    var included = Columns.Where(c => c.IsIncluded).Select(c => c.Name).ToList();
+                    if (included.Count > 0)
+                        sb.Append(" INCLUDE (").Append(string.Join(", ", included)).Append(')');
+                    break;
+            }
+
+            if (Filter != null && Type != Xml && Type != ClusteredColumnstore)
                 sb.Append(" WHERE ").Append(Filter);
             return sb.Append(';').ToString();
         }

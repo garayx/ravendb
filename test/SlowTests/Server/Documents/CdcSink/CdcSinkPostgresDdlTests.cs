@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
@@ -72,7 +73,7 @@ namespace SlowTests.Server.Documents.CdcSink
             Assert.Contains("CONSTRAINT \"customers_balance_check\" CHECK", customers);
 
             var orders = files["public/orders.sql"];
-            Assert.Contains("\"order_id\" bigint GENERATED ALWAYS AS IDENTITY NOT NULL", orders);
+            Assert.Contains("\"order_id\" bigint GENERATED ALWAYS AS IDENTITY (SEQUENCE NAME \"public\".\"orders_order_id_seq\" START WITH 1 INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 CACHE 1 NO CYCLE) NOT NULL", orders);
             Assert.Matches(@"""total"" numeric\(12,2\) GENERATED ALWAYS AS \(.+\) STORED", orders);
             Assert.Contains("CREATE INDEX ix_orders_customer ON public.orders USING btree (customer_id);", orders);
             Assert.Contains("WHERE (qty > 10);", orders);
@@ -100,22 +101,24 @@ namespace SlowTests.Server.Documents.CdcSink
         }
 
         [RavenFact(RavenTestCategory.Sinks, NpgSqlRequired = true)]
-        public async Task ExportsPartitionedTablesAndMatchesDiscoveredTables()
+        public async Task ExportsPartitionsAsStandaloneTablesWithAttachScript()
         {
             using var sourceTeardown = WithSqlDatabase(MigrationProvider.NpgSQL, out var sourceConnectionString, out _, dataSet: null, includeData: false);
             using var targetTeardown = WithSqlDatabase(MigrationProvider.NpgSQL, out var targetConnectionString, out _, dataSet: null, includeData: false);
             ExecuteSqlQuery(MigrationProvider.NpgSQL, sourceConnectionString, @"
-                CREATE TABLE events (
+                CREATE TABLE z_events (
                     id         BIGINT NOT NULL,
                     created_on DATE NOT NULL,
                     payload    JSONB,
-                    PRIMARY KEY (id, created_on)
+                    PRIMARY KEY (id, created_on),
+                    CONSTRAINT z_events_id_check CHECK (id > 0)
                 ) PARTITION BY RANGE (created_on);
 
-                CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
-                CREATE INDEX ix_events_payload ON events USING gin (payload);
+                CREATE TABLE a_events_2026 PARTITION OF z_events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+                CREATE TABLE a_events_default PARTITION OF z_events DEFAULT;
+                CREATE INDEX ix_events_payload ON z_events USING gin (payload);
 
-                CREATE VIEW events_view AS SELECT id FROM events;");
+                CREATE VIEW events_view AS SELECT id FROM z_events;");
 
             using var store = GetDocumentStore();
             var ddl = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(sourceConnectionString)));
@@ -123,21 +126,58 @@ namespace SlowTests.Server.Documents.CdcSink
 
             var files = ddl.GetFiles();
             Assert.Equal(
-                schema.Tables.Select(t => $"{t.SourceTableSchema}/{t.SourceTableName}.sql").OrderBy(x => x),
+                schema.Tables.Select(t => $"{t.SourceTableSchema}/{t.SourceTableName}.sql").Append(CdcSinkDdlResult.PartitionsFileName).OrderBy(x => x),
                 files.Keys.OrderBy(x => x));
 
-            var parent = files["public/events.sql"];
+            var parent = files["public/z_events.sql"];
             Assert.Contains("PARTITION BY RANGE (created_on)", parent);
-            Assert.Contains("CREATE INDEX ix_events_payload ON public.events USING gin (payload);", parent);
+            Assert.Contains("CREATE INDEX ix_events_payload ON public.z_events USING gin (payload);", parent);
 
-            var partition = files["public/events_2026.sql"];
-            Assert.Contains("CREATE TABLE \"public\".\"events_2026\" PARTITION OF \"public\".\"events\" FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');", partition);
+            var partition = files["public/a_events_2026.sql"];
+            Assert.Contains("CREATE TABLE \"public\".\"a_events_2026\" (", partition);
+            Assert.Contains("\"created_on\" date NOT NULL", partition);
+            Assert.DoesNotContain("PARTITION OF", partition);
             Assert.DoesNotContain("PRIMARY KEY", partition);
+            Assert.Contains("CONSTRAINT \"z_events_id_check\" CHECK", partition);
             Assert.DoesNotContain("CREATE INDEX", partition);
 
-            ApplyDdlExport(MigrationProvider.NpgSQL, targetConnectionString, ddl);
+            var attach = files[CdcSinkDdlResult.PartitionsFileName];
+            Assert.Contains("ALTER TABLE \"public\".\"z_events\" ATTACH PARTITION \"public\".\"a_events_2026\" FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');", attach);
+            Assert.Contains("ALTER TABLE \"public\".\"z_events\" ATTACH PARTITION \"public\".\"a_events_default\" DEFAULT;", attach);
+
+            foreach (var file in files.OrderBy(f => f.Key, StringComparer.Ordinal))
+                ExecuteSqlQuery(MigrationProvider.NpgSQL, targetConnectionString, file.Value);
+
             var target = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(targetConnectionString)));
             Assert.Equal(files, target.GetFiles());
+        }
+
+        [RavenFact(RavenTestCategory.Sinks, NpgSqlRequired = true)]
+        public async Task PreservesIdentityAndSerialSequenceOptions()
+        {
+            using var sourceTeardown = WithSqlDatabase(MigrationProvider.NpgSQL, out var sourceConnectionString, out _, dataSet: null, includeData: false);
+            using var targetTeardown = WithSqlDatabase(MigrationProvider.NpgSQL, out var targetConnectionString, out _, dataSet: null, includeData: false);
+            ExecuteSqlQuery(MigrationProvider.NpgSQL, sourceConnectionString, @"
+                CREATE TABLE tickets (
+                    id        BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5 CACHE 10 CYCLE),
+                    custom_no SERIAL,
+                    plain_no  SERIAL
+                );
+                ALTER SEQUENCE tickets_custom_no_seq INCREMENT BY 10 MAXVALUE 99999;");
+
+            using var store = GetDocumentStore();
+            var source = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(sourceConnectionString)));
+            var tickets = source.GetFiles()["public/tickets.sql"];
+
+            Assert.Contains("\"id\" bigint GENERATED ALWAYS AS IDENTITY (SEQUENCE NAME \"public\".\"tickets_id_seq\" START WITH 100 INCREMENT BY 5 MINVALUE 1 MAXVALUE 9223372036854775807 CACHE 10 CYCLE) NOT NULL", tickets);
+            Assert.Contains("\"plain_no\" serial", tickets);
+            Assert.StartsWith("CREATE SEQUENCE \"public\".\"tickets_custom_no_seq\" AS integer START WITH 1 INCREMENT BY 10 MINVALUE 1 MAXVALUE 99999 CACHE 1 NO CYCLE;", tickets);
+            Assert.Contains("\"custom_no\" integer DEFAULT nextval('public.tickets_custom_no_seq'::regclass) NOT NULL", tickets);
+            Assert.Contains("ALTER SEQUENCE \"public\".\"tickets_custom_no_seq\" OWNED BY \"public\".\"tickets\".\"custom_no\";", tickets);
+
+            ApplyDdlExport(MigrationProvider.NpgSQL, targetConnectionString, source);
+            var target = await store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(Connection(targetConnectionString)));
+            Assert.Equal(source.GetFiles(), target.GetFiles());
         }
 
         [RavenFact(RavenTestCategory.Sinks, NpgSqlRequired = true)]

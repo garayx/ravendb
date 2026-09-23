@@ -8,6 +8,8 @@ namespace Raven.Client.Documents.Operations.CdcSink.Schema;
 
 internal class CdcSinkDdlResult
 {
+    public const string PartitionsFileName = "zz_attach_partitions.sql";
+
     public const string ForeignKeysFileName = "zz_foreign_keys.sql";
 
     public byte[] ZipContent { get; set; }

@@ -46,7 +46,7 @@ internal abstract class CdcSinkDdlExporter
 
         var script = await ScriptAsync(connectionString, selected, ct);
 
-        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { CdcSinkDdlResult.ForeignKeysFileName };
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { CdcSinkDdlResult.PartitionsFileName, CdcSinkDdlResult.ForeignKeysFileName };
         foreach (var table in selected)
         {
             if (script.TableScripts.TryGetValue((table.SourceTableSchema, table.SourceTableName), out var sql) == false)
@@ -54,6 +54,9 @@ internal abstract class CdcSinkDdlExporter
 
             export.Files.Add(new CdcSinkDdlFile(UniqueFileName(table, usedFileNames), sql));
         }
+
+        if (script.Partitions.Length > 0)
+            export.Files.Add(new CdcSinkDdlFile(CdcSinkDdlResult.PartitionsFileName, script.Partitions.ToString()));
 
         if (script.ForeignKeys.Length > 0)
             export.Files.Add(new CdcSinkDdlFile(CdcSinkDdlResult.ForeignKeysFileName, script.ForeignKeys.ToString()));
@@ -98,6 +101,8 @@ internal abstract class CdcSinkDdlExporter
     protected sealed class CdcSinkDdlScript
     {
         public Dictionary<(string Schema, string Table), string> TableScripts { get; } = new();
+
+        public StringBuilder Partitions { get; } = new();
 
         public StringBuilder ForeignKeys { get; } = new();
     }
