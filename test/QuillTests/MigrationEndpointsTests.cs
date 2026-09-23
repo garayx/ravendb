@@ -108,6 +108,21 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
     }
 
     [RavenFact(RavenTestCategory.Quill)]
+    public async Task An_unreachable_ai_service_is_502_not_a_consent_problem()
+    {
+        var client = new FakeMigrationClient();
+        await using var host = await NewMigrationHostAsync(client, AiHelperStatus.InternalError);
+        await SeedDiscoveredSchemaAsync(host);
+
+        var resp = await host.Client.PostAsJsonAsync(
+            QuillRoutes.MigrationStart, new { slug = QuillHost.DefaultWizardSlug });
+
+        // The operator cannot fix this by giving consent, so it must not be reported as consent.
+        Assert.Equal(HttpStatusCode.BadGateway, resp.StatusCode);
+        Assert.Null(client.LastStart);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
     public async Task Ask_refuses_a_conversation_that_belongs_to_another_app()
     {
         var client = new FakeMigrationClient { Snapshot = SnapshotFor("someone-else") };

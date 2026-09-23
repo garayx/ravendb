@@ -11,19 +11,13 @@ namespace Raven.Quill.AiHelper.Migration;
 /// validate what the model emitted and reject it back into the same turn, which is only possible
 /// while Quill is the one calling RunAsync.
 /// </summary>
-public sealed class LocalMigrationClient(
-    IDocumentStore store,
-    MigrationPlanStore plans,
-    MigrationAgentInstaller installer) : IMigrationClient
+public sealed class LocalMigrationClient(IDocumentStore store, MigrationPlanStore plans) : IMigrationClient
 {
     public Task StartAsync(MigrationStartCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token) =>
-        StreamAsync(command.AiConnectionStringName, onFrame, token, async (channel, _) =>
+        StreamAsync(onFrame, async channel =>
         {
-            var catalog = SchemaCatalog.FromDiscoveredSchema(command.Schema);
-
             var session = MigrationSession.Start(
-                store, plans, channel, command.Slug, catalog,
-                maxModelIterationsPerCall: MigrationSession.IterationBudgetFor(catalog.Files.Count));
+                store, plans, channel, command.Slug, SchemaCatalog.FromDiscoveredSchema(command.Schema));
 
             session.AttachSchema();
 
@@ -37,27 +31,27 @@ public sealed class LocalMigrationClient(
         });
 
     public Task AskAsync(MigrationAskCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token) =>
-        StreamAsync(command.AiConnectionStringName, onFrame, token, async (channel, _) =>
+        StreamAsync(onFrame, async channel =>
         {
-            var catalog = SchemaCatalog.FromDiscoveredSchema(command.Schema);
-
             var session = await MigrationSession.ResumeAsync(
-                store, plans, channel, command.Slug, catalog, command.ConversationId,
-                MigrationSession.IterationBudgetFor(catalog.Files.Count), token);
+                store, plans, channel, command.Slug, SchemaCatalog.FromDiscoveredSchema(command.Schema),
+                command.ConversationId, token);
 
             var reply = await session.AskAsync(command.Prompt, token);
             return (session, reply);
         });
 
     public Task ForkAsync(MigrationForkCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token) =>
-        StreamAsync(command.AiConnectionStringName, onFrame, token, async (channel, _) =>
+        StreamAsync(onFrame, async channel =>
         {
             var checkpoint = await MigrationSession.FindCheckpointAsync(store, command.InputKey, token)
                 ?? throw new InvalidOperationException($"No stored analysis found for input key '{command.InputKey}'.");
 
+            // The discovered schema is exact, so the branch validates against the same facts the
+            // original session did rather than against DDL parsed back off the checkpoint.
             var session = MigrationSession.Fork(
                 store, plans, channel, command.Slug, checkpoint, command.Branch,
-                MigrationSession.IterationBudgetFor(checkpoint.Schema.Count));
+                SchemaCatalog.FromDiscoveredSchema(command.Schema));
 
             return (session, new MigrationReply());
         });
@@ -85,14 +79,10 @@ public sealed class LocalMigrationClient(
     /// Runs the turn on one task while the caller drains the frames it produces, so collections
     /// reach the browser as they are registered rather than in one batch at the end.
     /// </summary>
-    private async Task StreamAsync(
-        string aiConnectionStringName,
+    private static async Task StreamAsync(
         Func<MigrationFrame, Task> onFrame,
-        CancellationToken token,
-        Func<IPlanChannel, CancellationToken, Task<(MigrationSession Session, MigrationReply Reply)>> run)
+        Func<IPlanChannel, Task<(MigrationSession Session, MigrationReply Reply)>> run)
     {
-        await installer.EnsureRegisteredAsync(aiConnectionStringName, token);
-
         var queue = Channel.CreateUnbounded<MigrationFrame>(new UnboundedChannelOptions
         {
             SingleReader = true,
@@ -103,7 +93,7 @@ public sealed class LocalMigrationClient(
         {
             try
             {
-                var (session, reply) = await run(new QueuedPlanChannel(queue.Writer), token);
+                var (session, reply) = await run(new QueuedPlanChannel(queue.Writer));
 
                 queue.Writer.TryWrite(new ReplyFrame
                 {
@@ -124,15 +114,17 @@ public sealed class LocalMigrationClient(
             }
             catch (Exception e)
             {
-                queue.Writer.TryWrite(new ErrorFrame { Message = e.Message });
+                // The whole exception, not just the message: this is an operator-facing setup tool
+                // and the inner exception is usually the only thing that says what actually broke.
+                queue.Writer.TryWrite(new ErrorFrame { Message = e.ToString() });
             }
             finally
             {
                 queue.Writer.TryComplete();
             }
-        }, token);
+        });
 
-        await foreach (var frame in queue.Reader.ReadAllAsync(token))
+        await foreach (var frame in queue.Reader.ReadAllAsync())
             await onFrame(frame);
 
         await worker;

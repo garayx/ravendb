@@ -8,6 +8,7 @@ using Raven.Client.Documents.Operations.OngoingTasks;
 using Raven.Client.Exceptions;
 using Raven.Quill.AiHelper;
 using Raven.Quill.AiHelper.Migration;
+using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Contracts;
 using Raven.Quill.Endpoints.Helpers;
 using Raven.Quill.Infrastructure;
@@ -572,9 +573,14 @@ public static class WizardEndpoints
         if (refusal is null || started)
             return;
 
-        ctx.Response.StatusCode = refusal.ConsentRequired
-            ? StatusCodes.Status401Unauthorized
-            : StatusCodes.Status400BadRequest;
+        // A status the AI service reported is the operator's to act on; no status at all means the
+        // request itself was wrong, and a status it never got to report means the service is down.
+        ctx.Response.StatusCode = refusal.Status switch
+        {
+            null => StatusCodes.Status400BadRequest,
+            var status when status.Value.ServiceAnswered() => StatusCodes.Status401Unauthorized,
+            _ => StatusCodes.Status502BadGateway
+        };
 
         await ctx.Response.WriteAsJsonAsync(new ApiErrorResponse(refusal.Message), ct);
     }
@@ -744,6 +750,8 @@ public static class WizardEndpoints
     /// </summary>
     internal static void ValidateJoinColumnsAgainstSchema(CdcSinkConfiguration configuration, CdcSinkSourceSchema schema, List<string> errors)
     {
+        var catalog = SchemaCatalog.FromDiscoveredSchema(schema);
+
         foreach (var table in configuration.Tables)
             ValidateScope(table.SourceTableSchema, table.SourceTableName, table.CollectionName, table.EmbeddedTables, table.LinkedTables);
 
@@ -769,21 +777,27 @@ public static class WizardEndpoints
             }
         }
 
-        HashSet<string>? SourceColumnsOf(string? tableSchema, string tableName) => schema.Tables
-            .FirstOrDefault(table =>
-                string.Equals(table.SourceTableName, tableName, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(table.SourceTableSchema ?? string.Empty, tableSchema ?? string.Empty, StringComparison.OrdinalIgnoreCase))
-            ?.Columns.Select(column => column.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // One lookup implementation: the catalog is what PlanValidator holds the model to per call,
+        // so the whole-config pass and the per-call pass cannot disagree about what a table has.
+        IReadOnlyList<string>? SourceColumnsOf(string? tableSchema, string tableName)
+        {
+            var qualified = MigrationPlan.Qualify(tableSchema, tableName);
 
-        void CheckJoinColumns(List<string>? joinColumns, HashSet<string>? sourceColumns, string description)
+            return catalog.Knows(qualified) ? catalog.Columns(qualified) : null;
+        }
+
+        void CheckJoinColumns(List<string>? joinColumns, IReadOnlyList<string>? sourceColumns, string description)
         {
             if (sourceColumns is null)
                 return;
 
             foreach (var joinColumn in joinColumns ?? [])
             {
-                if (string.IsNullOrWhiteSpace(joinColumn) || sourceColumns.Contains(joinColumn))
+                if (string.IsNullOrWhiteSpace(joinColumn) ||
+                    sourceColumns.Contains(joinColumn, StringComparer.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 errors.Add($"{description}: join column '{joinColumn}' is not a column of the source table. " +
                     $"Its columns are: {string.Join(", ", sourceColumns)}.");

@@ -71,6 +71,9 @@ public sealed class MigrationPlan
     /// <summary>
     /// Every source table the plan touches, and how. Used to spot the same rows being embedded in
     /// more than one document.
+    ///
+    /// Keyed by schema-qualified name: two tables called "orders" under different schemas are
+    /// different tables, and conflating them would report an overlap that does not exist.
     /// </summary>
     public Dictionary<string, List<TableUse>> TableUsage()
     {
@@ -92,20 +95,32 @@ public sealed class MigrationPlan
             if (entry.Config is null)
                 continue;
 
-            Add(entry.Config.SourceTableName, entry.Collection, TableUseKind.Root);
+            // An embedded or linked entry that names no schema of its own belongs to its root's.
+            var rootSchema = entry.Config.SourceTableSchema;
+
+            Add(Qualify(rootSchema, entry.Config.SourceTableName), entry.Collection, TableUseKind.Root);
 
             foreach (var linked in entry.Config.LinkedTables ?? [])
-                Add(linked.SourceTableName, entry.Collection, TableUseKind.Linked);
+                Add(Qualify(linked.SourceTableSchema ?? rootSchema, linked.SourceTableName), entry.Collection, TableUseKind.Linked);
 
             CdcSinkConfiguration.ForEachEmbeddedTable(entry.Config.EmbeddedTables, embedded =>
             {
-                Add(embedded.SourceTableName, entry.Collection, TableUseKind.Embedded);
+                Add(Qualify(embedded.SourceTableSchema ?? rootSchema, embedded.SourceTableName), entry.Collection, TableUseKind.Embedded);
 
                 foreach (var linked in embedded.LinkedTables ?? [])
-                    Add(linked.SourceTableName, entry.Collection, TableUseKind.Linked);
+                    Add(Qualify(linked.SourceTableSchema ?? rootSchema, linked.SourceTableName), entry.Collection, TableUseKind.Linked);
             });
         }
 
         return usage;
     }
+
+    /// <summary>
+    /// The key a table is known by: "schema.table" where a schema is set, the bare name otherwise.
+    /// Shared with the validator so plan usage and schema lookups agree on what counts as one table.
+    /// </summary>
+    public static string? Qualify(string? tableSchema, string? table) =>
+        string.IsNullOrWhiteSpace(tableSchema) || string.IsNullOrWhiteSpace(table)
+            ? table
+            : $"{tableSchema.Trim()}.{table.Trim()}";
 }

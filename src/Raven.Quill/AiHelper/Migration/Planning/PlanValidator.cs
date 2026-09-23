@@ -43,7 +43,7 @@ public static class PlanValidator
         if (string.IsNullOrWhiteSpace(config.SourceTableName))
             r.Errors.Add("Config.SourceTableName is required.");
 
-        var rootTable = Qualify(config.SourceTableSchema, config.SourceTableName);
+        var rootTable = MigrationPlan.Qualify(config.SourceTableSchema, config.SourceTableName);
 
         ValidateColumns(r, rootTable, config.PrimaryKeyColumns, config.Columns, schema, plan.Conventions, "root");
 
@@ -141,7 +141,7 @@ public static class PlanValidator
         foreach (var e in embedded ?? new List<CdcSinkEmbeddedTableConfig>())
         {
             // An embedded entry that names no schema of its own belongs to its root's.
-            var embeddedTable = Qualify(
+            var embeddedTable = MigrationPlan.Qualify(
                 string.IsNullOrWhiteSpace(e.SourceTableSchema) ? defaultSchema : e.SourceTableSchema,
                 e.SourceTableName);
 
@@ -277,7 +277,7 @@ public static class PlanValidator
     {
         var usage = plan.TableUsage();
 
-        void Check(string table, bool embeddingHere)
+        void Check(string? table, bool embeddingHere)
         {
             if (string.IsNullOrWhiteSpace(table) || usage.TryGetValue(table, out var existing) == false)
                 return;
@@ -298,15 +298,17 @@ public static class PlanValidator
             }
         }
 
-        Check(config.SourceTableName, embeddingHere: false);
-        foreach (var e in config.EmbeddedTables ?? new List<CdcSinkEmbeddedTableConfig>())
-            Check(e.SourceTableName, embeddingHere: true);
-    }
+        // Qualified to match how the plan keys its usage: same schema, same table, or it is a
+        // different table that happens to share a name.
+        Check(MigrationPlan.Qualify(config.SourceTableSchema, config.SourceTableName), embeddingHere: false);
 
-    private static string? Qualify(string? tableSchema, string? table) =>
-        string.IsNullOrWhiteSpace(tableSchema) || string.IsNullOrWhiteSpace(table)
-            ? table
-            : $"{tableSchema.Trim()}.{table.Trim()}";
+        foreach (var e in config.EmbeddedTables ?? new List<CdcSinkEmbeddedTableConfig>())
+        {
+            Check(
+                MigrationPlan.Qualify(e.SourceTableSchema ?? config.SourceTableSchema, e.SourceTableName),
+                embeddingHere: true);
+        }
+    }
 
     private static bool MatchesCase(string name, PropertyCase convention) => convention switch
     {

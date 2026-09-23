@@ -58,7 +58,11 @@ public sealed class SchemaCatalog
             {
                 Name = System.IO.Path.GetFileName(path),
                 Path = System.IO.Path.GetFullPath(path),
-                Digest = Digest(content)
+                Digest = Digest(content),
+
+                // Held in memory so the catalog stays usable once the file is gone - a fork that
+                // materialised its DDL into a temp directory deletes it as soon as this returns.
+                Content = content
             });
 
             foreach (var declared in DdlColumnExtractor.Extract(content))

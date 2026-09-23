@@ -158,9 +158,38 @@ public class MigrationPlanAssemblyTests(ITestOutputHelper output) : NoDisposalNe
     }
 
     [RavenFact(RavenTestCategory.Quill)]
-    public void The_iteration_budget_scales_with_the_schema_and_is_capped()
+    public void Usage_keys_by_schema_so_two_tables_of_the_same_name_do_not_collide()
     {
-        Assert.Equal(36, MigrationSession.IterationBudgetFor(10));
-        Assert.Equal(256, MigrationSession.IterationBudgetFor(300));
+        var plan = new MigrationPlan();
+
+        var dbo = MigrationSamples.ValidOrders();
+        dbo.CollectionName = "DboOrders";
+        dbo.SourceTableSchema = "dbo";
+        plan.Upsert("DboOrders", null, dbo);
+
+        var sales = MigrationSamples.ValidOrders();
+        sales.CollectionName = "SalesOrders";
+        sales.SourceTableSchema = "sales";
+        plan.Upsert("SalesOrders", null, sales);
+
+        var usage = plan.TableUsage();
+
+        Assert.Equal("DboOrders", Assert.Single(usage["dbo.orders"]).Collection);
+        Assert.Equal("SalesOrders", Assert.Single(usage["sales.orders"]).Collection);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void An_embedded_table_without_a_schema_is_keyed_under_its_root()
+    {
+        var plan = new MigrationPlan();
+        var orders = MigrationSamples.ValidOrders();
+        var lines = MigrationSamples.ValidLines();
+        lines.SourceTableSchema = null;
+        orders.EmbeddedTables = [lines];
+        plan.Upsert("Orders", null, orders);
+
+        var usage = plan.TableUsage();
+
+        Assert.Equal(TableUseKind.Embedded, Assert.Single(usage["public.order_lines"]).Kind);
     }
 }

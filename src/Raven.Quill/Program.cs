@@ -13,7 +13,6 @@ using Polly;
 using Raven.Quill.Agents;
 using Raven.Quill.AiHelper;
 using Raven.Quill.AiHelper.Migration;
-using Raven.Quill.AiHelper.Migration.Agent;
 using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Auth;
 using Raven.Quill.Embed;
@@ -250,8 +249,6 @@ builder.Services.AddHttpClient<IAiHelperClient, AiHelperInternalClient>(static (
     });
 
 builder.Services.AddSingleton<MigrationPlanStore>();
-builder.Services.AddSingleton<MigrationAgentInstaller>();
-builder.Services.AddSingleton<MigrationConnectionStringResolver>();
 builder.Services.AddSingleton<IMigrationClient, LocalMigrationClient>();
 builder.Services.AddScoped<MigrationService>();
 

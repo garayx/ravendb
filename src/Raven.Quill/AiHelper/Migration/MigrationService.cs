@@ -14,8 +14,7 @@ namespace Raven.Quill.AiHelper.Migration;
 public sealed class MigrationService(
     IDocumentStore store,
     IMigrationClient client,
-    IAiHelperClient aiClient,
-    MigrationConnectionStringResolver connectionStrings)
+    IAiHelperClient aiClient)
 {
     /// <summary>
     /// The opening message from the design: the agent groups the tables and explains itself, and
@@ -26,7 +25,11 @@ public sealed class MigrationService(
         "(and the tables they include). Explain briefly the reasoning and what sort of agents and " +
         "behaviours this allows.";
 
-    public sealed record Refusal(string Message, bool ConsentRequired = false);
+    /// <summary>
+    /// Why a request was turned away. <see cref="Status"/> is set only when the AI service is the
+    /// reason, so the endpoint can tell "you have not consented" apart from "the service is down".
+    /// </summary>
+    public sealed record Refusal(string Message, AiHelperStatus? Status = null);
 
     public async Task<Refusal?> StartAsync(
         MigrationStartRequest request,
@@ -41,20 +44,9 @@ public sealed class MigrationService(
         if (consent is not null)
             return consent;
 
-        string connectionStringName;
-        try
-        {
-            connectionStringName = await connectionStrings.ResolveAsync(request.AiConnectionStringName, token);
-        }
-        catch (InvalidOperationException e)
-        {
-            return new Refusal(e.Message);
-        }
-
         var prompt = string.IsNullOrWhiteSpace(request.Prompt) ? DefaultStartPrompt : request.Prompt!;
 
-        await client.StartAsync(
-            new MigrationStartCommand(request.Slug, schema!, prompt, connectionStringName), onFrame, token);
+        await client.StartAsync(new MigrationStartCommand(request.Slug, schema!, prompt), onFrame, token);
 
         return null;
     }
@@ -81,19 +73,8 @@ public sealed class MigrationService(
         if (owner is not null && string.Equals(owner.Slug, request.Slug, StringComparison.OrdinalIgnoreCase) == false)
             return new Refusal("that conversation belongs to a different app");
 
-        string connectionStringName;
-        try
-        {
-            connectionStringName = await connectionStrings.ResolveAsync(requested: null, token);
-        }
-        catch (InvalidOperationException e)
-        {
-            return new Refusal(e.Message);
-        }
-
         await client.AskAsync(
-            new MigrationAskCommand(request.Slug, request.ConversationId, schema!, request.Prompt, connectionStringName),
-            onFrame, token);
+            new MigrationAskCommand(request.Slug, request.ConversationId, schema!, request.Prompt), onFrame, token);
 
         return null;
     }
@@ -106,24 +87,20 @@ public sealed class MigrationService(
         if (string.IsNullOrWhiteSpace(request.InputKey))
             return new Refusal("inputKey is required");
 
+        // The branch validates against the discovered schema, same as the session it came from,
+        // rather than against DDL read back off the checkpoint.
+        var (schema, refusal) = await ResolveSchemaAsync(request.Slug, selected: null, token);
+        if (refusal is not null)
+            return refusal;
+
         var consent = await RequireConsentAsync(token);
         if (consent is not null)
             return consent;
 
-        string connectionStringName;
-        try
-        {
-            connectionStringName = await connectionStrings.ResolveAsync(requested: null, token);
-        }
-        catch (InvalidOperationException e)
-        {
-            return new Refusal(e.Message);
-        }
-
         var branch = string.IsNullOrWhiteSpace(request.Branch) ? "branch" : request.Branch;
 
         await client.ForkAsync(
-            new MigrationForkCommand(request.Slug, request.InputKey, branch, connectionStringName), onFrame, token);
+            new MigrationForkCommand(request.Slug, schema!, request.InputKey, branch), onFrame, token);
 
         return null;
     }
@@ -154,9 +131,8 @@ public sealed class MigrationService(
         if (snapshot.Collections.Length == 0)
             return (null, new Refusal("the plan has no collections yet"));
 
-        WizardState? state;
-        using (var session = store.OpenAsyncSession())
-            state = await session.LoadAsync<WizardState>(WizardState.DocumentIdFor(request.Slug), token);
+        using var session = store.OpenAsyncSession();
+        var state = await session.LoadAsync<WizardState>(WizardState.DocumentIdFor(request.Slug), token);
 
         if (state?.LastDiscoveredSchema is null)
             return (null, new Refusal("no discovered schema found; call /api/setup/discover first"));
@@ -175,16 +151,9 @@ public sealed class MigrationService(
 
         var unmapped = PlanToCdcConfiguration.UnmappedTables(configuration, state.LastDiscoveredSchema);
 
-        using (var session = store.OpenAsyncSession())
-        {
-            var toUpdate = await session.LoadAsync<WizardState>(WizardState.DocumentIdFor(request.Slug), token);
-            if (toUpdate is not null)
-            {
-                toUpdate.LastMapConfiguration = configuration;
-                toUpdate.LastMapAt = DateTime.UtcNow;
-                await session.SaveChangesAsync(token);
-            }
-        }
+        state.LastMapConfiguration = configuration;
+        state.LastMapAt = DateTime.UtcNow;
+        await session.SaveChangesAsync(token);
 
         return (new MigrationApplyResponse(configuration, unmapped, []), null);
     }
@@ -222,8 +191,11 @@ public sealed class MigrationService(
     {
         var status = await aiClient.CheckConsentAsync(token);
 
-        return status == AiHelperStatus.Success
-            ? null
-            : new Refusal("consent to the RavenDB AI service is required", ConsentRequired: true);
+        if (status == AiHelperStatus.Success)
+            return null;
+
+        return status.ServiceAnswered()
+            ? new Refusal("consent to the RavenDB AI service is required", status)
+            : new Refusal("The AI service could not be reached.", status);
     }
 }

@@ -17,8 +17,6 @@ public sealed class PlanCheckpoint
 
     public string AgentIdentifier { get; set; } = string.Empty;
 
-    public int SystemPromptVersion { get; set; }
-
     public string? SourceConversationId { get; set; }
 
     public DateTime CreatedAt { get; set; }
@@ -34,18 +32,16 @@ public sealed class PlanCheckpoint
     public string ConversationIdFor(string branch) => $"MigrationChats/{InputKey}/{branch}";
 
     /// <summary>
-    /// Deterministic: the same agent, prompt version, schema files and prompts produce the same key
-    /// on any machine. Changing any of them invalidates the checkpoint rather than resuming against it.
+    /// Deterministic: the same agent, schema files and prompts produce the same key on any machine.
+    /// Changing any of them invalidates the checkpoint rather than resuming against it.
     /// </summary>
     public static string ComputeInputKey(
         string agentIdentifier,
-        int systemPromptVersion,
         IEnumerable<SchemaFile> files,
         IEnumerable<string> prompts)
     {
         var sb = new StringBuilder()
-            .Append(agentIdentifier).Append('\n')
-            .Append(systemPromptVersion).Append('\n');
+            .Append(agentIdentifier).Append('\n');
 
         foreach (var file in files.OrderBy(f => f.Name, StringComparer.Ordinal))
             sb.Append(file.Name).Append('\t').Append(file.Digest).Append('\n');

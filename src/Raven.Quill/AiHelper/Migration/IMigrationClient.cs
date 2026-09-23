@@ -26,18 +26,16 @@ public interface IMigrationClient
 public sealed record MigrationStartCommand(
     string Slug,
     CdcSinkSourceSchema Schema,
-    string Prompt,
-    string AiConnectionStringName);
+    string Prompt);
 
 public sealed record MigrationAskCommand(
     string Slug,
     string ConversationId,
     CdcSinkSourceSchema Schema,
-    string Prompt,
-    string AiConnectionStringName);
+    string Prompt);
 
 public sealed record MigrationForkCommand(
     string Slug,
+    CdcSinkSourceSchema Schema,
     string InputKey,
-    string Branch,
-    string AiConnectionStringName);
+    string Branch);

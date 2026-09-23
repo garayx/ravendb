@@ -57,10 +57,9 @@ public sealed class MigrationSession
         IPlanChannel channel,
         string slug,
         SchemaCatalog schema,
-        string conversationId = "MigrationChats/",
-        int? maxModelIterationsPerCall = null)
+        string conversationId = "MigrationChats/")
     {
-        var chat = OpenConversation(store, conversationId, maxModelIterationsPerCall);
+        var chat = OpenConversation(store, conversationId);
 
         return new MigrationSession(store, plans, channel, chat, slug, new MigrationPlan(), schema);
     }
@@ -71,9 +70,8 @@ public sealed class MigrationSession
         IPlanChannel channel,
         string slug,
         IEnumerable<string> ddlPaths,
-        string conversationId = "MigrationChats/",
-        int? maxModelIterationsPerCall = null) =>
-        Start(store, plans, channel, slug, SchemaCatalog.FromFiles(ddlPaths), conversationId, maxModelIterationsPerCall);
+        string conversationId = "MigrationChats/") =>
+        Start(store, plans, channel, slug, SchemaCatalog.FromFiles(ddlPaths), conversationId);
 
     /// <summary>
     /// Continue an existing conversation, rehydrating everything it has already registered. Without
@@ -87,10 +85,9 @@ public sealed class MigrationSession
         string slug,
         SchemaCatalog schema,
         string conversationId,
-        int? maxModelIterationsPerCall = null,
         CancellationToken token = default)
     {
-        var session = Start(store, plans, channel, slug, schema, conversationId, maxModelIterationsPerCall);
+        var session = Start(store, plans, channel, slug, schema, conversationId);
         var state = await plans.LoadAsync(conversationId, token);
 
         if (state is not null)
@@ -145,7 +142,7 @@ public sealed class MigrationSession
     {
         _chat.Handle(SchemaMigrationAgentDefinition.ProposePlan, async (ProposePlanArgs args) =>
         {
-            Plan.SetProposal(JsonSerializer.SerializeToElement(args, Json.Options));
+            Plan.SetProposal(JsonSerializer.SerializeToElement(args, JsonHelper.Options));
             _channel.ProposalRegistered(args);
             await PersistAsync(_turnToken);
 
@@ -262,7 +259,6 @@ public sealed class MigrationSession
     /// </summary>
     public string InputKey() => PlanCheckpoint.ComputeInputKey(
         SchemaMigrationAgentDefinition.Identifier,
-        SchemaMigrationAgentDefinition.SystemPromptVersion,
         Schema.Files,
         _prompts);
 
@@ -279,7 +275,6 @@ public sealed class MigrationSession
             Id = PlanCheckpoint.DocumentId(inputKey),
             InputKey = inputKey,
             AgentIdentifier = SchemaMigrationAgentDefinition.Identifier,
-            SystemPromptVersion = SchemaMigrationAgentDefinition.SystemPromptVersion,
             SourceConversationId = ConversationId,
             CreatedAt = DateTime.UtcNow,
             Schema = Schema.Files,
@@ -334,18 +329,9 @@ public sealed class MigrationSession
         string slug,
         PlanCheckpoint checkpoint,
         string branch,
-        int? maxModelIterationsPerCall = null)
+        SchemaCatalog? schema = null)
     {
-        if (checkpoint.SystemPromptVersion != SchemaMigrationAgentDefinition.SystemPromptVersion)
-        {
-            throw new InvalidOperationException(
-                $"Checkpoint {checkpoint.InputKey} was taken against system prompt v" +
-                $"{checkpoint.SystemPromptVersion}; this build is v" +
-                $"{SchemaMigrationAgentDefinition.SystemPromptVersion}. Re-run the analysis instead " +
-                "of resuming against guidance the model was never given.");
-        }
-
-        var chat = OpenConversation(store, checkpoint.ConversationIdFor(branch), maxModelIterationsPerCall);
+        var chat = OpenConversation(store, checkpoint.ConversationIdFor(branch));
 
         // The files are already in the database. Copy them into this turn rather than shipping
         // them from the client again.
@@ -358,11 +344,10 @@ public sealed class MigrationSession
                 SchemaMigrationAgentDefinition.ProposePlan, checkpoint.ProposalJson);
         }
 
-        // Local schema files are needed for validation. Prefer the recorded paths; if they are
-        // gone, write the checkpoint's attachments to a temp directory instead.
-        var catalog = checkpoint.Schema.All(f => string.IsNullOrEmpty(f.Path) == false && File.Exists(f.Path))
-            ? SchemaCatalog.FromFiles(checkpoint.Schema.Select(f => f.Path!))
-            : SchemaCatalog.FromFiles(MaterialiseAttachments(store, checkpoint));
+        // Validation needs the schema facts. A caller that still holds them passes them in, which
+        // keeps the branch as exact as the session it came from; only a caller with nothing left
+        // falls back to reading the DDL back off the checkpoint.
+        var catalog = schema ?? CatalogFromCheckpoint(store, checkpoint);
 
         var session = new MigrationSession(store, plans, channel, chat, slug, new MigrationPlan(), catalog);
         session._prompts.AddRange(checkpoint.Prompts);
@@ -373,47 +358,52 @@ public sealed class MigrationSession
         return session;
     }
 
-    private static IAiConversationOperations OpenConversation(
-        IDocumentStore store,
-        string conversationId,
-        int? maxModelIterationsPerCall) =>
+    private static IAiConversationOperations OpenConversation(IDocumentStore store, string conversationId) =>
         store.AI.Conversation(
             agentId: SchemaMigrationAgentDefinition.Identifier,
             conversationId: conversationId,
             creationOptions: new AiConversationCreationOptions
             {
                 // A planning session is worked on over days, not minutes.
-                ExpirationInSec = (int)ConversationLifetime.TotalSeconds,
-
-                // One add_collection per collection plus a retry apiece, so the ceiling has to
-                // scale with the schema rather than sit at the agent's conservative default.
-                MaxModelIterationsPerCall = maxModelIterationsPerCall
+                ExpirationInSec = (int)ConversationLifetime.TotalSeconds
             });
 
     /// <summary>
-    /// The iteration budget for a turn that emits one add_collection per collection, with room for
-    /// a validation rejection and retry on each, plus the closing reply.
+    /// Last resort for a fork whose caller no longer has the schema: write the checkpoint's DDL
+    /// attachments out, index them, and delete them again. The facts this recovers are only as good
+    /// as the DDL parses, so a caller that can pass the discovered schema should.
     /// </summary>
-    public static int IterationBudgetFor(int tableCount) => Math.Min(256, (2 * tableCount) + 16);
-
-    private static List<string> MaterialiseAttachments(IDocumentStore store, PlanCheckpoint checkpoint)
+    private static SchemaCatalog CatalogFromCheckpoint(IDocumentStore store, PlanCheckpoint checkpoint)
     {
-        var dir = Directory.CreateTempSubdirectory("rvn-migration-").FullName;
-        var paths = new List<string>();
+        if (checkpoint.Schema.All(f => string.IsNullOrEmpty(f.Path) == false && File.Exists(f.Path)))
+            return SchemaCatalog.FromFiles(checkpoint.Schema.Select(f => f.Path!));
 
-        using var session = store.OpenSession();
+        var dir = Directory.CreateTempSubdirectory("rvn-migration-");
 
-        foreach (var file in checkpoint.Schema)
+        try
         {
-            using var attachment = session.Advanced.Attachments.Get(checkpoint.Id, file.Name);
-            var path = Path.Combine(dir, file.Name);
+            var paths = new List<string>();
 
-            using (var target = File.Create(path))
-                attachment.Stream.CopyTo(target);
+            using (var session = store.OpenSession())
+            {
+                foreach (var file in checkpoint.Schema)
+                {
+                    using var attachment = session.Advanced.Attachments.Get(checkpoint.Id, file.Name);
+                    var path = Path.Combine(dir.FullName, file.Name);
 
-            paths.Add(path);
+                    using (var target = File.Create(path))
+                        attachment.Stream.CopyTo(target);
+
+                    paths.Add(path);
+                }
+            }
+
+            return SchemaCatalog.FromFiles(paths);
         }
-
-        return paths;
+        finally
+        {
+            // The catalog holds its index in memory, so the files have done their job.
+            dir.Delete(recursive: true);
+        }
     }
 }

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Raven.Quill.AiHelper.Migration.Planning;
 
-public static class Json
+internal static class JsonHelper
 {
     public static readonly JsonSerializerOptions Options = new()
     {

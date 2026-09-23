@@ -6,37 +6,33 @@ using Raven.Quill.AiHelper.Migration.Planning;
 namespace Raven.Quill.AiHelper.Migration.Agent;
 
 /// <summary>
-/// Creates the "schema-migration-planner" agent: reads relational DDL from conversation
+/// Creates the schema migration planner agent: reads relational DDL from conversation
 /// attachments and emits CDC Sink table configurations through action tools.
 /// </summary>
 public static class SchemaMigrationAgentDefinition
 {
-    public const string Identifier = "schema-migration-planner";
+    public const string Identifier = "quill-schema-migration-planner-gpt-5-mini-ai-agent";
 
-    /// <summary>
-    /// Bump this whenever SystemPrompt changes. It is part of the checkpoint input key, so an
-    /// edit to the prompt invalidates stored proposals instead of resuming against stale guidance.
-    /// </summary>
-    public const int SystemPromptVersion = 1;
+    public const string ConnectionStringName = "quill-open-ai-gpt-5-mini";
 
     public const string ProposePlan = "propose_plan";
     public const string AddCollection = "add_collection";
     public const string RemoveCollection = "remove_collection";
     public const string SetConventions = "set_conventions";
 
-    public static async Task CreateOrUpdateAsync(IDocumentStore store, string connectionStringName, CancellationToken token = default)
+    public static async Task CreateOrUpdateAsync(IDocumentStore store, CancellationToken token = default)
     {
         var agent = new AiAgentConfiguration(
-            name: "Schema Migration Planner",
-            connectionStringName: connectionStringName,
+            name: "QuillSchemaMigrationPlannerGpt5MiniAiAgent",
+            connectionStringName: ConnectionStringName,
             systemPrompt: SystemPrompt)
         {
             Identifier = Identifier,
 
-            // Turn two emits one add_collection per collection plus the reply. This is only the
-            // floor, for a caller that says nothing; a session raises it to suit the schema in
-            // hand through AiConversationCreationOptions.
-            MaxModelIterationsPerCall = 64,
+            // A turn emits one add_collection per collection plus a retry apiece, so the ceiling
+            // has to clear the whole schema. It only exists to stop a runaway loop, so it is set
+            // well above anything a real plan needs rather than computed per conversation.
+            MaxModelIterationsPerCall = 256,
 
             ChatTrimming = new AiAgentChatTrimmingConfiguration(
                 new AiAgentSummarizationByTokens
@@ -60,7 +56,7 @@ public static class SchemaMigrationAgentDefinition
                 // later, "why is Region copied onto the order?" has an answer.
                 new AiAgentHistoryConfiguration()),
 
-            SampleObject = Json.Pretty(new MigrationReply
+            SampleObject = JsonHelper.Pretty(new MigrationReply
             {
                 Reply = "Explain the modelling decisions and their trade-offs. Do not repeat configuration JSON.",
                 Gaps = new[] { "something the user asked for that the source schema cannot express" },
@@ -77,7 +73,7 @@ public static class SchemaMigrationAgentDefinition
                         "source tables into candidate collections and reports what each collection absorbs and " +
                         "how. Registers the proposal so it can be resumed or forked later. This tool does not " +
                         "create any mapping - nothing is configured until add_collection is called.",
-                    ParametersSampleObject = Json.Pretty(SampleProposal)
+                    ParametersSampleObject = JsonHelper.Pretty(SampleProposal)
                 },
                 new()
                 {
@@ -88,7 +84,7 @@ public static class SchemaMigrationAgentDefinition
                         "source schema and the agreed naming conventions; on rejection the response lists every " +
                         "error and nothing is registered, so fix them and call again. Registration is an upsert " +
                         "keyed by collection name: calling again for the same collection replaces its mapping.",
-                    ParametersSampleObject = Json.Pretty(SampleAddCollection)
+                    ParametersSampleObject = JsonHelper.Pretty(SampleAddCollection)
                 },
                 new()
                 {
@@ -96,7 +92,7 @@ public static class SchemaMigrationAgentDefinition
                     Description =
                         "Remove a previously registered collection from the plan, when the user drops it or " +
                         "when it turned out to belong inside another document.",
-                    ParametersSampleObject = Json.Pretty(new RemoveCollectionArgs
+                    ParametersSampleObject = JsonHelper.Pretty(new RemoveCollectionArgs
                     {
                         Collection = "Products",
                         Reason = "why it is being removed"
@@ -110,7 +106,7 @@ public static class SchemaMigrationAgentDefinition
                         "the user states or changes them. Changing conventions does not rewrite mappings that " +
                         "are already registered - the response tells you which collections must be re-emitted " +
                         "through add_collection, and validation will then reject anything that does not conform.",
-                    ParametersSampleObject = Json.Pretty(new SetConventionsArgs
+                    ParametersSampleObject = JsonHelper.Pretty(new SetConventionsArgs
                     {
                         PropertyCase = PropertyCase.SnakeCase,
                         PropertyLanguage = "Spanish",
@@ -214,7 +210,7 @@ public static class SchemaMigrationAgentDefinition
         Enables = new[] { "an agent that can answer questions about an order without a join" }
     };
 
-    internal const string SystemPrompt = """
+    private const string SystemPrompt = """
         You are a relational-to-document migration architect. The user attaches the DDL of a
         relational schema, one file per table. You decide how those tables become RavenDB
         documents, and you emit that decision as CDC Sink table configurations through your tools.

@@ -281,8 +281,8 @@ public class MigrationPlanValidatorTests(ITestOutputHelper output) : NoDisposalN
 
         Assert.True(result.Ok);
         Assert.Contains(
-            "table 'order_lines' is also used as: embedded in Invoices. Embedding the same rows in more " +
-            "than one document means more than one copy to keep consistent - intended?",
+            "table 'public.order_lines' is also used as: embedded in Invoices. Embedding the same rows in " +
+            "more than one document means more than one copy to keep consistent - intended?",
             result.Warnings);
     }
 

@@ -7,8 +7,7 @@ namespace Raven.Quill.Contracts;
 public sealed record MigrationStartRequest(
     string Slug,
     SelectedSourceTable[]? SelectedTables = null,
-    string? Prompt = null,
-    string? AiConnectionStringName = null);
+    string? Prompt = null);
 
 /// <summary>One more turn in an existing planning session.</summary>
 public sealed record MigrationAskRequest(string Slug, string ConversationId, string Prompt);
