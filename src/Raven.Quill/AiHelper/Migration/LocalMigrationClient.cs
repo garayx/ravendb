@@ -53,14 +53,20 @@ public sealed class LocalMigrationClient(IDocumentStore store, MigrationPlanStor
                 store, plans, channel, command.Slug, checkpoint, command.Branch,
                 SchemaCatalog.FromDiscoveredSchema(command.Schema));
 
+            // A fork runs no turn, so nothing else would record who owns the new conversation -
+            // and an unowned conversation is one anybody can carry on.
+            await session.PersistAsync(token);
+
             return (session, new MigrationReply());
         });
 
-    public async Task<MigrationPlanSnapshot?> GetAsync(string conversationId, CancellationToken token)
+    public async Task<MigrationPlanSnapshot?> GetAsync(string slug, string conversationId, CancellationToken token)
     {
         var state = await plans.LoadAsync(conversationId, token);
 
-        if (state is null)
+        // Plans for every app share one database, so a conversation id alone is not an entitlement
+        // to read one. A mismatch reads as "no such plan" rather than admitting the plan exists.
+        if (state is null || string.Equals(state.Slug, slug, StringComparison.OrdinalIgnoreCase) == false)
             return null;
 
         return new MigrationPlanSnapshot(

@@ -20,7 +20,8 @@ public interface IMigrationClient
 
     Task ForkAsync(MigrationForkCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token);
 
-    Task<MigrationPlanSnapshot?> GetAsync(string conversationId, CancellationToken token);
+    /// <summary>The plan a conversation has registered, or null when no such plan belongs to <paramref name="slug"/>.</summary>
+    Task<MigrationPlanSnapshot?> GetAsync(string slug, string conversationId, CancellationToken token);
 }
 
 public sealed record MigrationStartCommand(

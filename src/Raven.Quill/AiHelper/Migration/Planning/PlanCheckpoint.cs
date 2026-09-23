@@ -17,6 +17,12 @@ public sealed class PlanCheckpoint
 
     public string AgentIdentifier { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The app whose schema this analysis was taken of. A fork copies the checkpoint's DDL and its
+    /// proposal into a new conversation, so it has to be refused when it belongs to another app.
+    /// </summary>
+    public string Slug { get; set; } = string.Empty;
+
     public string? SourceConversationId { get; set; }
 
     public DateTime CreatedAt { get; set; }

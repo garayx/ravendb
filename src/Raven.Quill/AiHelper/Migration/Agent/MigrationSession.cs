@@ -246,7 +246,8 @@ public sealed class MigrationSession
         };
     }
 
-    private Task PersistAsync(CancellationToken token) =>
+    /// <summary>Publicly callable so a fork can record its owner before any turn has run.</summary>
+    public Task PersistAsync(CancellationToken token) =>
         _plans.SaveAsync(_slug, ConversationId, Plan, InputKey(), _prompts, token);
 
     // -----------------------------------------------------------------------
@@ -275,6 +276,7 @@ public sealed class MigrationSession
             Id = PlanCheckpoint.DocumentId(inputKey),
             InputKey = inputKey,
             AgentIdentifier = SchemaMigrationAgentDefinition.Identifier,
+            Slug = _slug,
             SourceConversationId = ConversationId,
             CreatedAt = DateTime.UtcNow,
             Schema = Schema.Files,

@@ -1,5 +1,6 @@
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
+using Raven.Quill.AiHelper.Migration.Agent;
 using Raven.Quill.Contracts;
 using Raven.Quill.Endpoints;
 using Raven.Quill.Wizard;
@@ -69,9 +70,11 @@ public sealed class MigrationService(
         if (consent is not null)
             return consent;
 
-        var owner = await client.GetAsync(request.ConversationId, token);
-        if (owner is not null && string.Equals(owner.Slug, request.Slug, StringComparison.OrdinalIgnoreCase) == false)
-            return new Refusal("that conversation belongs to a different app");
+        // Every session persists its plan before this can be called - start does it at the end of
+        // the opening turn, fork does it as it branches - so nothing found here means the
+        // conversation is not this app's to continue, whether or not it exists at all.
+        if (await client.GetAsync(request.Slug, request.ConversationId, token) is null)
+            return new Refusal("no planning session found for that conversation");
 
         await client.AskAsync(
             new MigrationAskCommand(request.Slug, request.ConversationId, schema!, request.Prompt), onFrame, token);
@@ -97,6 +100,22 @@ public sealed class MigrationService(
         if (consent is not null)
             return consent;
 
+        // Checked here rather than in the client, because forking copies the checkpoint's DDL and
+        // its proposal into the new conversation - by the time the client has it, another app's
+        // analysis has already been handed over.
+        var checkpoint = await MigrationSession.FindCheckpointAsync(store, request.InputKey, token);
+
+        if (checkpoint is null)
+            return new Refusal($"no stored analysis found for input key '{request.InputKey}'");
+
+        // Checkpoints written before checkpoints had an owner are treated as unowned rather than
+        // stranded.
+        if (string.IsNullOrEmpty(checkpoint.Slug) == false &&
+            string.Equals(checkpoint.Slug, request.Slug, StringComparison.OrdinalIgnoreCase) == false)
+        {
+            return new Refusal("that analysis belongs to a different app");
+        }
+
         var branch = string.IsNullOrWhiteSpace(request.Branch) ? "branch" : request.Branch;
 
         await client.ForkAsync(
@@ -105,8 +124,8 @@ public sealed class MigrationService(
         return null;
     }
 
-    public Task<MigrationPlanSnapshot?> GetAsync(string conversationId, CancellationToken token) =>
-        client.GetAsync(conversationId, token);
+    public Task<MigrationPlanSnapshot?> GetAsync(string slug, string conversationId, CancellationToken token) =>
+        client.GetAsync(slug, conversationId, token);
 
     /// <summary>
     /// Turns the registered plan into the configuration the wizard carries on with. The per-call
@@ -121,12 +140,9 @@ public sealed class MigrationService(
         if (string.IsNullOrWhiteSpace(request.ConversationId))
             return (null, new Refusal("conversationId is required"));
 
-        var snapshot = await client.GetAsync(request.ConversationId, token);
+        var snapshot = await client.GetAsync(request.Slug, request.ConversationId, token);
         if (snapshot is null)
             return (null, new Refusal("no plan found for that conversation"));
-
-        if (string.Equals(snapshot.Slug, request.Slug, StringComparison.OrdinalIgnoreCase) == false)
-            return (null, new Refusal("that conversation belongs to a different app"));
 
         if (snapshot.Collections.Length == 0)
             return (null, new Refusal("the plan has no collections yet"));

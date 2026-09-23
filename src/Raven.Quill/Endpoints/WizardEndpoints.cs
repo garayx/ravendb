@@ -89,7 +89,8 @@ public static class WizardEndpoints
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest);
         group.MapGet("/migration/{**conversationId}", GetMigrationPlanAsync)
             .WithName("setup.migrationPlan")
-            .WithDescription("The plan a session has registered so far, for reload and resume.")
+            .WithDescription("The plan a session has registered so far, for reload and resume. Requires the owning app's slug.")
+            .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<MigrationPlanSnapshot>()
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound);
         group.MapPost("/test-mapping", TestMappingAsync)
@@ -526,10 +527,14 @@ public static class WizardEndpoints
 
     private static async Task<IResult> GetMigrationPlanAsync(
         string conversationId,
+        string? slug,
         MigrationService service,
         CancellationToken ct)
     {
-        var snapshot = await service.GetAsync(conversationId, ct);
+        if (string.IsNullOrWhiteSpace(slug))
+            return Results.BadRequest(new ApiErrorResponse("slug is required"));
+
+        var snapshot = await service.GetAsync(slug, conversationId, ct);
 
         return snapshot is null
             ? Results.NotFound(new ApiErrorResponse($"no plan found for conversation '{conversationId}'"))
