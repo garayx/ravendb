@@ -1,5 +1,6 @@
 using Raven.Client.Documents.Conventions;
 using Raven.Quill.Agents;
+using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Channels;
 using Raven.Quill.Discord;
 using Raven.Quill.Metrics;
@@ -24,5 +25,7 @@ public static class QuillConventions
         : type == typeof(DiscordBotReservation) ? "@discord-bots"
         : type == typeof(ConversationPreview) ? ConversationPreview.Collection // "@ConversationPreviews"
         : type == typeof(AgentActionBindings) ? "@agent-actions"
+        : type == typeof(MigrationPlanState) ? MigrationPlanState.Collection // "@migration-plans"
+        : type == typeof(PlanCheckpoint) ? PlanCheckpoint.Collection // "@migration-checkpoints"
         : DocumentConventions.DefaultGetCollectionName(type);
 }

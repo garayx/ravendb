@@ -1,27 +1,42 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
+using Raven.Client.Documents.Operations.CdcSink.Schema;
+using Raven.Quill.AiHelper.Migration.Schema;
 
 namespace Raven.Quill.AiHelper.Migration.Planning;
 
 /// <summary>
-/// The table and column facts the validator holds the model to. Built from DDL files on disk;
-/// a catalog that could not parse a table answers <see cref="Knows"/> with false, which makes the
-/// column check skip rather than reject a column it simply failed to read.
+/// The table and column facts the validator holds the model to.
+///
+/// Built either from DDL files on disk or straight from a discovered schema. The discovery path is
+/// exact by construction - it indexes the same data it renders into the DDL the model reads - so
+/// the two can never disagree. The file path goes through <see cref="DdlColumnExtractor"/>, and a
+/// table it could not read is simply unknown, which makes the column check skip rather than reject
+/// a column it only failed to parse.
 /// </summary>
 public sealed class SchemaCatalog
 {
-    private static readonly Regex CreateTable = new(
-        @"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?<name>(?:\[[^\]]+\]|""[^""]+""|`[^`]+`|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:\[[^\]]+\]|""[^""]+""|`[^`]+`|[A-Za-z_][\w$]*))*)\s*\(",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    /// <summary>
+    /// Columns are kept in the order the source declares them - that is the order the model reads
+    /// them in, and it makes the "Known columns" list in a rejection stable.
+    /// </summary>
+    private sealed record TableEntry(string Schema, string Name)
+    {
+        public List<string> Columns { get; } = [];
 
-    private static readonly string[] ConstraintLeaders =
-    [
-        "PRIMARY", "FOREIGN", "CONSTRAINT", "UNIQUE", "CHECK", "KEY", "INDEX", "EXCLUDE", "PERIOD"
-    ];
+        public HashSet<string> Lookup { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly Dictionary<string, HashSet<string>> _columnsByTable =
-        new(StringComparer.OrdinalIgnoreCase);
+        public string Qualified => string.IsNullOrEmpty(Schema) ? Name : $"{Schema}.{Name}";
+
+        public void Add(string column)
+        {
+            if (Lookup.Add(column))
+                Columns.Add(column);
+        }
+    }
+
+    private readonly Dictionary<string, TableEntry> _byQualified = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<TableEntry>> _byBare = new(StringComparer.OrdinalIgnoreCase);
 
     private SchemaCatalog(List<SchemaFile> files)
     {
@@ -46,172 +61,112 @@ public sealed class SchemaCatalog
                 Digest = Digest(content)
             });
 
-            catalog.Index(content);
+            foreach (var declared in DdlColumnExtractor.Extract(content))
+                catalog.Add(declared.Schema, declared.Name, declared.Columns);
         }
 
         return catalog;
     }
 
-    public bool Knows(string? table) =>
-        string.IsNullOrWhiteSpace(table) == false && _columnsByTable.ContainsKey(Bare(table));
-
-    public bool HasColumn(string? table, string? column)
+    /// <summary>
+    /// Build from what discovery already found, rendering one DDL file per table for the model to
+    /// read. No parser is involved: the indexed columns are the discovered columns.
+    /// </summary>
+    public static SchemaCatalog FromDiscoveredSchema(CdcSinkSourceSchema schema)
     {
-        if (string.IsNullOrWhiteSpace(table) || string.IsNullOrWhiteSpace(column))
-            return false;
+        var files = new List<SchemaFile>();
+        var catalog = new SchemaCatalog(files);
 
-        return _columnsByTable.TryGetValue(Bare(table), out var columns) && columns.Contains(column.Trim());
+        foreach (var table in schema.Tables ?? [])
+        {
+            var content = DdlRenderer.Render(table);
+
+            files.Add(new SchemaFile
+            {
+                Name = DdlRenderer.FileNameFor(table),
+                Digest = Digest(content),
+                Content = content
+            });
+
+            catalog.Add(
+                table.SourceTableSchema ?? string.Empty,
+                table.SourceTableName ?? string.Empty,
+                (table.Columns ?? []).Select(c => c.Name).Where(n => string.IsNullOrWhiteSpace(n) == false).ToArray());
+        }
+
+        return catalog;
     }
 
-    public IReadOnlyCollection<string> Columns(string? table) =>
-        string.IsNullOrWhiteSpace(table) == false && _columnsByTable.TryGetValue(Bare(table), out var columns)
-            ? columns
+    /// <summary>True when the name resolves to exactly one table. An ambiguous bare name does not.</summary>
+    public bool Knows(string? table) => Resolve(table) is not null;
+
+    public bool HasColumn(string? table, string? column) =>
+        string.IsNullOrWhiteSpace(column) == false &&
+        Resolve(table) is { } entry &&
+        entry.Lookup.Contains(column.Trim());
+
+    public IReadOnlyList<string> Columns(string? table) =>
+        Resolve(table)?.Columns ?? (IReadOnlyList<string>)Array.Empty<string>();
+
+    /// <summary>A bare table name declared under more than one schema. The caller must qualify it.</summary>
+    public bool IsAmbiguous(string? table) =>
+        table is not null &&
+        Qualified(table) == false &&
+        _byBare.TryGetValue(Bare(table), out var entries) &&
+        entries.Count > 1;
+
+    public IReadOnlyList<string> Candidates(string? table) =>
+        table is not null && _byBare.TryGetValue(Bare(table), out var entries)
+            ? entries.Select(e => e.Qualified).ToArray()
             : Array.Empty<string>();
 
-    private void Index(string ddl)
+    private TableEntry? Resolve(string? table)
     {
-        foreach (Match match in CreateTable.Matches(ddl))
-        {
-            var table = Bare(match.Groups["name"].Value);
-            var body = ReadBalancedBody(ddl, match.Index + match.Length - 1);
+        if (string.IsNullOrWhiteSpace(table))
+            return null;
 
-            if (body is null)
-                continue;
+        if (Qualified(table) && _byQualified.TryGetValue(Normalise(table), out var qualified))
+            return qualified;
 
-            if (_columnsByTable.TryGetValue(table, out var columns) == false)
-                _columnsByTable[table] = columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var column in ColumnNames(body))
-                columns.Add(column);
-        }
-    }
-
-    private static IEnumerable<string> ColumnNames(string body)
-    {
-        foreach (var item in SplitTopLevel(body))
-        {
-            var trimmed = item.Trim();
-            if (trimmed.Length == 0)
-                continue;
-
-            var first = trimmed.Split([' ', '\t', '\r', '\n', '('], StringSplitOptions.RemoveEmptyEntries)
-                               .FirstOrDefault();
-
-            if (string.IsNullOrEmpty(first))
-                continue;
-
-            if (ConstraintLeaders.Contains(Unquote(first), StringComparer.OrdinalIgnoreCase))
-                continue;
-
-            yield return Unquote(first);
-        }
-    }
-
-    private static IEnumerable<string> SplitTopLevel(string body)
-    {
-        var depth = 0;
-        var start = 0;
-        char? quote = null;
-
-        for (var i = 0; i < body.Length; i++)
-        {
-            var c = body[i];
-
-            if (quote is not null)
-            {
-                if (c == quote)
-                    quote = null;
-                continue;
-            }
-
-            switch (c)
-            {
-                case '\'' or '"' or '`':
-                    quote = c;
-                    break;
-                case '[':
-                    quote = ']';
-                    break;
-                case '(':
-                    depth++;
-                    break;
-                case ')':
-                    depth--;
-                    break;
-                case ',' when depth == 0:
-                    yield return body[start..i];
-                    start = i + 1;
-                    break;
-            }
-        }
-
-        if (start < body.Length)
-            yield return body[start..];
-    }
-
-    private static string? ReadBalancedBody(string ddl, int openParenIndex)
-    {
-        var depth = 0;
-        char? quote = null;
-
-        for (var i = openParenIndex; i < ddl.Length; i++)
-        {
-            var c = ddl[i];
-
-            if (quote is not null)
-            {
-                if (c == quote)
-                    quote = null;
-                continue;
-            }
-
-            switch (c)
-            {
-                case '\'' or '"' or '`':
-                    quote = c;
-                    break;
-                case '[':
-                    quote = ']';
-                    break;
-                case '(':
-                    depth++;
-                    break;
-                case ')':
-                    depth--;
-                    if (depth == 0)
-                        return ddl[(openParenIndex + 1)..i];
-                    break;
-            }
-        }
+        if (_byBare.TryGetValue(Bare(table), out var entries) && entries.Count == 1)
+            return entries[0];
 
         return null;
     }
+
+    private void Add(string schema, string name, IReadOnlyCollection<string> columns)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        var key = string.IsNullOrEmpty(schema) ? name : $"{schema}.{name}";
+
+        if (_byQualified.TryGetValue(key, out var entry) == false)
+        {
+            entry = new TableEntry(schema, name);
+            _byQualified[key] = entry;
+
+            if (_byBare.TryGetValue(name, out var bare) == false)
+                _byBare[name] = bare = new List<TableEntry>();
+
+            bare.Add(entry);
+        }
+
+        foreach (var column in columns)
+            entry.Add(column.Trim());
+    }
+
+    private static bool Qualified(string table) => table.Contains('.');
+
+    private static string Normalise(string table) =>
+        string.Join('.', table.Split('.', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()));
 
     private static string Bare(string table)
     {
         var name = table.Trim();
         var lastSeparator = name.LastIndexOf('.');
 
-        if (lastSeparator >= 0)
-            name = name[(lastSeparator + 1)..];
-
-        return Unquote(name);
-    }
-
-    private static string Unquote(string value)
-    {
-        var trimmed = value.Trim();
-
-        if (trimmed.Length < 2)
-            return trimmed;
-
-        var first = trimmed[0];
-        var last = trimmed[^1];
-
-        if ((first == '[' && last == ']') || (first == '"' && last == '"') || (first == '`' && last == '`'))
-            return trimmed[1..^1].Trim();
-
-        return trimmed;
+        return lastSeparator >= 0 ? name[(lastSeparator + 1)..].Trim() : name;
     }
 
     private static string Digest(string content) =>

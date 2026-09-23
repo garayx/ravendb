@@ -24,7 +24,7 @@ public static class SchemaMigrationAgentDefinition
     public const string RemoveCollection = "remove_collection";
     public const string SetConventions = "set_conventions";
 
-    public static async Task CreateOrUpdateAsync(IDocumentStore store, string connectionStringName)
+    public static async Task CreateOrUpdateAsync(IDocumentStore store, string connectionStringName, CancellationToken token = default)
     {
         var agent = new AiAgentConfiguration(
             name: "Schema Migration Planner",
@@ -33,9 +33,10 @@ public static class SchemaMigrationAgentDefinition
         {
             Identifier = Identifier,
 
-            // Turn two emits one add_collection per collection plus the reply. Allow enough
-            // iterations for a handful of collections and a retry after a validation rejection.
-            MaxModelIterationsPerCall = 12,
+            // Turn two emits one add_collection per collection plus the reply. This is only the
+            // floor, for a caller that says nothing; a session raises it to suit the schema in
+            // hand through AiConversationCreationOptions.
+            MaxModelIterationsPerCall = 64,
 
             ChatTrimming = new AiAgentChatTrimmingConfiguration(
                 new AiAgentSummarizationByTokens
@@ -119,7 +120,7 @@ public static class SchemaMigrationAgentDefinition
             }
         };
 
-        await store.AI.CreateAgentAsync(agent);
+        await store.AI.CreateAgentAsync(agent, token);
     }
 
     // A worked example beats a schema. The model is shown a small but complete configuration
@@ -213,7 +214,7 @@ public static class SchemaMigrationAgentDefinition
         Enables = new[] { "an agent that can answer questions about an order without a join" }
     };
 
-    private const string SystemPrompt = """
+    internal const string SystemPrompt = """
         You are a relational-to-document migration architect. The user attaches the DDL of a
         relational schema, one file per table. You decide how those tables become RavenDB
         documents, and you emit that decision as CDC Sink table configurations through your tools.

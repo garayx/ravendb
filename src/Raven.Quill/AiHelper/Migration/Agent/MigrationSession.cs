@@ -12,10 +12,17 @@ namespace Raven.Quill.AiHelper.Migration.Agent;
 /// </summary>
 public sealed class MigrationSession
 {
+    private static readonly TimeSpan ConversationLifetime = TimeSpan.FromDays(30);
+
     private readonly IDocumentStore _store;
+    private readonly MigrationPlanStore _plans;
     private readonly IPlanChannel _channel;
     private readonly IAiConversationOperations _chat;
+    private readonly string _slug;
     private readonly List<string> _prompts = new();
+    private readonly List<Stream> _pendingAttachments = new();
+
+    private CancellationToken _turnToken;
 
     public MigrationPlan Plan { get; }
     public SchemaCatalog Schema { get; }
@@ -23,53 +30,88 @@ public sealed class MigrationSession
 
     private MigrationSession(
         IDocumentStore store,
+        MigrationPlanStore plans,
         IPlanChannel channel,
         IAiConversationOperations chat,
+        string slug,
         MigrationPlan plan,
         SchemaCatalog schema)
     {
         _store = store;
+        _plans = plans;
         _channel = channel;
         _chat = chat;
+        _slug = slug;
         Plan = plan;
         Schema = schema;
         RegisterHandlers();
     }
 
     /// <summary>
-    /// Start a session over a set of DDL files. Pass a conversationId prefix ending in '/' for a
-    /// new conversation, or a full ID to continue an existing one.
+    /// Start a session over a schema. Pass a conversationId prefix ending in '/' for a new
+    /// conversation, or a full ID to continue an existing one.
     /// </summary>
     public static MigrationSession Start(
         IDocumentStore store,
+        MigrationPlanStore plans,
         IPlanChannel channel,
-        IEnumerable<string> ddlPaths,
-        string conversationId = "MigrationChats/")
+        string slug,
+        SchemaCatalog schema,
+        string conversationId = "MigrationChats/",
+        int? maxModelIterationsPerCall = null)
     {
-        var schema = SchemaCatalog.FromFiles(ddlPaths);
+        var chat = OpenConversation(store, conversationId, maxModelIterationsPerCall);
 
-        var chat = store.AI.Conversation(
-            agentId: SchemaMigrationAgentDefinition.Identifier,
-            conversationId: conversationId,
-            creationOptions: new AiConversationCreationOptions
-            {
-                // A planning session is worked on over days, not minutes.
-                ExpirationInSec = (int)TimeSpan.FromDays(30).TotalSeconds
-            });
+        return new MigrationSession(store, plans, channel, chat, slug, new MigrationPlan(), schema);
+    }
 
-        return new MigrationSession(store, channel, chat, new MigrationPlan(), schema);
+    public static MigrationSession Start(
+        IDocumentStore store,
+        MigrationPlanStore plans,
+        IPlanChannel channel,
+        string slug,
+        IEnumerable<string> ddlPaths,
+        string conversationId = "MigrationChats/",
+        int? maxModelIterationsPerCall = null) =>
+        Start(store, plans, channel, slug, SchemaCatalog.FromFiles(ddlPaths), conversationId, maxModelIterationsPerCall);
+
+    /// <summary>
+    /// Continue an existing conversation, rehydrating everything it has already registered. Without
+    /// this a second request would drive the same conversation against an empty plan and re-register
+    /// collections the user can already see.
+    /// </summary>
+    public static async Task<MigrationSession> ResumeAsync(
+        IDocumentStore store,
+        MigrationPlanStore plans,
+        IPlanChannel channel,
+        string slug,
+        SchemaCatalog schema,
+        string conversationId,
+        int? maxModelIterationsPerCall = null,
+        CancellationToken token = default)
+    {
+        var session = Start(store, plans, channel, slug, schema, conversationId, maxModelIterationsPerCall);
+        var state = await plans.LoadAsync(conversationId, token);
+
+        if (state is not null)
+        {
+            session.Plan.Restore(state);
+            session._prompts.AddRange(state.Prompts);
+        }
+
+        return session;
     }
 
     /// <summary>
-    /// Attach the DDL files to the next turn. Attachments are scoped to a single turn and cleared
-    /// after RunAsync, which is fine here: the model summarises each file into the conversation
-    /// context on the first turn, and the summary is what later turns reason over.
+    /// Attach the DDL files to the next turn. Attachments are queued rather than read here, so the
+    /// streams stay open until the turn has run and are disposed by <see cref="AskAsync"/>.
     /// </summary>
     public void AttachSchema()
     {
         foreach (var file in Schema.Files)
         {
-            var stream = File.OpenRead(file.Path);
+            var stream = file.OpenRead();
+            _pendingAttachments.Add(stream);
             _chat.AddAttachment(file.Name, stream, "text/plain");
         }
     }
@@ -78,9 +120,21 @@ public sealed class MigrationSession
     {
         _prompts.Add(prompt);
         _chat.SetUserPrompt(prompt);
+        _turnToken = token;
 
-        var result = await _chat.RunAsync<MigrationReply>(token);
-        return result.Answer;
+        try
+        {
+            var result = await _chat.RunAsync<MigrationReply>(token);
+            await PersistAsync(token);
+            return result.Answer;
+        }
+        finally
+        {
+            foreach (var stream in _pendingAttachments)
+                stream.Dispose();
+
+            _pendingAttachments.Clear();
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -89,10 +143,11 @@ public sealed class MigrationSession
 
     private void RegisterHandlers()
     {
-        _chat.Handle(SchemaMigrationAgentDefinition.ProposePlan, (ProposePlanArgs args) =>
+        _chat.Handle(SchemaMigrationAgentDefinition.ProposePlan, async (ProposePlanArgs args) =>
         {
             Plan.SetProposal(JsonSerializer.SerializeToElement(args, Json.Options));
             _channel.ProposalRegistered(args);
+            await PersistAsync(_turnToken);
 
             return new ActionAck
             {
@@ -102,7 +157,7 @@ public sealed class MigrationSession
             };
         });
 
-        _chat.Handle(SchemaMigrationAgentDefinition.AddCollection, (AddCollectionArgs args) =>
+        _chat.Handle(SchemaMigrationAgentDefinition.AddCollection, async (AddCollectionArgs args) =>
         {
             var collection = args.Collection ?? args.Config?.CollectionName;
 
@@ -122,8 +177,9 @@ public sealed class MigrationSession
                 return ActionAck.Rejected(collection, validation.Errors, validation.Warnings);
             }
 
-            // Accepted: into the in-memory plan, and straight out to the user.
+            // Accepted: into the plan, persisted, and straight out to the user.
             var entry = Plan.Upsert(collection, args.Rationale, args.Config);
+            await PersistAsync(_turnToken);
             _channel.CollectionRegistered(entry, validation.Warnings);
 
             return new ActionAck
@@ -137,11 +193,14 @@ public sealed class MigrationSession
             };
         });
 
-        _chat.Handle(SchemaMigrationAgentDefinition.RemoveCollection, (RemoveCollectionArgs args) =>
+        _chat.Handle(SchemaMigrationAgentDefinition.RemoveCollection, async (RemoveCollectionArgs args) =>
         {
             var removed = Plan.Remove(args.Collection ?? string.Empty);
             if (removed)
+            {
+                await PersistAsync(_turnToken);
                 _channel.CollectionRemoved(args.Collection, args.Reason);
+            }
 
             return new ActionAck
             {
@@ -151,10 +210,11 @@ public sealed class MigrationSession
             };
         });
 
-        _chat.Handle(SchemaMigrationAgentDefinition.SetConventions, (SetConventionsArgs args) =>
+        _chat.Handle(SchemaMigrationAgentDefinition.SetConventions, async (SetConventionsArgs args) =>
         {
             var conventions = new NamingConventions(args.PropertyCase, args.PropertyLanguage, args.Notes);
             Plan.SetConventions(conventions);
+            await PersistAsync(_turnToken);
 
             // Conventions do not rewrite what is already registered - the model has to re-emit,
             // and validation now rejects anything that does not conform. Tell it exactly what is
@@ -188,6 +248,9 @@ public sealed class MigrationSession
             return Task.CompletedTask;
         };
     }
+
+    private Task PersistAsync(CancellationToken token) =>
+        _plans.SaveAsync(_slug, ConversationId, Plan, InputKey(), _prompts, token);
 
     // -----------------------------------------------------------------------
     // Checkpoint and fork
@@ -224,16 +287,28 @@ public sealed class MigrationSession
             ProposalJson = Plan.Proposal is { } p ? p.GetRawText() : null
         };
 
-        using var session = _store.OpenAsyncSession();
-        await session.StoreAsync(checkpoint, checkpoint.Id, token);
+        var streams = new List<Stream>();
 
-        foreach (var file in Schema.Files)
+        try
         {
-            session.Advanced.Attachments.Store(
-                checkpoint.Id, file.Name, File.OpenRead(file.Path), "text/plain");
+            using var session = _store.OpenAsyncSession();
+            await session.StoreAsync(checkpoint, checkpoint.Id, token);
+
+            foreach (var file in Schema.Files)
+            {
+                var stream = file.OpenRead();
+                streams.Add(stream);
+                session.Advanced.Attachments.Store(checkpoint.Id, file.Name, stream, "text/plain");
+            }
+
+            await session.SaveChangesAsync(token);
+        }
+        finally
+        {
+            foreach (var stream in streams)
+                stream.Dispose();
         }
 
-        await session.SaveChangesAsync(token);
         return checkpoint;
     }
 
@@ -254,9 +329,12 @@ public sealed class MigrationSession
     /// </summary>
     public static MigrationSession Fork(
         IDocumentStore store,
+        MigrationPlanStore plans,
         IPlanChannel channel,
+        string slug,
         PlanCheckpoint checkpoint,
-        string branch)
+        string branch,
+        int? maxModelIterationsPerCall = null)
     {
         if (checkpoint.SystemPromptVersion != SchemaMigrationAgentDefinition.SystemPromptVersion)
         {
@@ -267,13 +345,7 @@ public sealed class MigrationSession
                 "of resuming against guidance the model was never given.");
         }
 
-        var chat = store.AI.Conversation(
-            agentId: SchemaMigrationAgentDefinition.Identifier,
-            conversationId: checkpoint.ConversationIdFor(branch),
-            creationOptions: new AiConversationCreationOptions
-            {
-                ExpirationInSec = (int)TimeSpan.FromDays(30).TotalSeconds
-            });
+        var chat = OpenConversation(store, checkpoint.ConversationIdFor(branch), maxModelIterationsPerCall);
 
         // The files are already in the database. Copy them into this turn rather than shipping
         // them from the client again.
@@ -288,32 +360,60 @@ public sealed class MigrationSession
 
         // Local schema files are needed for validation. Prefer the recorded paths; if they are
         // gone, write the checkpoint's attachments to a temp directory instead.
-        var paths = checkpoint.Schema.Select(f => f.Path).ToArray();
-        var catalog = paths.All(File.Exists)
-            ? SchemaCatalog.FromFiles(paths)
+        var catalog = checkpoint.Schema.All(f => string.IsNullOrEmpty(f.Path) == false && File.Exists(f.Path))
+            ? SchemaCatalog.FromFiles(checkpoint.Schema.Select(f => f.Path!))
             : SchemaCatalog.FromFiles(MaterialiseAttachments(store, checkpoint));
 
-        var session = new MigrationSession(store, channel, chat, new MigrationPlan(), catalog);
+        var session = new MigrationSession(store, plans, channel, chat, slug, new MigrationPlan(), catalog);
         session._prompts.AddRange(checkpoint.Prompts);
 
-        if (string.IsNullOrWhiteSpace(checkpoint.ProposalJson) == false)
-            session.Plan.SetProposal(JsonDocument.Parse(checkpoint.ProposalJson).RootElement);
+        if (MigrationPlan.ParseProposal(checkpoint.ProposalJson) is { } proposal)
+            session.Plan.SetProposal(proposal);
 
         return session;
     }
 
-    private static IEnumerable<string> MaterialiseAttachments(IDocumentStore store, PlanCheckpoint checkpoint)
+    private static IAiConversationOperations OpenConversation(
+        IDocumentStore store,
+        string conversationId,
+        int? maxModelIterationsPerCall) =>
+        store.AI.Conversation(
+            agentId: SchemaMigrationAgentDefinition.Identifier,
+            conversationId: conversationId,
+            creationOptions: new AiConversationCreationOptions
+            {
+                // A planning session is worked on over days, not minutes.
+                ExpirationInSec = (int)ConversationLifetime.TotalSeconds,
+
+                // One add_collection per collection plus a retry apiece, so the ceiling has to
+                // scale with the schema rather than sit at the agent's conservative default.
+                MaxModelIterationsPerCall = maxModelIterationsPerCall
+            });
+
+    /// <summary>
+    /// The iteration budget for a turn that emits one add_collection per collection, with room for
+    /// a validation rejection and retry on each, plus the closing reply.
+    /// </summary>
+    public static int IterationBudgetFor(int tableCount) => Math.Min(256, (2 * tableCount) + 16);
+
+    private static List<string> MaterialiseAttachments(IDocumentStore store, PlanCheckpoint checkpoint)
     {
         var dir = Directory.CreateTempSubdirectory("rvn-migration-").FullName;
+        var paths = new List<string>();
+
         using var session = store.OpenSession();
 
         foreach (var file in checkpoint.Schema)
         {
             using var attachment = session.Advanced.Attachments.Get(checkpoint.Id, file.Name);
             var path = Path.Combine(dir, file.Name);
-            using var target = File.Create(path);
-            attachment.Stream.CopyTo(target);
-            yield return path;
+
+            using (var target = File.Create(path))
+                attachment.Stream.CopyTo(target);
+
+            paths.Add(path);
         }
+
+        return paths;
     }
 }

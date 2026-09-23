@@ -43,13 +43,15 @@ public static class PlanValidator
         if (string.IsNullOrWhiteSpace(config.SourceTableName))
             r.Errors.Add("Config.SourceTableName is required.");
 
-        ValidateColumns(r, config.SourceTableName, config.PrimaryKeyColumns, config.Columns, schema, plan.Conventions, "root");
+        var rootTable = Qualify(config.SourceTableSchema, config.SourceTableName);
+
+        ValidateColumns(r, rootTable, config.PrimaryKeyColumns, config.Columns, schema, plan.Conventions, "root");
 
         foreach (var linked in config.LinkedTables ?? new List<CdcSinkLinkedTableConfig>())
-            ValidateLinked(r, linked, config, plan, schema);
+            ValidateLinked(r, linked, config, rootTable, plan, schema);
 
-        ValidateEmbedded(r, config.EmbeddedTables, config.SourceTableName, config.PrimaryKeyColumns,
-                         collection, plan, schema, depth: 1);
+        ValidateEmbedded(r, config.EmbeddedTables, rootTable, config.PrimaryKeyColumns,
+                         collection, config.SourceTableSchema, plan, schema, depth: 1);
 
         ValidateDerivedValuePlacement(r, config);
         ValidateTableOwnership(r, collection, config, plan);
@@ -67,6 +69,12 @@ public static class PlanValidator
         string what)
     {
         columns ??= new List<CdcColumnMapping>();
+
+        if (schema.IsAmbiguous(table))
+        {
+            r.Errors.Add($"{what} '{table}': the source schema declares more than one table with this name " +
+                         $"({string.Join(", ", schema.Candidates(table))}). Set SourceTableSchema to say which one.");
+        }
 
         if (columns.Count == 0)
             r.Errors.Add($"{what} '{table}': Columns is empty - a mapping with no columns produces empty documents.");
@@ -125,13 +133,19 @@ public static class PlanValidator
         string? parentTable,
         List<string>? parentPrimaryKeys,
         string owner,
+        string? defaultSchema,
         MigrationPlan plan,
         SchemaCatalog schema,
         int depth)
     {
         foreach (var e in embedded ?? new List<CdcSinkEmbeddedTableConfig>())
         {
-            var what = $"embedded '{e.SourceTableName}' in {owner}";
+            // An embedded entry that names no schema of its own belongs to its root's.
+            var embeddedTable = Qualify(
+                string.IsNullOrWhiteSpace(e.SourceTableSchema) ? defaultSchema : e.SourceTableSchema,
+                e.SourceTableName);
+
+            var what = $"embedded '{embeddedTable}' in {owner}";
 
             if (string.IsNullOrWhiteSpace(e.PropertyName))
                 r.Errors.Add($"{what}: PropertyName is required.");
@@ -149,16 +163,16 @@ public static class PlanValidator
                                $"{parentPrimaryKeys.Count} column(s) on '{parentTable}'.");
             }
 
-            if (schema.Knows(e.SourceTableName))
+            if (schema.Knows(embeddedTable))
             {
                 foreach (var jc in e.JoinColumns ?? new List<string>())
                 {
-                    if (schema.HasColumn(e.SourceTableName, jc) == false)
-                        r.Errors.Add($"{what}: join column '{jc}' does not exist on '{e.SourceTableName}'.");
+                    if (schema.HasColumn(embeddedTable, jc) == false)
+                        r.Errors.Add($"{what}: join column '{jc}' does not exist on '{embeddedTable}'.");
                 }
             }
 
-            ValidateColumns(r, e.SourceTableName, e.PrimaryKeyColumns, e.Columns, schema, plan.Conventions, what);
+            ValidateColumns(r, embeddedTable, e.PrimaryKeyColumns, e.Columns, schema, plan.Conventions, what);
 
             if (e.Type == CdcSinkRelationType.Value && e.Columns is { Count: > 6 })
             {
@@ -172,8 +186,8 @@ public static class PlanValidator
             foreach (var linked in e.LinkedTables ?? new List<CdcSinkLinkedTableConfig>())
                 ValidateLinkedCore(r, linked, plan, schema, what);
 
-            ValidateEmbedded(r, e.EmbeddedTables, e.SourceTableName, e.PrimaryKeyColumns,
-                             $"{owner}.{e.PropertyName}", plan, schema, depth + 1);
+            ValidateEmbedded(r, e.EmbeddedTables, embeddedTable, e.PrimaryKeyColumns,
+                             $"{owner}.{e.PropertyName}", defaultSchema, plan, schema, depth + 1);
         }
     }
 
@@ -181,19 +195,20 @@ public static class PlanValidator
         ValidationResult r,
         CdcSinkLinkedTableConfig linked,
         CdcSinkTableConfig parent,
+        string? parentTable,
         MigrationPlan plan,
         SchemaCatalog schema)
     {
         ValidateLinkedCore(r, linked, plan, schema, $"linked '{linked.SourceTableName}' in {parent.CollectionName}");
 
-        if (schema.Knows(parent.SourceTableName))
+        if (schema.Knows(parentTable))
         {
             foreach (var jc in linked.JoinColumns ?? new List<string>())
             {
-                if (schema.HasColumn(parent.SourceTableName, jc) == false)
+                if (schema.HasColumn(parentTable, jc) == false)
                 {
                     r.Errors.Add($"linked '{linked.SourceTableName}' in {parent.CollectionName}: join column " +
-                                 $"'{jc}' does not exist on the parent table '{parent.SourceTableName}'.");
+                                 $"'{jc}' does not exist on the parent table '{parentTable}'.");
                 }
             }
         }
@@ -287,6 +302,11 @@ public static class PlanValidator
         foreach (var e in config.EmbeddedTables ?? new List<CdcSinkEmbeddedTableConfig>())
             Check(e.SourceTableName, embeddingHere: true);
     }
+
+    private static string? Qualify(string? tableSchema, string? table) =>
+        string.IsNullOrWhiteSpace(tableSchema) || string.IsNullOrWhiteSpace(table)
+            ? table
+            : $"{tableSchema.Trim()}.{table.Trim()}";
 
     private static bool MatchesCase(string name, PropertyCase convention) => convention switch
     {
