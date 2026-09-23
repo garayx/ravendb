@@ -12,7 +12,7 @@ import { ChooseDataSourceStep } from "@/pages/setup/add-app-wizard/steps/data-so
 import { DATA_SOURCE_OPTIONS } from "@/pages/setup/add-app-wizard/steps/data-source/data-source-options";
 import { MAP_SOURCE_OPTIONS } from "@/pages/setup/add-app-wizard/steps/map/map-source-options";
 import { ConnectSourceStep } from "@/pages/setup/add-app-wizard/steps/connect/connect-source-step";
-import { MapSchemaStep } from "@/pages/setup/add-app-wizard/steps/map/map-schema-step";
+import { DesignWithAiStep } from "@/pages/setup/add-app-wizard/steps/map/design-with-ai-step";
 import { useMapAiConsentBlock } from "@/pages/setup/add-app-wizard/steps/map/use-map-ai-consent-block";
 import { MapTablesStep } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-step";
 import { PreviewStep } from "@/pages/setup/add-app-wizard/steps/preview/preview-step";
@@ -20,7 +20,6 @@ import { ExportConfigAction } from "@/pages/setup/add-app-wizard/steps/preview/e
 import { ImportConfigHeaderAction } from "@/pages/setup/add-app-wizard/steps/connect/import-config-header-action";
 import { VerifySchemaStep } from "@/pages/setup/add-app-wizard/steps/verify/verify-schema-step";
 import { useConnectSourceStep } from "@/pages/setup/add-app-wizard/steps/connect/use-connect-source-step";
-import { useMapSchemaStep } from "@/pages/setup/add-app-wizard/steps/map/use-map-schema-step";
 import { useFocusMapTablesError } from "@/pages/setup/add-app-wizard/steps/map-tables/use-focus-map-tables-error";
 import { useMapTablesStep } from "@/pages/setup/add-app-wizard/steps/map-tables/use-map-tables-step";
 import { useIsMapTablesNextDisabled } from "@/pages/setup/add-app-wizard/steps/map-tables/use-suggested-map-tables";
@@ -33,7 +32,6 @@ export const useAppSteps = (): WizardSteps<AppStepId, AppFormData> => {
     const verifySchemaBeforeNext = useVerifySchemaStep();
     const verifyCdcBeforeNext = useVerifyCdcStep();
     const isVerifyCdcRunning = useIsVerifyCdcRunning();
-    const mapSchemaBeforeNext = useMapSchemaStep();
     const mapAiConsentBlock = useMapAiConsentBlock();
     const mapTablesBeforeNext = useMapTablesStep();
     const focusMapTablesError = useFocusMapTablesError();
@@ -87,10 +85,10 @@ export const useAppSteps = (): WizardSteps<AppStepId, AppFormData> => {
             badge: ({ values }) => <VerifySelectionChangedBadge tables={values.verifySchema.tables} />,
         },
         map: {
-            title: "How would you like to map your schema?",
-            bodyComponent: MapSchemaStep,
-            validate: "map",
-            beforeNext: mapSchemaBeforeNext,
+            title: "Design your document model with the planner",
+            bodyComponent: DesignWithAiStep,
+            // The step's own buttons apply a mapping; there is nothing for Next to validate or do.
+            validate: false,
             isNextDisabled: mapAiConsentBlock.isNextDisabled,
             nextDisabledReason: mapAiConsentBlock.nextDisabledReason,
             badgeFields: ["map.source"],
@@ -130,8 +128,7 @@ export const getAppFlow = ({ dataSource, isEditing }: { dataSource: string; isEd
         return [/* "dataSource", */ "preview"];
     }
 
-    // The edit seed pins the map source to "manual", so the "How would you like to map your
-    // schema?" step has nothing to ask.
+    // The edit seed pins the map source to "manual", so the planner step has nothing to offer.
     if (isEditing) {
         return ["externalConnection", "verifySchema", "mapTables", "preview"];
     }

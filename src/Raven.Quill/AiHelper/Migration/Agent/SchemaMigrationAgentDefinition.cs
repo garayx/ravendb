@@ -15,6 +15,8 @@ public static class SchemaMigrationAgentDefinition
 
     public const string ConnectionStringName = "quill-open-ai-gpt-5-mini";
 
+    public const string Model = "gpt-5-mini";
+
     public const string ProposePlan = "propose_plan";
     public const string AddCollection = "add_collection";
     public const string RemoveCollection = "remove_collection";
@@ -48,6 +50,10 @@ public static class SchemaMigrationAgentDefinition
                         "table and column names discussed, every collection already registered and the " +
                         "tables it absorbs, the naming conventions in force, and any gap the user was told " +
                         "about. Discard conversational filler and superseded drafts.",
+
+                    SummarizationTaskEndPrompt =
+                        "Summarise the conversation above under those rules. The mappings are the state of " +
+                        "the work: a table or column name dropped here is one the next turn will re-invent.",
 
                     ResultPrefix = "Planning session so far:"
                 },

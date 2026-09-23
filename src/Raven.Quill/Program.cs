@@ -13,6 +13,7 @@ using Polly;
 using Raven.Quill.Agents;
 using Raven.Quill.AiHelper;
 using Raven.Quill.AiHelper.Migration;
+using Raven.Quill.AiHelper.Migration.Agent;
 using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Auth;
 using Raven.Quill.Embed;
@@ -198,6 +199,7 @@ if (!isOpenApiDocumentGeneration)
 {
     builder.Services.AddHostedService<RavenReadinessService>();
     builder.Services.AddHostedService<ApplianceActivationService>();
+    builder.Services.AddHostedService<MigrationAgentDeploymentService>();
     builder.Services.AddHostedService(sp => sp.GetRequiredService<TelegramChannelManager>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<SlackInboundProcessor>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<DiscordInboundProcessor>());
