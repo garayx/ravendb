@@ -70,8 +70,8 @@ internal sealed class CdcSinkHandlerProcessorForDdl : AbstractCdcSinkHandlerProc
                 }
 
                 HttpContext.Response.ContentType = "application/zip";
-                HttpContext.Response.Headers[Constants.Headers.ContentDisposition] =
-                    "attachment; filename=" + Uri.EscapeDataString((export.CatalogName ?? "schema") + "-ddl.zip");
+                var fileName = Uri.EscapeDataString((export.CatalogName ?? "schema") + "-ddl.zip");
+                HttpContext.Response.Headers[Constants.Headers.ContentDisposition] = $"attachment; filename=\"{fileName}\"; filename*=UTF-8''{fileName}";
 
                 ms.Position = 0;
                 await ms.CopyToAsync(RequestHandler.ResponseBodyStream(), cts.Token);

@@ -15,7 +15,7 @@ internal class CdcSinkDdlResult
     public IReadOnlyDictionary<string, string> GetFiles()
     {
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (ZipContent == null)
+        if (ZipContent is not { Length: > 0 })
             return files;
 
         using (var ms = new MemoryStream(ZipContent))

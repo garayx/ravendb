@@ -34,10 +34,7 @@ namespace SlowTests.Server.Documents.CdcSink
                 ExecuteSqlQuery(provider, connectionString, file.Value);
 
             if (files.TryGetValue(CdcSinkDdlResult.ForeignKeysFileName, out var foreignKeys))
-            {
-                foreach (var statement in foreignKeys.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    ExecuteSqlQuery(provider, connectionString, statement);
-            }
+                ExecuteSqlQuery(provider, connectionString, foreignKeys);
         }
 
         private protected static Dictionary<string, string> DdlFilesByTableName(CdcSinkDdlResult ddl)
