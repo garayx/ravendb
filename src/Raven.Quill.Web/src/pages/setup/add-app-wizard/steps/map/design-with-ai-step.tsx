@@ -1,168 +1,74 @@
-import { useRef, useState } from "react";
 import { useFormContext } from "react-hook-form";
-import { api } from "@/api/api";
-import type { MigrationFrame } from "@/api/custom-services/migration-service";
+import { Sparkles, Table2 } from "lucide-react";
+import { TranscriptDisclosureState } from "@/components/chat/transcript-disclosure";
 import { Button } from "@/components/shadcn/ui/button";
-import { Textarea } from "@/components/shadcn/ui/textarea";
-import { Heading, Text } from "@/components/typography";
+import {
+    ResizableHandle,
+    ResizablePanel,
+    ResizablePanelGroup,
+} from "@/components/shadcn/ui/resizable";
+import type { WizardBodyComponentProps } from "@/components/form/wizard/form-wizard";
 import { useSetupWizardStore } from "@/pages/setup/add-app-wizard/app-wizard-store";
 import { type AppFormData } from "@/pages/setup/add-app-wizard/app-wizard-validation";
-import { computeSourceKey } from "@/pages/setup/add-app-wizard/steps/connect/use-connect-source-step";
-import { computeMapKey } from "@/pages/setup/add-app-wizard/steps/map/use-map-schema-step";
-import { useApplyMapTables } from "@/pages/setup/add-app-wizard/steps/map-tables/use-apply-map-tables";
-import { wrapDtoTablesToFormShape } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-dto";
+import { PlannerChat } from "@/pages/setup/add-app-wizard/steps/map/planner-chat";
+import { PlannerResults } from "@/pages/setup/add-app-wizard/steps/map/planner-results";
+import { usePlannerSession } from "@/pages/setup/add-app-wizard/steps/map/use-planner-session";
+import { useAdoptMapTables } from "@/pages/setup/add-app-wizard/steps/map/use-adopt-map-tables";
 import { scaffoldTables } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-utils";
-import { tablesSchema } from "@/pages/setup/add-app-wizard/app-wizard-validation";
 
-/**
- * A developer view of the interactive planner, not a designed screen: it shows the raw frames the
- * agent produced so the conversation can be driven by hand while the backend is being built. The
- * real UI is a separate piece of work.
- */
-export function DesignWithAiStep() {
-    const { getValues, setValue } = useFormContext<AppFormData>();
-    const applyMapTables = useApplyMapTables();
+export function DesignWithAiStep({ isBusy }: WizardBodyComponentProps) {
+    const { getValues } = useFormContext<AppFormData>();
+    const session = usePlannerSession();
+    const adoptTables = useAdoptMapTables();
 
-    const [log, setLog] = useState<string[]>([]);
-    const [conversationId, setConversationId] = useState<string | null>(null);
-    const [prompt, setPrompt] = useState("");
-    const [isStreaming, setIsStreaming] = useState(false);
-    const abortRef = useRef<AbortController | null>(null);
+    const hasConversation = session.conversationId !== null;
 
-    const append = (entry: string) => setLog((entries) => [...entries, entry]);
-
-    const consume = async (frames: AsyncGenerator<MigrationFrame>) => {
-        for await (const frame of frames) {
-            append(JSON.stringify(frame));
-
-            if (frame.type === "done") {
-                setConversationId(frame.conversationId);
-            }
-        }
-    };
-
-    const run = async (frames: (signal: AbortSignal) => AsyncGenerator<MigrationFrame>) => {
-        const controller = new AbortController();
-        abortRef.current = controller;
-        setIsStreaming(true);
-
-        try {
-            await consume(frames(controller.signal));
-        } catch (error) {
-            if (!controller.signal.aborted) {
-                append(`ERROR ${error instanceof Error ? error.message : String(error)}`);
-            }
-        } finally {
-            abortRef.current = null;
-            setIsStreaming(false);
-        }
-    };
-
-    const slug = () => getValues("externalConnection").slug;
-
-    const handleStart = () =>
-        run((signal) =>
-            api.services.migration.start(
-                { slug: slug(), selectedTables: getValues("verifySchema").tables },
-                signal,
-            ),
-        );
-
-    const handleAsk = () => {
-        if (!conversationId) {
-            return;
-        }
-
-        const text = prompt;
-        setPrompt("");
-
-        return run((signal) => api.services.migration.ask({ slug: slug(), conversationId, prompt: text }, signal));
-    };
-
-    const handleApply = async () => {
-        if (!conversationId) {
-            return;
-        }
-
-        try {
-            const result = await api.services.migration.apply({ slug: slug(), conversationId });
-
-            append(`APPLY unmapped=${JSON.stringify(result.unmappedTables)} errors=${JSON.stringify(result.errors)}`);
-
-            if (result.configuration) {
-                adoptTables(tablesSchema.parse(wrapDtoTablesToFormShape(result.configuration.tables ?? [])));
-            }
-        } catch (error) {
-            append(`APPLY FAILED ${error instanceof Error ? error.message : String(error)}`);
-        }
-    };
-
-    const handleManual = () => {
+    const useManualMapping = () => {
         const store = useSetupWizardStore.getState();
         adoptTables(scaffoldTables(getValues("verifySchema").tables, store.discoverResult));
-        append("Scaffolded a manual mapping.");
-    };
-
-    /** Whatever produced the tables, mapTables only renders them once they are the applied answer. */
-    const adoptTables = (tables: AppFormData["mapTables"]["tables"]) => {
-        const store = useSetupWizardStore.getState();
-
-        setValue("map.source", "manual");
-        applyMapTables(tables);
-        store.setAppliedMapKey(
-            computeMapKey({
-                sourceKey: computeSourceKey(getValues("externalConnection")),
-                source: "manual",
-                aiPrompt: "",
-                selectedTables: getValues("verifySchema").tables,
-            }),
-        );
-        store.resetMapTablesUiState();
     };
 
     return (
-        <div className="flex flex-col gap-4">
-            <div>
-                <Heading as="h3">Design with AI (developer view)</Heading>
-                <Text variant="muted">
-                    Raw planner frames. The designed screen is a separate piece of work.
-                </Text>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" onClick={handleStart} disabled={isStreaming}>
-                    Start
-                </Button>
-                <Button type="button" variant="outline" onClick={handleApply} disabled={!conversationId || isStreaming}>
-                    Apply to mapping
-                </Button>
-                <Button type="button" variant="outline" onClick={handleManual} disabled={isStreaming}>
-                    Use manual mapping
-                </Button>
-                <Text variant="muted">{conversationId ?? "no conversation yet"}</Text>
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <Textarea
-                    rows={3}
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    placeholder="go ahead with orders and products, and I need lines of credit per customer"
-                />
-                <div>
+        <TranscriptDisclosureState>
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+                <div className="flex shrink-0 items-center justify-end gap-2">
                     <Button
                         type="button"
-                        onClick={handleAsk}
-                        disabled={!conversationId || isStreaming || !prompt.trim()}
+                        onClick={() => void session.start()}
+                        disabled={isBusy || session.isStreaming}
                     >
-                        Send
+                        <Sparkles aria-hidden />
+                        {hasConversation ? "Start over" : "Start"}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={useManualMapping}
+                        disabled={isBusy || session.isStreaming}
+                    >
+                        <Table2 aria-hidden />
+                        Use manual mapping
                     </Button>
                 </div>
-            </div>
 
-            <pre className="max-h-96 overflow-auto rounded border p-2 text-xs whitespace-pre-wrap">
-                {log.join("\n\n")}
-            </pre>
-        </div>
+                <ResizablePanelGroup
+                    orientation="horizontal"
+                    className="min-h-80 flex-1 rounded-lg border bg-background"
+                >
+                    <ResizablePanel defaultSize="40%" minSize="320px" maxSize="60%" className="min-w-0">
+                        <PlannerChat
+                            isStreaming={session.isStreaming}
+                            canAsk={hasConversation}
+                            onAsk={(prompt) => void session.ask(prompt)}
+                            onStop={session.stop}
+                        />
+                    </ResizablePanel>
+                    <ResizableHandle />
+                    <ResizablePanel className="min-w-0">
+                        <PlannerResults />
+                    </ResizablePanel>
+                </ResizablePanelGroup>
+            </div>
+        </TranscriptDisclosureState>
     );
 }

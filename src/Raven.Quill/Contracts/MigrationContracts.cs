@@ -15,8 +15,12 @@ public sealed record MigrationAskRequest(string Slug, string ConversationId, str
 /// <summary>Branches off a stored analysis, so the same schema is not analysed twice.</summary>
 public sealed record MigrationForkRequest(string Slug, string InputKey, string Branch);
 
-/// <summary>Turns everything the session registered into the configuration the wizard carries on with.</summary>
-public sealed record MigrationApplyRequest(string Slug, string ConversationId);
+/// <summary>
+/// Turns what the session registered into the configuration the wizard carries on with.
+/// <paramref name="Collections"/> narrows it to the ones the operator kept; empty or absent takes
+/// the whole plan. Anything left out is reported back in the coverage diff, not silently dropped.
+/// </summary>
+public sealed record MigrationApplyRequest(string Slug, string ConversationId, string[]? Collections = null);
 
 public sealed record MigrationApplyResponse(
     CdcSinkConfiguration? Configuration,

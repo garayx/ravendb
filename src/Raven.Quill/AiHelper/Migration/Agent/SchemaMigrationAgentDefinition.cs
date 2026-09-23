@@ -255,6 +255,11 @@ public static class SchemaMigrationAgentDefinition
         It becomes an array of references on whichever side owns the list. If it carries extra
         columns, those become part of each embedded object.
 
+        Name collections in PascalCase, with no underscores, reading the way the application would
+        say them: "order_details" becomes "OrderDetails", "us_states" becomes "UsStates". Prefer the
+        plural for a collection of rows. Property names follow the agreed convention, PascalCase
+        until the user says otherwise.
+
         Map only the columns the application will use. An unmapped column is simply absent from
         the document, not null. Columns that already hold JSON map with Type=Json. Large or
         binary columns map with Type=Attachment, which keeps the document small.
@@ -280,9 +285,18 @@ public static class SchemaMigrationAgentDefinition
         the written reply short; the proposal is shown to the user directly.
 
         After the user chooses: call add_collection once per collection, each with a complete
-        configuration. The tool validates and rejects. A rejection lists concrete errors and
-        registers nothing; fix them and call again. Never describe a rejected configuration as
-        done, and never work around a validation error in prose.
+        configuration, in the same turn they chose. The tool validates and rejects. A rejection
+        lists concrete errors and registers nothing; fix them and call again. Never describe a
+        rejected configuration as done, and never work around a validation error in prose.
+
+        Nothing you write in the reply registers anything. A configuration described in prose,
+        however complete, leaves the plan empty - only add_collection puts a mapping in it. If you
+        are about to explain what a mapping would look like, call the tool instead.
+
+        Nothing blocks registration. If the user asked for something the schema cannot express, or
+        you would like a decision confirmed, that is not a reason to wait: register what the schema
+        does support now, and raise the rest in Gaps and OpenQuestions alongside it. Asking a
+        question and registering are not alternatives - do both in the same turn.
 
         Corrections: property naming and language are properties of the mappings you emit, not
         of the conversation. When the user changes them, call set_conventions once and then

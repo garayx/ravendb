@@ -14,6 +14,8 @@ import { MAP_SOURCE_OPTIONS } from "@/pages/setup/add-app-wizard/steps/map/map-s
 import { ConnectSourceStep } from "@/pages/setup/add-app-wizard/steps/connect/connect-source-step";
 import { DesignWithAiStep } from "@/pages/setup/add-app-wizard/steps/map/design-with-ai-step";
 import { useMapAiConsentBlock } from "@/pages/setup/add-app-wizard/steps/map/use-map-ai-consent-block";
+import { usePlannerNextBlock } from "@/pages/setup/add-app-wizard/steps/map/use-planner-next-block";
+import { useApplyPlanner } from "@/pages/setup/add-app-wizard/steps/map/use-apply-planner";
 import { MapTablesStep } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-step";
 import { PreviewStep } from "@/pages/setup/add-app-wizard/steps/preview/preview-step";
 import { ExportConfigAction } from "@/pages/setup/add-app-wizard/steps/preview/export-config-action";
@@ -33,6 +35,8 @@ export const useAppSteps = (): WizardSteps<AppStepId, AppFormData> => {
     const verifyCdcBeforeNext = useVerifyCdcStep();
     const isVerifyCdcRunning = useIsVerifyCdcRunning();
     const mapAiConsentBlock = useMapAiConsentBlock();
+    const plannerBlock = usePlannerNextBlock();
+    const applyPlanner = useApplyPlanner();
     const mapTablesBeforeNext = useMapTablesStep();
     const focusMapTablesError = useFocusMapTablesError();
     const isMapTablesNextDisabled = useIsMapTablesNextDisabled();
@@ -87,10 +91,14 @@ export const useAppSteps = (): WizardSteps<AppStepId, AppFormData> => {
         map: {
             title: "Design your document model with the planner",
             bodyComponent: DesignWithAiStep,
-            // The step's own buttons apply a mapping; there is nothing for Next to validate or do.
+            isFullHeight: true,
+            // The mapping is produced by the planner, not by form fields, so there is nothing here
+            // for the resolver to check. Applying it is what Next does.
             validate: false,
-            isNextDisabled: mapAiConsentBlock.isNextDisabled,
-            nextDisabledReason: mapAiConsentBlock.nextDisabledReason,
+            nextLabel: "Apply to mapping",
+            beforeNext: applyPlanner,
+            isNextDisabled: mapAiConsentBlock.isNextDisabled || plannerBlock.isNextDisabled,
+            nextDisabledReason: mapAiConsentBlock.nextDisabledReason ?? plannerBlock.nextDisabledReason,
             badgeFields: ["map.source"],
             badge: ({ isComplete, values }) => {
                 if (!isComplete) {

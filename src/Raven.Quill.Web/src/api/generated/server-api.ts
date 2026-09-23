@@ -1004,7 +1004,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The plan a session has registered so far, for reload and resume. */
+        /** @description The plan a session has registered so far, for reload and resume. Requires the owning app's slug. */
         get: operations["setup.migrationPlan"];
         put?: never;
         post?: never;
@@ -4516,7 +4516,9 @@ export interface operations {
     };
     "setup.migrationPlan": {
         parameters: {
-            query?: never;
+            query?: {
+                slug?: string;
+            };
             header?: never;
             path: {
                 conversationId: string;
@@ -4532,6 +4534,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MigrationPlanSnapshot"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             /** @description Not Found */
@@ -5013,7 +5024,7 @@ export function createServerApi(client: ApiClient) {
             migrationApply: (request: string) => client.post<MigrationApplyResponse, ApiErrorResponse>(API_ENDPOINTS.setup.migrationApply, request),
             migrationAsk: (request: string) => client.post<void>(API_ENDPOINTS.setup.migrationAsk, request),
             migrationFork: (request: string) => client.post<void>(API_ENDPOINTS.setup.migrationFork, request),
-            migrationPlan: (conversationId: string) => client.get<MigrationPlanSnapshot, ApiErrorResponse>(API_ENDPOINTS.setup.migrationPlan(conversationId)),
+            migrationPlan: (conversationId: string, searchParams?: { slug?: string; }) => client.get<MigrationPlanSnapshot, ApiErrorResponse>(API_ENDPOINTS.setup.migrationPlan(conversationId), { searchParams }),
             migrationStart: (request: string) => client.post<void>(API_ENDPOINTS.setup.migrationStart, request),
             provision: (request: ProvisionRequest) => client.post<ProvisionResponse, ApiErrorResponse>(API_ENDPOINTS.setup.provision, request),
             suggestCdc: (request: SuggestCdcRequest) => client.post<SuggestCdcResponse, ApiErrorResponse>(API_ENDPOINTS.setup.suggestCdc, request),

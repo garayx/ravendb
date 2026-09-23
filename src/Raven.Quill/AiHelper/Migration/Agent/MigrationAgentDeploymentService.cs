@@ -1,7 +1,6 @@
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.ConnectionStrings;
-using Raven.Client.ServerWide.Operations.ConnectionStrings;
 using Raven.Quill.Hosting;
 using Raven.Quill.Logging;
 using Raven.Server.Logging;
@@ -63,11 +62,14 @@ public sealed class MigrationAgentDeploymentService(
 
     private async Task EnsureConnectionStringAsync(CancellationToken token)
     {
-        var existing = await store.Maintenance.Server.SendAsync(
-            new GetServerWideConnectionStringsOperation(
+        // On the database record, not server-wide: a conversation resolves its connection string
+        // through ConversationHandler.GetAiConnectionString, which reads the database record only.
+        // A server-wide one of the same name is invisible to it.
+        var existing = await store.Maintenance.SendAsync(
+            new GetConnectionStringsOperation(
                 SchemaMigrationAgentDefinition.ConnectionStringName, ConnectionStringType.Ai), token);
 
-        if (existing is { Results.Count: > 0 })
+        if (existing?.AiConnectionStrings is { Count: > 0 })
             return;
 
         var apiKey = ApiKeyVariables
@@ -86,18 +88,15 @@ public sealed class MigrationAgentDeploymentService(
             return;
         }
 
-        await store.Maintenance.Server.SendAsync(
-            new PutServerWideConnectionStringOperation(new ServerWideConnectionString
+        await store.Maintenance.SendAsync(
+            new PutConnectionStringOperation<AiConnectionString>(new AiConnectionString
             {
-                ConnectionString = new AiConnectionString
-                {
-                    Name = SchemaMigrationAgentDefinition.ConnectionStringName,
-                    ModelType = AiModelType.Chat,
-                    OpenAiSettings = new OpenAiSettings(
-                        apiKey: apiKey,
-                        endpoint: null,
-                        model: SchemaMigrationAgentDefinition.Model)
-                }
+                Name = SchemaMigrationAgentDefinition.ConnectionStringName,
+                ModelType = AiModelType.Chat,
+                OpenAiSettings = new OpenAiSettings(
+                    apiKey: apiKey,
+                    endpoint: null,
+                    model: SchemaMigrationAgentDefinition.Model)
             }), token);
 
         if (logger.IsInfoEnabled)

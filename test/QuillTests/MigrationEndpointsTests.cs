@@ -256,6 +256,63 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
     }
 
     [RavenFact(RavenTestCategory.Quill)]
+    public async Task Apply_narrows_the_configuration_to_the_selected_collections()
+    {
+        var customers = MigrationSamples.ValidOrders();
+        customers.CollectionName = "Customers";
+        customers.SourceTableName = "customers";
+        customers.PrimaryKeyColumns = ["order_id"];
+
+        var client = new FakeMigrationClient
+        {
+            Snapshot = new MigrationPlanSnapshot("MigrationChats/abc", QuillHost.DefaultWizardSlug, "key",
+                PropertyCase.Unspecified, null,
+                [
+                    new MigrationPlanCollection("Orders", 1, null, MigrationSamples.ValidOrders()),
+                    new MigrationPlanCollection("Customers", 1, null, customers)
+                ],
+                [])
+        };
+
+        await using var host = await NewMigrationHostAsync(client);
+        await SeedDiscoveredSchemaAsync(host);
+
+        var resp = await host.Client.PostAsJsonAsync(QuillRoutes.MigrationApply, new
+        {
+            slug = QuillHost.DefaultWizardSlug,
+            conversationId = "MigrationChats/abc",
+            collections = new[] { "Orders" }
+        });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var applied = await resp.Content.ReadFromJsonAsync<MigrationApplyResponse>();
+        Assert.Equal("Orders", Assert.Single(applied!.Configuration!.Tables).CollectionName);
+
+        // A collection left behind is reported rather than silently dropped.
+        Assert.Contains("public.customers", applied.UnmappedTables);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public async Task Apply_refuses_a_collection_the_plan_does_not_hold()
+    {
+        var client = new FakeMigrationClient { Snapshot = SnapshotFor(QuillHost.DefaultWizardSlug) };
+        await using var host = await NewMigrationHostAsync(client);
+        await SeedDiscoveredSchemaAsync(host);
+
+        var resp = await host.Client.PostAsJsonAsync(QuillRoutes.MigrationApply, new
+        {
+            slug = QuillHost.DefaultWizardSlug,
+            conversationId = "MigrationChats/abc",
+            collections = new[] { "Orders", "Invented" }
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        var error = await resp.Content.ReadFromJsonAsync<ApiErrorResponse>();
+        Assert.Contains("Invented", error!.Error);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
     public async Task Apply_assembles_the_plan_persists_it_and_reports_uncovered_tables()
     {
         var client = new FakeMigrationClient { Snapshot = SnapshotFor(QuillHost.DefaultWizardSlug) };

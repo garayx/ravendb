@@ -66,6 +66,53 @@ export type SetupWizardState = {
     openMapTablesRawView: (content: string) => void;
     closeMapTablesRawView: () => void;
     setMapTablesRawContent: (content: string, isValid: boolean) => void;
+
+    /**
+     * The planner session. It lives here rather than in the step body because the wizard remounts
+     * the body on every step change - holding the conversation id in component state would mean
+     * leaving the step and coming back could only start over, never resume.
+     */
+    plannerMessages: PlannerMessage[];
+    plannerConversationId: string | null;
+    /** Registered collections, keyed by name so a re-emit replaces rather than appends. */
+    plannerCollections: Record<string, PlannerCollection>;
+    plannerProposal: PlannerProposal | null;
+    /** Names the operator kept. Absent from the map means kept - a new collection starts selected. */
+    plannerDeselected: Record<string, boolean>;
+    isPlannerStreaming: boolean;
+    appendPlannerMessage: (message: PlannerMessage) => void;
+    setPlannerConversationId: (conversationId: string) => void;
+    setPlannerProposal: (proposal: PlannerProposal) => void;
+    upsertPlannerCollection: (collection: PlannerCollection) => void;
+    removePlannerCollection: (collection: string) => void;
+    togglePlannerCollection: (collection: string, isSelected: boolean) => void;
+    setIsPlannerStreaming: (isStreaming: boolean) => void;
+    resetPlannerState: () => void;
+};
+
+/** One turn in the planner transcript. Tool activity is a marker line, not a bubble. */
+export type PlannerMessage = {
+    id: string;
+    role: "user" | "agent" | "tool" | "error";
+    text: string;
+};
+
+export type PlannerProposal = {
+    areas: unknown[];
+    collections: unknown[];
+    dropped: unknown[];
+    enables: string[];
+};
+
+export type PlannerCollection = {
+    collection: string;
+    version: number;
+    status: string;
+    rationale?: string | null;
+    config?: unknown;
+    warnings: string[];
+    /** Set when the last attempt was rejected; the card shows why instead of a mapping. */
+    errors?: string[];
 };
 
 const initialState: Pick<
@@ -85,6 +132,12 @@ const initialState: Pick<
     | "isMapTablesRawView"
     | "mapTablesRawContent"
     | "isMapTablesRawContentValid"
+    | "plannerMessages"
+    | "plannerConversationId"
+    | "plannerCollections"
+    | "plannerProposal"
+    | "plannerDeselected"
+    | "isPlannerStreaming"
 > = {
     discoverResult: null,
     discoverSchemas: [],
@@ -101,6 +154,12 @@ const initialState: Pick<
     isMapTablesRawView: false,
     mapTablesRawContent: "",
     isMapTablesRawContentValid: true,
+    plannerMessages: [],
+    plannerConversationId: null,
+    plannerCollections: {},
+    plannerProposal: null,
+    plannerDeselected: {},
+    isPlannerStreaming: false,
 };
 
 export const useSetupWizardStore = create<SetupWizardState>((set) => ({
@@ -165,4 +224,39 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
         set({ isMapTablesRawView: false, mapTablesRawContent: "", isMapTablesRawContentValid: true }),
     setMapTablesRawContent: (content, isValid) =>
         set({ mapTablesRawContent: content, isMapTablesRawContentValid: isValid }),
+
+    appendPlannerMessage: (message) => set((state) => ({ plannerMessages: [...state.plannerMessages, message] })),
+    setPlannerConversationId: (conversationId) => set({ plannerConversationId: conversationId }),
+    setPlannerProposal: (proposal) => set({ plannerProposal: proposal }),
+
+    // Keyed by name because add_collection is an upsert: a re-emit after a convention change
+    // replaces the card rather than stacking a second one beside it.
+    upsertPlannerCollection: (collection) =>
+        set((state) => ({
+            plannerCollections: { ...state.plannerCollections, [collection.collection]: collection },
+        })),
+
+    removePlannerCollection: (collection) =>
+        set((state) => ({
+            plannerCollections: Object.fromEntries(
+                Object.entries(state.plannerCollections).filter(([name]) => name !== collection),
+            ),
+        })),
+
+    togglePlannerCollection: (collection, isSelected) =>
+        set((state) => ({
+            plannerDeselected: { ...state.plannerDeselected, [collection]: !isSelected },
+        })),
+
+    setIsPlannerStreaming: (isStreaming) => set({ isPlannerStreaming: isStreaming }),
+
+    resetPlannerState: () =>
+        set({
+            plannerMessages: [],
+            plannerConversationId: null,
+            plannerCollections: {},
+            plannerProposal: null,
+            plannerDeselected: {},
+            isPlannerStreaming: false,
+        }),
 }));

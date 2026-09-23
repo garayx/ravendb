@@ -66,7 +66,7 @@ export type MigrationStartRequest = {
 
 export type MigrationAskRequest = { slug: string; conversationId: string; prompt: string };
 
-export type MigrationApplyRequest = { slug: string; conversationId: string };
+export type MigrationApplyRequest = { slug: string; conversationId: string; collections?: string[] };
 
 export type MigrationApplyResult = {
     configuration: { tables?: CdcSinkTableConfig[] | null } | null;

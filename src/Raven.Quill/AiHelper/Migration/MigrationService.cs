@@ -147,6 +147,16 @@ public sealed class MigrationService(
         if (snapshot.Collections.Length == 0)
             return (null, new Refusal("the plan has no collections yet"));
 
+        var (selected, unknown) = SelectCollections(snapshot, request.Collections);
+
+        if (unknown.Length > 0)
+            return (null, new Refusal($"the plan has no collection named {string.Join(", ", unknown)}"));
+
+        if (selected.Length == 0)
+            return (null, new Refusal("no collections were selected"));
+
+        snapshot = snapshot with { Collections = selected };
+
         using var session = store.OpenAsyncSession();
         var state = await session.LoadAsync<WizardState>(WizardState.DocumentIdFor(request.Slug), token);
 
@@ -172,6 +182,28 @@ public sealed class MigrationService(
         await session.SaveChangesAsync(token);
 
         return (new MigrationApplyResponse(configuration, unmapped, []), null);
+    }
+
+    /// <summary>
+    /// Narrows the plan to the collections the operator kept. Naming one the plan does not hold is
+    /// a mistake worth reporting rather than quietly ignoring - it usually means the caller is
+    /// working from a stale view of the plan.
+    /// </summary>
+    private static (MigrationPlanCollection[] Selected, string[] Unknown) SelectCollections(
+        MigrationPlanSnapshot snapshot,
+        string[]? requested)
+    {
+        if (requested is not { Length: > 0 })
+            return (snapshot.Collections, []);
+
+        var wanted = requested.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var unknown = wanted
+            .Where(name => snapshot.Collections.Any(c => string.Equals(c.Collection, name, StringComparison.OrdinalIgnoreCase)) == false)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        return (snapshot.Collections.Where(c => wanted.Contains(c.Collection)).ToArray(), unknown);
     }
 
     private async Task<(CdcSinkSourceSchema? Schema, Refusal? Refusal)> ResolveSchemaAsync(
