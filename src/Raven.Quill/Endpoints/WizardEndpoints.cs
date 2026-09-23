@@ -7,6 +7,7 @@ using Raven.Client.Documents.Operations.ETL.SQL;
 using Raven.Client.Documents.Operations.OngoingTasks;
 using Raven.Client.Exceptions;
 using Raven.Quill.AiHelper;
+using Raven.Quill.AiHelper.Migration;
 using Raven.Quill.Contracts;
 using Raven.Quill.Endpoints.Helpers;
 using Raven.Quill.Infrastructure;
@@ -64,6 +65,32 @@ public static class WizardEndpoints
             .Produces<SuggestCdcResponse>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity);
+        group.MapPost("/migration/start", StartMigrationAsync)
+            .WithName("setup.migrationStart")
+            .WithDescription(
+                "Opens an interactive planning session over the discovered schema. Streams NDJSON " +
+                "frames: the agent's proposal, then one frame per collection as it is registered or " +
+                "rejected, then its reply.")
+            .Accepts<MigrationStartRequest>("application/json");
+        group.MapPost("/migration/ask", AskMigrationAsync)
+            .WithName("setup.migrationAsk")
+            .WithDescription("One more turn in an existing planning session. Streams the same NDJSON frames.")
+            .Accepts<MigrationAskRequest>("application/json");
+        group.MapPost("/migration/fork", ForkMigrationAsync)
+            .WithName("setup.migrationFork")
+            .WithDescription("Branches off a stored analysis so the same schema is not analysed twice.")
+            .Accepts<MigrationForkRequest>("application/json");
+        group.MapPost("/migration/apply", ApplyMigrationAsync)
+            .WithName("setup.migrationApply")
+            .WithDescription("Assembles the registered plan into a CDC configuration and hands it to the map step.")
+            .Accepts<MigrationApplyRequest>("application/json")
+            .Produces<MigrationApplyResponse>()
+            .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest);
+        group.MapGet("/migration/{**conversationId}", GetMigrationPlanAsync)
+            .WithName("setup.migrationPlan")
+            .WithDescription("The plan a session has registered so far, for reload and resume.")
+            .Produces<MigrationPlanSnapshot>()
+            .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound);
         group.MapPost("/test-mapping", TestMappingAsync)
             .WithName("setup.testMapping")
             .Accepts<TestMappingRequest>("application/json")
@@ -447,6 +474,111 @@ public static class WizardEndpoints
         return Results.Ok(new SuggestCdcResponse(result.Configuration, result.Rationale, result.Status.ToString()));
     }
 
+    private static Task StartMigrationAsync(
+        MigrationStartRequest? body,
+        MigrationService service,
+        HttpContext ctx,
+        CancellationToken ct) =>
+        StreamMigrationAsync(ctx, ct, body, (request, write) => service.StartAsync(request, write, ct));
+
+    private static Task AskMigrationAsync(
+        MigrationAskRequest? body,
+        MigrationService service,
+        HttpContext ctx,
+        CancellationToken ct) =>
+        StreamMigrationAsync(ctx, ct, body, (request, write) => service.AskAsync(request, write, ct));
+
+    private static Task ForkMigrationAsync(
+        MigrationForkRequest? body,
+        MigrationService service,
+        HttpContext ctx,
+        CancellationToken ct) =>
+        StreamMigrationAsync(ctx, ct, body, (request, write) => service.ForkAsync(request, write, ct));
+
+    private static async Task<IResult> ApplyMigrationAsync(
+        MigrationApplyRequest? body,
+        MigrationService service,
+        QuillLogger<WizardLogger> logger,
+        CancellationToken ct)
+    {
+        if (body is null)
+            return Results.BadRequest(new ApiErrorResponse("request body is required"));
+
+        var (response, refusal) = await service.ApplyAsync(body, ct);
+
+        if (refusal is not null)
+            return Results.BadRequest(new ApiErrorResponse(refusal.Message));
+
+        if (response!.Errors.Length > 0)
+        {
+            if (logger.IsInfoEnabled)
+                logger.Info($"Migration apply: assembled configuration failed validation ({response.Errors.Length} errors)");
+
+            return Results.UnprocessableEntity(new ApiErrorResponse(Errors: response.Errors));
+        }
+
+        if (response.UnmappedTables.Length > 0 && logger.IsInfoEnabled)
+            logger.Info($"Migration apply: {response.UnmappedTables.Length} discovered table(s) are not covered by the plan");
+
+        return Results.Ok(response);
+    }
+
+    private static async Task<IResult> GetMigrationPlanAsync(
+        string conversationId,
+        MigrationService service,
+        CancellationToken ct)
+    {
+        var snapshot = await service.GetAsync(conversationId, ct);
+
+        return snapshot is null
+            ? Results.NotFound(new ApiErrorResponse($"no plan found for conversation '{conversationId}'"))
+            : Results.Ok(snapshot);
+    }
+
+    /// <summary>
+    /// Streams migration frames as NDJSON. The response headers are only committed once there is a
+    /// frame to write, so a request that is refused before the turn starts can still answer with a
+    /// status code rather than a 200 carrying an error frame.
+    /// </summary>
+    private static async Task StreamMigrationAsync<TRequest>(
+        HttpContext ctx,
+        CancellationToken ct,
+        TRequest? body,
+        Func<TRequest, Func<MigrationFrame, Task>, Task<MigrationService.Refusal?>> run)
+        where TRequest : class
+    {
+        if (body is null)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await ctx.Response.WriteAsJsonAsync(new ApiErrorResponse("request body is required"), ct);
+            return;
+        }
+
+        var started = false;
+
+        async Task WriteAsync(MigrationFrame frame)
+        {
+            if (started == false)
+            {
+                NdjsonStream.SetHeaders(ctx);
+                started = true;
+            }
+
+            await NdjsonStream.WriteLineAsync(ctx, frame);
+        }
+
+        var refusal = await run(body, WriteAsync);
+
+        if (refusal is null || started)
+            return;
+
+        ctx.Response.StatusCode = refusal.ConsentRequired
+            ? StatusCodes.Status401Unauthorized
+            : StatusCodes.Status400BadRequest;
+
+        await ctx.Response.WriteAsJsonAsync(new ApiErrorResponse(refusal.Message), ct);
+    }
+
     private static async Task<IResult> TestMappingAsync(
         TestMappingRequest body,
         IDocumentStore store,
@@ -610,7 +742,7 @@ public static class WizardEndpoints
     /// Discovery enumerates whole schemas, so handing the AI everything it found would map tables the
     /// operator deliberately left out.
     /// </summary>
-    private static void ValidateJoinColumnsAgainstSchema(CdcSinkConfiguration configuration, CdcSinkSourceSchema schema, List<string> errors)
+    internal static void ValidateJoinColumnsAgainstSchema(CdcSinkConfiguration configuration, CdcSinkSourceSchema schema, List<string> errors)
     {
         foreach (var table in configuration.Tables)
             ValidateScope(table.SourceTableSchema, table.SourceTableName, table.CollectionName, table.EmbeddedTables, table.LinkedTables);
@@ -659,7 +791,7 @@ public static class WizardEndpoints
         }
     }
 
-    private static CdcSinkSourceSchema SelectTables(CdcSinkSourceSchema schema, SelectedSourceTable[] selectedTables)
+    internal static CdcSinkSourceSchema SelectTables(CdcSinkSourceSchema schema, SelectedSourceTable[] selectedTables)
     {
         var selectedKeys = selectedTables
             .Select(table => TableKey(table.SourceTableSchema, table.SourceTableName))

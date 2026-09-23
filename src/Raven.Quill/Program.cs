@@ -12,6 +12,9 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Raven.Quill.Agents;
 using Raven.Quill.AiHelper;
+using Raven.Quill.AiHelper.Migration;
+using Raven.Quill.AiHelper.Migration.Agent;
+using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Auth;
 using Raven.Quill.Embed;
 using Raven.Quill.Endpoints;
@@ -245,6 +248,12 @@ builder.Services.AddHttpClient<IAiHelperClient, AiHelperInternalClient>(static (
             handler.ClientCertificates.Add(store.Certificate);
         return handler;
     });
+
+builder.Services.AddSingleton<MigrationPlanStore>();
+builder.Services.AddSingleton<MigrationAgentInstaller>();
+builder.Services.AddSingleton<MigrationConnectionStringResolver>();
+builder.Services.AddSingleton<IMigrationClient, LocalMigrationClient>();
+builder.Services.AddScoped<MigrationService>();
 
 builder.Services.AddSingleton<ILicenseClient, LicenseHttpClient>();
 
