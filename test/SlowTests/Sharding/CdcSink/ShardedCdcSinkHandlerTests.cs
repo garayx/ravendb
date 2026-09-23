@@ -60,6 +60,21 @@ public class ShardedCdcSinkHandlerTests : RavenTestBase
     }
 
     [RavenFact(RavenTestCategory.Sinks | RavenTestCategory.Sharding)]
+    public async Task PostDdl_OnShardedDatabase_RejectsWithNotSupportedInSharding()
+    {
+        using (var store = Sharding.GetDocumentStore())
+        {
+            var connection = new SqlConnectionString { FactoryName = "Npgsql", ConnectionString = "Host=ignored" };
+
+            var e = await Assert.ThrowsAsync<NotSupportedInShardingException>(
+                () => store.Maintenance.SendAsync(new GetCdcSinkDdlOperation(connection)));
+
+            Assert.Contains("CDC Sinks", e.Message);
+            Assert.Contains("not supported in sharding", e.Message);
+        }
+    }
+
+    [RavenFact(RavenTestCategory.Sinks | RavenTestCategory.Sharding)]
     public async Task Performance_OnShardedDatabase_RejectsWithNotSupportedInSharding()
     {
         using (var store = Sharding.GetDocumentStore())

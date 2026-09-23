@@ -28,6 +28,13 @@ public sealed class ShardedCdcSinkHandler : ShardedDatabaseRequestHandler
             await processor.ExecuteAsync();
     }
 
+    [RavenShardedAction("/databases/*/admin/cdc-sink/ddl", "POST")]
+    public async Task PostDdl()
+    {
+        using (var processor = new NotSupportedInShardingProcessor(this, NotSupportedMessage))
+            await processor.ExecuteAsync();
+    }
+
     [RavenShardedAction("/databases/*/cdc-sink/performance", "GET")]
     public async Task Performance()
     {

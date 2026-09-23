@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.CdcSink;
+using Raven.Client.Documents.Operations.CdcSink.Schema;
 using Raven.Server.SqlMigration;
 using Sparrow.Collections;
 using Tests.Infrastructure;
@@ -24,6 +25,25 @@ namespace SlowTests.Server.Documents.CdcSink
         // loop keeps the wal_sender alive, the slot stays `active`, and the drop silently
         // fails — orphaning the slot and eventually saturating max_replication_slots.
         private readonly ConcurrentSet<(IDocumentStore Store, string Name)> _createdSinks = new();
+
+        private protected void ApplyDdlExport(MigrationProvider provider, string connectionString, CdcSinkDdlResult ddl)
+        {
+            var files = ddl.GetFiles();
+
+            foreach (var file in files.Where(f => f.Key != CdcSinkDdlResult.ForeignKeysFileName).OrderBy(f => f.Key, StringComparer.Ordinal))
+                ExecuteSqlQuery(provider, connectionString, file.Value);
+
+            if (files.TryGetValue(CdcSinkDdlResult.ForeignKeysFileName, out var foreignKeys))
+            {
+                foreach (var statement in foreignKeys.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    ExecuteSqlQuery(provider, connectionString, statement);
+            }
+        }
+
+        private protected static Dictionary<string, string> DdlFilesByTableName(CdcSinkDdlResult ddl)
+        {
+            return ddl.GetFiles().ToDictionary(f => f.Key.Substring(f.Key.IndexOf('/') + 1), f => f.Value);
+        }
 
         protected AddCdcSinkOperationResult AddCdcSink(IDocumentStore store, CdcSinkConfiguration config)
         {

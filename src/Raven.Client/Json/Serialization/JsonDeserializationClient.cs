@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using Raven.Client.Documents.AI;
 using Raven.Client.Documents.Attachments;
@@ -270,6 +270,8 @@ namespace Raven.Client.Json.Serialization
         internal static readonly Func<BlittableJsonReaderObject, CdcSinkSourceSchema> CdcSinkSourceSchema = GenerateJsonDeserializationRoutine<CdcSinkSourceSchema>();
 
         internal static readonly Func<BlittableJsonReaderObject, CdcSinkSchemaRequest> CdcSinkSchemaRequest = GenerateJsonDeserializationRoutine<CdcSinkSchemaRequest>();
+
+        internal static readonly Func<BlittableJsonReaderObject, CdcSinkDdlRequest> CdcSinkDdlRequest = GenerateJsonDeserializationRoutine<CdcSinkDdlRequest>();
 
         internal static readonly Func<BlittableJsonReaderObject, UpdateCdcSinkOperationResult> UpdateCdcSinkOperationResult = GenerateJsonDeserializationRoutine<UpdateCdcSinkOperationResult>();
 
