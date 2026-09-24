@@ -209,7 +209,17 @@ public sealed class MigrationSession
 
         _chat.Handle(SchemaMigrationAgentDefinition.SetConventions, async (SetConventionsArgs args) =>
         {
-            var conventions = new NamingConventions(args.PropertyCase, args.PropertyLanguage, args.Notes);
+            if (PropertyCases.TryParse(args.PropertyCase, out var propertyCase) == false)
+            {
+                return new ActionAck
+                {
+                    Status = "rejected",
+                    Errors = [$"Unknown PropertyCase '{args.PropertyCase}'. Use one of: {string.Join(", ", PropertyCases.Names)}."],
+                    Registered = Plan.CollectionNames()
+                };
+            }
+
+            var conventions = new NamingConventions(propertyCase, args.PropertyLanguage, args.Notes);
             Plan.SetConventions(conventions);
             await PersistAsync(_turnToken);
 

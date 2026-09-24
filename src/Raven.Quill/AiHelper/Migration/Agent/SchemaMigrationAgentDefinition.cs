@@ -111,10 +111,11 @@ public static class SchemaMigrationAgentDefinition
                         "Record the property naming convention and language for the whole plan. Call this when " +
                         "the user states or changes them. Changing conventions does not rewrite mappings that " +
                         "are already registered - the response tells you which collections must be re-emitted " +
-                        "through add_collection, and validation will then reject anything that does not conform.",
+                        "through add_collection, and validation will then reject anything that does not conform. " +
+                        "PropertyCase is one of SnakeCase, CamelCase or PascalCase.",
                     ParametersSampleObject = JsonHelper.Pretty(new SetConventionsArgs
                     {
-                        PropertyCase = PropertyCase.SnakeCase,
+                        PropertyCase = nameof(PropertyCase.SnakeCase),
                         PropertyLanguage = "Spanish",
                         Notes = "optional, e.g. keep identifiers and enum values untranslated"
                     })

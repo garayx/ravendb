@@ -45,6 +45,41 @@ public class MigrationPlanValidatorTests(ITestOutputHelper output) : NoDisposalN
     }
 
     [RavenFact(RavenTestCategory.Quill)]
+    public void A_column_mapped_twice_is_rejected_at_registration_not_at_apply()
+    {
+        var config = MigrationSamples.ValidOrders();
+        config.Columns.Add(new CdcColumnMapping { Column = "order_id", Name = "OrderIdAgain" });
+
+        var result = Validate(config);
+
+        Assert.Contains(result.Errors, e => e.Contains("duplicate column 'order_id'"));
+    }
+
+    [RavenTheory(RavenTestCategory.Quill)]
+    [InlineData("snake_case", PropertyCase.SnakeCase)]
+    [InlineData("SnakeCase", PropertyCase.SnakeCase)]
+    [InlineData("snake-case", PropertyCase.SnakeCase)]
+    [InlineData("camel case", PropertyCase.CamelCase)]
+    [InlineData("camelCase", PropertyCase.CamelCase)]
+    [InlineData("Pascal", PropertyCase.PascalCase)]
+    [InlineData("PASCAL_CASE", PropertyCase.PascalCase)]
+    public void A_property_case_is_read_however_it_is_spelled(string value, PropertyCase expected)
+    {
+        Assert.True(PropertyCases.TryParse(value, out var parsed));
+        Assert.Equal(expected, parsed);
+    }
+
+    [RavenTheory(RavenTestCategory.Quill)]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("kebab-case")]
+    [InlineData("Unspecified")]
+    public void An_unknown_property_case_is_refused(string? value)
+    {
+        Assert.False(PropertyCases.TryParse(value, out _));
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
     public void Missing_config_is_reported_rather_than_throwing()
     {
         var result = Validate(config: null);

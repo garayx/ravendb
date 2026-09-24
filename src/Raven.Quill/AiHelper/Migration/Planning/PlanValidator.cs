@@ -56,7 +56,24 @@ public static class PlanValidator
         ValidateDerivedValuePlacement(r, config);
         ValidateTableOwnership(r, collection, config, plan);
 
+        if (r.Errors.Count == 0)
+            ValidateAsTask(r, config);
+
         return r;
+    }
+
+    /// <summary>
+    /// Apply runs the task's own validation over the assembled configuration. Running it here too,
+    /// over this one table, means a mapping the plan accepts cannot fail there later - by then the
+    /// model is no longer in the loop to fix it. It runs last, as a backstop: the checks above
+    /// explain the same problems better, in terms of the schema the model was given.
+    /// </summary>
+    private static void ValidateAsTask(ValidationResult r, CdcSinkTableConfig config)
+    {
+        var task = new CdcSinkConfiguration { Name = "plan", ConnectionStringName = "plan", Tables = [config] };
+
+        if (task.Validate(out var errors, validateName: false, validateConnection: false) == false)
+            r.Errors.AddRange(errors);
     }
 
     private static void ValidateColumns(
