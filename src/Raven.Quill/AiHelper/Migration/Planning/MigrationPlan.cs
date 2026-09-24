@@ -11,7 +11,7 @@ public sealed class MigrationPlan
 {
     private readonly Dictionary<string, PlanEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
 
-    public NamingConventions Conventions { get; private set; } = NamingConventions.None;
+    public NamingConventions Conventions { get; private set; } = new();
 
     public JsonElement? Proposal { get; private set; }
 
@@ -25,7 +25,7 @@ public sealed class MigrationPlan
         foreach (var entry in state.Entries)
             _entries[entry.Collection] = entry;
 
-        Conventions = state.Conventions ?? NamingConventions.None;
+        Conventions = state.Conventions ?? new NamingConventions();
         Proposal = ParseProposal(state.ProposalJson);
     }
 

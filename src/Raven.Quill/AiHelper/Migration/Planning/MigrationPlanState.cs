@@ -18,7 +18,9 @@ public sealed class MigrationPlanState
 
     public string? InputKey { get; set; }
 
-    public NamingConventions Conventions { get; set; } = NamingConventions.None;
+    // A fresh instance per document: the store fills an existing value in place when loading, so a
+    // shared default would carry one plan's conventions into every plan loaded after it.
+    public NamingConventions Conventions { get; set; } = new();
 
     public string? ProposalJson { get; set; }
 
