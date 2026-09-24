@@ -43,6 +43,8 @@ public static class PlanValidator
         if (string.IsNullOrWhiteSpace(config.SourceTableName))
             r.Errors.Add("Config.SourceTableName is required.");
 
+        ValidateTableNamesAreBare(r, config);
+
         var rootTable = MigrationPlan.Qualify(config.SourceTableSchema, config.SourceTableName);
 
         ValidateColumns(r, rootTable, config.PrimaryKeyColumns, config.Columns, schema, plan.Conventions, "root");
@@ -60,6 +62,37 @@ public static class PlanValidator
             ValidateAsTask(r, config);
 
         return r;
+    }
+
+    /// <summary>
+    /// A schema written into the table name resolves here, but the CDC runtime reads the name as one
+    /// identifier - and an embedded table's inherited schema is prefixed to it on apply. The schema has
+    /// to go in SourceTableSchema.
+    /// </summary>
+    private static void ValidateTableNamesAreBare(ValidationResult r, CdcSinkTableConfig config)
+    {
+        void Check(string? table, string what)
+        {
+            if (table is null || table.Contains('.') == false)
+                return;
+
+            var split = table.LastIndexOf('.');
+            r.Errors.Add($"{what} SourceTableName '{table}' includes a schema. Set SourceTableSchema to " +
+                         $"'{table[..split]}' and SourceTableName to '{table[(split + 1)..]}'.");
+        }
+
+        Check(config.SourceTableName, "root");
+
+        foreach (var linked in config.LinkedTables ?? [])
+            Check(linked.SourceTableName, "linked");
+
+        CdcSinkConfiguration.ForEachEmbeddedTable(config.EmbeddedTables, embedded =>
+        {
+            Check(embedded.SourceTableName, "embedded");
+
+            foreach (var linked in embedded.LinkedTables ?? [])
+                Check(linked.SourceTableName, "linked");
+        });
     }
 
     /// <summary>

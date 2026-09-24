@@ -45,6 +45,22 @@ public class MigrationPlanValidatorTests(ITestOutputHelper output) : NoDisposalN
     }
 
     [RavenFact(RavenTestCategory.Quill)]
+    public void A_schema_written_into_an_embedded_table_name_is_rejected()
+    {
+        var config = MigrationSamples.ValidOrders();
+        var lines = MigrationSamples.ValidLines();
+        lines.SourceTableSchema = null;
+        lines.SourceTableName = "public.order_lines";
+        config.EmbeddedTables = [lines];
+
+        var result = Validate(config);
+
+        Assert.Contains(result.Errors, e =>
+            e.Contains("'public.order_lines' includes a schema") &&
+            e.Contains("SourceTableSchema to 'public' and SourceTableName to 'order_lines'"));
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
     public void A_column_mapped_twice_is_rejected_at_registration_not_at_apply()
     {
         var config = MigrationSamples.ValidOrders();
