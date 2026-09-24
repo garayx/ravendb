@@ -12,6 +12,9 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Raven.Quill.Agents;
 using Raven.Quill.AiHelper;
+using Raven.Quill.AiHelper.Migration;
+using Raven.Quill.AiHelper.Migration.Agent;
+using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Auth;
 using Raven.Quill.Embed;
 using Raven.Quill.Endpoints;
@@ -196,6 +199,7 @@ if (!isOpenApiDocumentGeneration)
 {
     builder.Services.AddHostedService<RavenReadinessService>();
     builder.Services.AddHostedService<ApplianceActivationService>();
+    builder.Services.AddHostedService<MigrationAgentDeploymentService>();
     builder.Services.AddHostedService(sp => sp.GetRequiredService<TelegramChannelManager>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<SlackInboundProcessor>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<DiscordInboundProcessor>());
@@ -245,6 +249,10 @@ builder.Services.AddHttpClient<IAiHelperClient, AiHelperInternalClient>(static (
             handler.ClientCertificates.Add(store.Certificate);
         return handler;
     });
+
+builder.Services.AddSingleton<MigrationPlanStore>();
+builder.Services.AddSingleton<IMigrationClient, LocalMigrationClient>();
+builder.Services.AddScoped<MigrationService>();
 
 builder.Services.AddSingleton<ILicenseClient, LicenseHttpClient>();
 
