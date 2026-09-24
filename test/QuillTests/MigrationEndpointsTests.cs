@@ -36,7 +36,7 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
                 Version = 1,
                 Config = MigrationSamples.ValidOrders()
             });
-            frames.Add(new DoneFrame { ConversationId = "MigrationChats/abc", InputKey = "key" });
+            frames.Add(new DoneFrame { ConversationId = "MigrationChats/abc" });
         };
 
         await using var host = await NewMigrationHostAsync(client);
@@ -125,7 +125,7 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
     [RavenFact(RavenTestCategory.Quill)]
     public async Task Ask_refuses_a_conversation_that_belongs_to_another_app()
     {
-        var client = new FakeMigrationClient { Snapshot = SnapshotFor("someone-else") };
+        var client = new FakeMigrationClient { Plan = PlanFor("someone-else") };
         await using var host = await NewMigrationHostAsync(client);
         await SeedDiscoveredSchemaAsync(host);
 
@@ -161,101 +161,6 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
     }
 
     [RavenFact(RavenTestCategory.Quill)]
-    public async Task Fork_requires_an_input_key()
-    {
-        var client = new FakeMigrationClient();
-        await using var host = await NewMigrationHostAsync(client);
-
-        var resp = await host.Client.PostAsJsonAsync(QuillRoutes.MigrationFork, new
-        {
-            slug = QuillHost.DefaultWizardSlug,
-            inputKey = "",
-            branch = "b"
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-    }
-
-    [RavenFact(RavenTestCategory.Quill)]
-    public async Task Fork_refuses_an_analysis_that_belongs_to_another_app()
-    {
-        var client = new FakeMigrationClient();
-        await using var host = await NewMigrationHostAsync(client);
-        await SeedDiscoveredSchemaAsync(host);
-        await SeedCheckpointAsync(host, "someone-elses-key", slug: "someone-else");
-
-        var resp = await host.Client.PostAsJsonAsync(QuillRoutes.MigrationFork, new
-        {
-            slug = QuillHost.DefaultWizardSlug,
-            inputKey = "someone-elses-key",
-            branch = "b"
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-        var error = await resp.Content.ReadFromJsonAsync<ApiErrorResponse>();
-        Assert.Contains("different app", error!.Error);
-
-        // The refusal has to land before the client copies the checkpoint's DDL and proposal.
-        Assert.Null(client.LastFork);
-    }
-
-    [RavenFact(RavenTestCategory.Quill)]
-    public async Task Fork_branches_an_analysis_of_its_own_app()
-    {
-        var client = new FakeMigrationClient();
-        await using var host = await NewMigrationHostAsync(client);
-        await SeedDiscoveredSchemaAsync(host);
-        await SeedCheckpointAsync(host, "my-key", QuillHost.DefaultWizardSlug);
-
-        var resp = await host.Client.PostAsJsonAsync(QuillRoutes.MigrationFork, new
-        {
-            slug = QuillHost.DefaultWizardSlug,
-            inputKey = "my-key",
-            branch = "b"
-        });
-
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        Assert.Equal("my-key", client.LastFork!.InputKey);
-    }
-
-    [RavenFact(RavenTestCategory.Quill)]
-    public async Task The_plan_snapshot_is_readable_by_its_owning_app()
-    {
-        var client = new FakeMigrationClient { Snapshot = SnapshotFor(QuillHost.DefaultWizardSlug) };
-        await using var host = await NewMigrationHostAsync(client);
-
-        var snapshot = await host.Client.GetFromJsonAsync<MigrationPlanSnapshot>(
-            $"{QuillRoutes.MigrationPlan("MigrationChats/abc")}?slug={QuillHost.DefaultWizardSlug}");
-
-        Assert.NotNull(snapshot);
-        Assert.Equal("Orders", Assert.Single(snapshot.Collections).Collection);
-    }
-
-    [RavenFact(RavenTestCategory.Quill)]
-    public async Task The_plan_snapshot_is_not_readable_by_another_app()
-    {
-        var client = new FakeMigrationClient { Snapshot = SnapshotFor("someone-else") };
-        await using var host = await NewMigrationHostAsync(client);
-
-        var resp = await host.Client.GetAsync(
-            $"{QuillRoutes.MigrationPlan("MigrationChats/abc")}?slug={QuillHost.DefaultWizardSlug}");
-
-        // A mismatch reads as "no such plan" rather than admitting the plan exists.
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
-    }
-
-    [RavenFact(RavenTestCategory.Quill)]
-    public async Task The_plan_snapshot_requires_a_slug()
-    {
-        var client = new FakeMigrationClient { Snapshot = SnapshotFor(QuillHost.DefaultWizardSlug) };
-        await using var host = await NewMigrationHostAsync(client);
-
-        var resp = await host.Client.GetAsync(QuillRoutes.MigrationPlan("MigrationChats/abc"));
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-    }
-
-    [RavenFact(RavenTestCategory.Quill)]
     public async Task Apply_narrows_the_configuration_to_the_selected_collections()
     {
         var customers = MigrationSamples.ValidOrders();
@@ -265,13 +170,11 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
 
         var client = new FakeMigrationClient
         {
-            Snapshot = new MigrationPlanSnapshot("MigrationChats/abc", QuillHost.DefaultWizardSlug, "key",
-                PropertyCase.Unspecified, null,
-                [
-                    new MigrationPlanCollection("Orders", 1, null, MigrationSamples.ValidOrders()),
-                    new MigrationPlanCollection("Customers", 1, null, customers)
-                ],
-                [])
+            Plan = new FakePlan(QuillHost.DefaultWizardSlug,
+            [
+                new PlanEntry { Collection = "Orders", Version = 1, Config = MigrationSamples.ValidOrders() },
+                new PlanEntry { Collection = "Customers", Version = 1, Config = customers }
+            ])
         };
 
         await using var host = await NewMigrationHostAsync(client);
@@ -296,7 +199,7 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
     [RavenFact(RavenTestCategory.Quill)]
     public async Task Apply_refuses_a_collection_the_plan_does_not_hold()
     {
-        var client = new FakeMigrationClient { Snapshot = SnapshotFor(QuillHost.DefaultWizardSlug) };
+        var client = new FakeMigrationClient { Plan = PlanFor(QuillHost.DefaultWizardSlug) };
         await using var host = await NewMigrationHostAsync(client);
         await SeedDiscoveredSchemaAsync(host);
 
@@ -315,7 +218,7 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
     [RavenFact(RavenTestCategory.Quill)]
     public async Task Apply_assembles_the_plan_persists_it_and_reports_uncovered_tables()
     {
-        var client = new FakeMigrationClient { Snapshot = SnapshotFor(QuillHost.DefaultWizardSlug) };
+        var client = new FakeMigrationClient { Plan = PlanFor(QuillHost.DefaultWizardSlug) };
         await using var host = await NewMigrationHostAsync(client);
         await SeedDiscoveredSchemaAsync(host);
 
@@ -346,7 +249,7 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
         var broken = MigrationSamples.ValidOrders();
         broken.PrimaryKeyColumns = [];
 
-        var client = new FakeMigrationClient { Snapshot = SnapshotFor(QuillHost.DefaultWizardSlug, broken) };
+        var client = new FakeMigrationClient { Plan = PlanFor(QuillHost.DefaultWizardSlug, broken) };
         await using var host = await NewMigrationHostAsync(client);
         await SeedDiscoveredSchemaAsync(host);
 
@@ -364,8 +267,7 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
     {
         var client = new FakeMigrationClient
         {
-            Snapshot = new MigrationPlanSnapshot("MigrationChats/abc", QuillHost.DefaultWizardSlug, null,
-                PropertyCase.Unspecified, null, [], [])
+            Plan = new FakePlan(QuillHost.DefaultWizardSlug, [])
         };
 
         await using var host = await NewMigrationHostAsync(client);
@@ -403,27 +305,8 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
             .ToList();
     }
 
-    private static MigrationPlanSnapshot SnapshotFor(string slug, CdcSinkTableConfig? config = null) =>
-        new("MigrationChats/abc", slug, "key", PropertyCase.Unspecified, null,
-            [new MigrationPlanCollection("Orders", 1, "because", config ?? MigrationSamples.ValidOrders())],
-            []);
-
-    private static async Task SeedCheckpointAsync(QuillHost host, string inputKey, string slug)
-    {
-        using var session = host.Config.OpenAsyncSession();
-        await session.StoreAsync(
-            new PlanCheckpoint
-            {
-                Id = PlanCheckpoint.DocumentId(inputKey),
-                InputKey = inputKey,
-                Slug = slug,
-                AgentIdentifier = "test-agent",
-                CreatedAt = DateTime.UtcNow
-            },
-            PlanCheckpoint.DocumentId(inputKey));
-
-        await session.SaveChangesAsync();
-    }
+    private static FakePlan PlanFor(string slug, CdcSinkTableConfig? config = null) =>
+        new(slug, [new PlanEntry { Collection = "Orders", Version = 1, Rationale = "because", Config = config ?? MigrationSamples.ValidOrders() }]);
 
     private static async Task SeedDiscoveredSchemaAsync(QuillHost host)
     {
@@ -456,13 +339,14 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
         ]
     };
 
+    private sealed record FakePlan(string Slug, PlanEntry[] Entries);
+
     private sealed class FakeMigrationClient : IMigrationClient
     {
         public Action<List<MigrationFrame>>? OnStart { get; set; }
         public MigrationStartCommand? LastStart { get; private set; }
         public MigrationAskCommand? LastAsk { get; private set; }
-        public MigrationForkCommand? LastFork { get; private set; }
-        public MigrationPlanSnapshot? Snapshot { get; set; }
+        public FakePlan? Plan { get; set; }
 
         public async Task StartAsync(MigrationStartCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token)
         {
@@ -476,16 +360,10 @@ public class MigrationEndpointsTests(ITestOutputHelper output) : QuillTestBase(o
             await EmitAsync(onFrame);
         }
 
-        public async Task ForkAsync(MigrationForkCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token)
-        {
-            LastFork = command;
-            await EmitAsync(onFrame);
-        }
-
-        public Task<MigrationPlanSnapshot?> GetAsync(string slug, string conversationId, CancellationToken token) =>
-            Task.FromResult(
-                Snapshot is not null && string.Equals(Snapshot.Slug, slug, StringComparison.OrdinalIgnoreCase)
-                    ? Snapshot
+        public Task<IReadOnlyCollection<PlanEntry>?> GetAsync(string slug, string conversationId, CancellationToken token) =>
+            Task.FromResult<IReadOnlyCollection<PlanEntry>?>(
+                Plan is not null && string.Equals(Plan.Slug, slug, StringComparison.OrdinalIgnoreCase)
+                    ? Plan.Entries
                     : null);
 
         private async Task EmitAsync(Func<MigrationFrame, Task> onFrame)

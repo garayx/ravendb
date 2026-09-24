@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Raven.Client.Documents.Operations.CdcSink;
 
 namespace Raven.Quill.AiHelper.Migration.Planning;
@@ -13,10 +12,6 @@ public sealed class MigrationPlan
 
     public NamingConventions Conventions { get; private set; } = new();
 
-    public JsonElement? Proposal { get; private set; }
-
-    public void SetProposal(JsonElement proposal) => Proposal = proposal;
-
     /// <summary>Rehydrate a plan persisted by an earlier request.</summary>
     public void Restore(MigrationPlanState state)
     {
@@ -26,20 +21,6 @@ public sealed class MigrationPlan
             _entries[entry.Collection] = entry;
 
         Conventions = state.Conventions ?? new NamingConventions();
-        Proposal = ParseProposal(state.ProposalJson);
-    }
-
-    /// <summary>
-    /// A JsonElement is only valid while the JsonDocument backing it is alive, so the parsed value
-    /// is cloned free of it before the document goes away.
-    /// </summary>
-    public static JsonElement? ParseProposal(string? proposalJson)
-    {
-        if (string.IsNullOrWhiteSpace(proposalJson))
-            return null;
-
-        using var document = JsonDocument.Parse(proposalJson);
-        return document.RootElement.Clone();
     }
 
     public void SetConventions(NamingConventions conventions) => Conventions = conventions;

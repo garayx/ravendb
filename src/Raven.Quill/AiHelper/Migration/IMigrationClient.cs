@@ -1,5 +1,5 @@
 using Raven.Client.Documents.Operations.CdcSink.Schema;
-using Raven.Quill.Contracts;
+using Raven.Quill.AiHelper.Migration.Planning;
 
 namespace Raven.Quill.AiHelper.Migration;
 
@@ -18,10 +18,8 @@ public interface IMigrationClient
 
     Task AskAsync(MigrationAskCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token);
 
-    Task ForkAsync(MigrationForkCommand command, Func<MigrationFrame, Task> onFrame, CancellationToken token);
-
-    /// <summary>The plan a conversation has registered, or null when no such plan belongs to <paramref name="slug"/>.</summary>
-    Task<MigrationPlanSnapshot?> GetAsync(string slug, string conversationId, CancellationToken token);
+    /// <summary>What a conversation has registered, or null when no such plan belongs to <paramref name="slug"/>.</summary>
+    Task<IReadOnlyCollection<PlanEntry>?> GetAsync(string slug, string conversationId, CancellationToken token);
 }
 
 public sealed record MigrationStartCommand(
@@ -34,9 +32,3 @@ public sealed record MigrationAskCommand(
     string ConversationId,
     CdcSinkSourceSchema Schema,
     string Prompt);
-
-public sealed record MigrationForkCommand(
-    string Slug,
-    CdcSinkSourceSchema Schema,
-    string InputKey,
-    string Branch);

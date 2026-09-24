@@ -1,5 +1,4 @@
 using Raven.Client.Documents.Operations.CdcSink;
-using Raven.Quill.AiHelper.Migration.Planning;
 
 namespace Raven.Quill.Contracts;
 
@@ -12,9 +11,6 @@ public sealed record MigrationStartRequest(
 /// <summary>One more turn in an existing planning session.</summary>
 public sealed record MigrationAskRequest(string Slug, string ConversationId, string Prompt);
 
-/// <summary>Branches off a stored analysis, so the same schema is not analysed twice.</summary>
-public sealed record MigrationForkRequest(string Slug, string InputKey, string Branch);
-
 /// <summary>
 /// Turns what the session registered into the configuration the wizard carries on with.
 /// <paramref name="Collections"/> narrows it to the ones the operator kept; empty or absent takes
@@ -26,18 +22,3 @@ public sealed record MigrationApplyResponse(
     CdcSinkConfiguration? Configuration,
     string[] UnmappedTables,
     string[] Errors);
-
-public sealed record MigrationPlanSnapshot(
-    string ConversationId,
-    string Slug,
-    string? InputKey,
-    PropertyCase PropertyCase,
-    string? PropertyLanguage,
-    MigrationPlanCollection[] Collections,
-    string[] Prompts);
-
-public sealed record MigrationPlanCollection(
-    string Collection,
-    int Version,
-    string? Rationale,
-    CdcSinkTableConfig? Config);

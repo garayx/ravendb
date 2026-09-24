@@ -89,7 +89,7 @@ public static class SchemaMigrationAgentDefinition
                     Description =
                         "Call this exactly once, on the first turn, after reading the attached DDL. Groups the " +
                         "source tables into candidate collections and reports what each collection absorbs and " +
-                        "how. Registers the proposal so it can be resumed or forked later. This tool does not " +
+                        "how. The proposal is shown to the user to choose from. This tool does not " +
                         "create any mapping - nothing is configured until add_collection is called.",
                     ParametersSampleObject = JsonHelper.Pretty(SampleProposal)
                 },

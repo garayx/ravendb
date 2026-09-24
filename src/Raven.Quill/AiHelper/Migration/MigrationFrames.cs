@@ -108,7 +108,6 @@ public sealed record OpenQuestion(string Question, string[] Options, int? Recomm
 public sealed class DoneFrame : MigrationFrame
 {
     public string ConversationId { get; set; } = string.Empty;
-    public string? InputKey { get; set; }
 }
 
 public sealed class ErrorFrame : MigrationFrame

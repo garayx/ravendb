@@ -84,7 +84,6 @@ const migrationFrameSchema = z.discriminatedUnion("type", [
     z.object({
         type: z.literal("done"),
         conversationId: z.string(),
-        inputKey: z.string().nullish(),
     }),
     z.object({ type: z.literal("error"), message: z.string() }),
 ]);

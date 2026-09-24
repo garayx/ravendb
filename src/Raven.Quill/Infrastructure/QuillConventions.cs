@@ -26,6 +26,5 @@ public static class QuillConventions
         : type == typeof(ConversationPreview) ? ConversationPreview.Collection // "@ConversationPreviews"
         : type == typeof(AgentActionBindings) ? "@agent-actions"
         : type == typeof(MigrationPlanState) ? MigrationPlanState.Collection // "@migration-plans"
-        : type == typeof(PlanCheckpoint) ? PlanCheckpoint.Collection // "@migration-checkpoints"
         : DocumentConventions.DefaultGetCollectionName(type);
 }

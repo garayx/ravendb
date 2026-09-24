@@ -15,40 +15,18 @@ public sealed class MigrationPlanStore(IDocumentStore store)
         return await session.LoadAsync<MigrationPlanState>(MigrationPlanState.DocumentId(conversationId), token);
     }
 
-    public async Task SaveAsync(
-        string slug,
-        string conversationId,
-        MigrationPlan plan,
-        string? inputKey,
-        IEnumerable<string> prompts,
-        CancellationToken token = default)
+    public async Task SaveAsync(string slug, string conversationId, MigrationPlan plan, CancellationToken token = default)
     {
-        var id = MigrationPlanState.DocumentId(conversationId);
+        var state = new MigrationPlanState
+        {
+            Id = MigrationPlanState.DocumentId(conversationId),
+            Slug = slug,
+            Conventions = plan.Conventions,
+            Entries = plan.Entries.ToList()
+        };
 
         using var session = store.OpenAsyncSession();
-        var state = await session.LoadAsync<MigrationPlanState>(id, token);
-
-        if (state is null)
-        {
-            state = new MigrationPlanState
-            {
-                Id = id,
-                ConversationId = conversationId,
-                Slug = slug,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await session.StoreAsync(state, id, token);
-        }
-
-        state.Slug = slug;
-        state.InputKey = inputKey;
-        state.Conventions = plan.Conventions;
-        state.ProposalJson = plan.Proposal is { } proposal ? proposal.GetRawText() : null;
-        state.Entries = plan.Entries.ToList();
-        state.Prompts = prompts.ToList();
-        state.UpdatedAt = DateTime.UtcNow;
-
+        await session.StoreAsync(state, state.Id, token);
         await session.SaveChangesAsync(token);
     }
 }

@@ -1,6 +1,6 @@
 using Raven.Client.Documents.Operations.CdcSink;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
-using Raven.Quill.Contracts;
+using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Endpoints;
 
 namespace Raven.Quill.AiHelper.Migration;
@@ -15,24 +15,24 @@ public static class PlanToCdcConfiguration
     /// Keeps the task and connection string names of the mapping the app already has. A new app has
     /// none yet, so it gets the same defaults the map endpoint gives a mapping saved without them.
     /// </summary>
-    public static CdcSinkConfiguration Build(MigrationPlanSnapshot snapshot, CdcSinkConfiguration? previousMapping) =>
+    public static CdcSinkConfiguration Build(IEnumerable<PlanEntry> entries, CdcSinkConfiguration? previousMapping) =>
         Build(
-            snapshot,
+            entries,
             string.IsNullOrWhiteSpace(previousMapping?.Name) ? WizardEndpoints.DefaultCdcTaskName : previousMapping.Name,
             string.IsNullOrWhiteSpace(previousMapping?.ConnectionStringName)
                 ? WizardEndpoints.SourceConnectionStringName
                 : previousMapping.ConnectionStringName);
 
     public static CdcSinkConfiguration Build(
-        MigrationPlanSnapshot snapshot,
+        IEnumerable<PlanEntry> entries,
         string name,
         string connectionStringName) =>
         new()
         {
             Name = name,
             ConnectionStringName = connectionStringName,
-            Tables = snapshot.Collections
-                .Select(c => c.Config)
+            Tables = entries
+                .Select(e => e.Config)
                 .Where(c => c is not null)
                 .Select(c => WithInheritedSchemas(c!))
                 .ToList()

@@ -1,18 +1,11 @@
-using System.Security.Cryptography;
-using System.Text;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
 using Raven.Quill.AiHelper.Migration.Schema;
 
 namespace Raven.Quill.AiHelper.Migration.Planning;
 
 /// <summary>
-/// The table and column facts the validator holds the model to.
-///
-/// Built either from DDL files on disk or straight from a discovered schema. The discovery path is
-/// exact by construction - it indexes the same data it renders into the DDL the model reads - so
-/// the two can never disagree. The file path goes through <see cref="DdlColumnExtractor"/>, and a
-/// table it could not read is simply unknown, which makes the column check skip rather than reject
-/// a column it only failed to parse.
+/// The table and column facts the validator holds the model to. Built from the discovered schema,
+/// indexing the same data it renders into the DDL the model reads, so the two cannot disagree.
 /// </summary>
 public sealed class SchemaCatalog
 {
@@ -45,33 +38,6 @@ public sealed class SchemaCatalog
 
     public List<SchemaFile> Files { get; }
 
-    public static SchemaCatalog FromFiles(IEnumerable<string> ddlPaths)
-    {
-        var files = new List<SchemaFile>();
-        var catalog = new SchemaCatalog(files);
-
-        foreach (var path in ddlPaths)
-        {
-            var content = File.ReadAllText(path);
-
-            files.Add(new SchemaFile
-            {
-                Name = System.IO.Path.GetFileName(path),
-                Path = System.IO.Path.GetFullPath(path),
-                Digest = Digest(content),
-
-                // Held in memory so the catalog stays usable once the file is gone - a fork that
-                // materialised its DDL into a temp directory deletes it as soon as this returns.
-                Content = content
-            });
-
-            foreach (var declared in DdlColumnExtractor.Extract(content))
-                catalog.Add(declared.Schema, declared.Name, declared.Columns);
-        }
-
-        return catalog;
-    }
-
     /// <summary>
     /// Build from what discovery already found, rendering one DDL file per table for the model to
     /// read. No parser is involved: the indexed columns are the discovered columns.
@@ -85,12 +51,7 @@ public sealed class SchemaCatalog
         {
             var content = DdlRenderer.Render(table);
 
-            files.Add(new SchemaFile
-            {
-                Name = DdlRenderer.FileNameFor(table),
-                Digest = Digest(content),
-                Content = content
-            });
+            files.Add(new SchemaFile(DdlRenderer.FileNameFor(table), content));
 
             catalog.Add(
                 table.SourceTableSchema ?? string.Empty,
@@ -173,6 +134,4 @@ public sealed class SchemaCatalog
         return lastSeparator >= 0 ? name[(lastSeparator + 1)..].Trim() : name;
     }
 
-    private static string Digest(string content) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 }

@@ -129,9 +129,7 @@ internal static class QuillRoutes
     public const string SuggestCdc = "/api/setup/suggest/cdc";
     public const string MigrationStart = "/api/setup/migration/start";
     public const string MigrationAsk = "/api/setup/migration/ask";
-    public const string MigrationFork = "/api/setup/migration/fork";
     public const string MigrationApply = "/api/setup/migration/apply";
-    public static string MigrationPlan(string conversationId) => $"/api/setup/migration/{conversationId}";
 
     // global (config-DB fan-out)
     public const string Usage = "/api/usage";

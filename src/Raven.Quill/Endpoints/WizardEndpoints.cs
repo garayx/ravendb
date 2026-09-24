@@ -77,22 +77,12 @@ public static class WizardEndpoints
             .WithName("setup.migrationAsk")
             .WithDescription("One more turn in an existing planning session. Streams the same NDJSON frames.")
             .Accepts<MigrationAskRequest>("application/json");
-        group.MapPost("/migration/fork", ForkMigrationAsync)
-            .WithName("setup.migrationFork")
-            .WithDescription("Branches off a stored analysis so the same schema is not analysed twice.")
-            .Accepts<MigrationForkRequest>("application/json");
         group.MapPost("/migration/apply", ApplyMigrationAsync)
             .WithName("setup.migrationApply")
             .WithDescription("Assembles the registered plan into a CDC configuration and hands it to the map step.")
             .Accepts<MigrationApplyRequest>("application/json")
             .Produces<MigrationApplyResponse>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest);
-        group.MapGet("/migration/{**conversationId}", GetMigrationPlanAsync)
-            .WithName("setup.migrationPlan")
-            .WithDescription("The plan a session has registered so far, for reload and resume. Requires the owning app's slug.")
-            .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
-            .Produces<MigrationPlanSnapshot>()
-            .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound);
         group.MapPost("/test-mapping", TestMappingAsync)
             .WithName("setup.testMapping")
             .Accepts<TestMappingRequest>("application/json")
@@ -490,13 +480,6 @@ public static class WizardEndpoints
         CancellationToken ct) =>
         StreamMigrationAsync(ctx, ct, body, (request, write) => service.AskAsync(request, write, ct));
 
-    private static Task ForkMigrationAsync(
-        MigrationForkRequest? body,
-        MigrationService service,
-        HttpContext ctx,
-        CancellationToken ct) =>
-        StreamMigrationAsync(ctx, ct, body, (request, write) => service.ForkAsync(request, write, ct));
-
     private static async Task<IResult> ApplyMigrationAsync(
         MigrationApplyRequest? body,
         MigrationService service,
@@ -523,22 +506,6 @@ public static class WizardEndpoints
             logger.Info($"Migration apply: {response.UnmappedTables.Length} discovered table(s) are not covered by the plan");
 
         return Results.Ok(response);
-    }
-
-    private static async Task<IResult> GetMigrationPlanAsync(
-        string conversationId,
-        string? slug,
-        MigrationService service,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(slug))
-            return Results.BadRequest(new ApiErrorResponse("slug is required"));
-
-        var snapshot = await service.GetAsync(slug, conversationId, ct);
-
-        return snapshot is null
-            ? Results.NotFound(new ApiErrorResponse($"no plan found for conversation '{conversationId}'"))
-            : Results.Ok(snapshot);
     }
 
     /// <summary>

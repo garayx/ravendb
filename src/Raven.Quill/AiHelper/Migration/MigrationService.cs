@@ -1,6 +1,6 @@
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
-using Raven.Quill.AiHelper.Migration.Agent;
+using Raven.Quill.AiHelper.Migration.Planning;
 using Raven.Quill.Contracts;
 using Raven.Quill.Endpoints;
 using Raven.Quill.Wizard;
@@ -70,9 +70,8 @@ public sealed class MigrationService(
         if (consent is not null)
             return consent;
 
-        // Every session persists its plan before this can be called - start does it at the end of
-        // the opening turn, fork does it as it branches - so nothing found here means the
-        // conversation is not this app's to continue, whether or not it exists at all.
+        // Every session persists its plan at the end of its opening turn, so nothing found here means
+        // the conversation is not this app's to continue, whether or not it exists at all.
         if (await client.GetAsync(request.Slug, request.ConversationId, token) is null)
             return new Refusal("no planning session found for that conversation");
 
@@ -81,51 +80,6 @@ public sealed class MigrationService(
 
         return null;
     }
-
-    public async Task<Refusal?> ForkAsync(
-        MigrationForkRequest request,
-        Func<MigrationFrame, Task> onFrame,
-        CancellationToken token)
-    {
-        if (string.IsNullOrWhiteSpace(request.InputKey))
-            return new Refusal("inputKey is required");
-
-        // The branch validates against the discovered schema, same as the session it came from,
-        // rather than against DDL read back off the checkpoint.
-        var (schema, refusal) = await ResolveSchemaAsync(request.Slug, selected: null, token);
-        if (refusal is not null)
-            return refusal;
-
-        var consent = await RequireConsentAsync(token);
-        if (consent is not null)
-            return consent;
-
-        // Checked here rather than in the client, because forking copies the checkpoint's DDL and
-        // its proposal into the new conversation - by the time the client has it, another app's
-        // analysis has already been handed over.
-        var checkpoint = await MigrationSession.FindCheckpointAsync(store, request.InputKey, token);
-
-        if (checkpoint is null)
-            return new Refusal($"no stored analysis found for input key '{request.InputKey}'");
-
-        // Checkpoints written before checkpoints had an owner are treated as unowned rather than
-        // stranded.
-        if (string.IsNullOrEmpty(checkpoint.Slug) == false &&
-            string.Equals(checkpoint.Slug, request.Slug, StringComparison.OrdinalIgnoreCase) == false)
-        {
-            return new Refusal("that analysis belongs to a different app");
-        }
-
-        var branch = string.IsNullOrWhiteSpace(request.Branch) ? "branch" : request.Branch;
-
-        await client.ForkAsync(
-            new MigrationForkCommand(request.Slug, schema!, request.InputKey, branch), onFrame, token);
-
-        return null;
-    }
-
-    public Task<MigrationPlanSnapshot?> GetAsync(string slug, string conversationId, CancellationToken token) =>
-        client.GetAsync(slug, conversationId, token);
 
     /// <summary>
     /// Turns the registered plan into the configuration the wizard carries on with. The per-call
@@ -140,14 +94,14 @@ public sealed class MigrationService(
         if (string.IsNullOrWhiteSpace(request.ConversationId))
             return (null, new Refusal("conversationId is required"));
 
-        var snapshot = await client.GetAsync(request.Slug, request.ConversationId, token);
-        if (snapshot is null)
+        var entries = await client.GetAsync(request.Slug, request.ConversationId, token);
+        if (entries is null)
             return (null, new Refusal("no plan found for that conversation"));
 
-        if (snapshot.Collections.Length == 0)
+        if (entries.Count == 0)
             return (null, new Refusal("the plan has no collections yet"));
 
-        var (selected, unknown) = SelectCollections(snapshot, request.Collections);
+        var (selected, unknown) = SelectCollections(entries, request.Collections);
 
         if (unknown.Length > 0)
             return (null, new Refusal($"the plan has no collection named {string.Join(", ", unknown)}"));
@@ -155,15 +109,13 @@ public sealed class MigrationService(
         if (selected.Length == 0)
             return (null, new Refusal("no collections were selected"));
 
-        snapshot = snapshot with { Collections = selected };
-
         using var session = store.OpenAsyncSession();
         var state = await session.LoadAsync<WizardState>(WizardState.DocumentIdFor(request.Slug), token);
 
         if (state?.LastDiscoveredSchema is null)
             return (null, new Refusal("no discovered schema found; call /api/setup/discover first"));
 
-        var configuration = PlanToCdcConfiguration.Build(snapshot, state.LastMapConfiguration);
+        var configuration = PlanToCdcConfiguration.Build(selected, state.LastMapConfiguration);
 
         if (configuration.Validate(out var errors, validateName: false, validateConnection: false) == false)
             return (new MigrationApplyResponse(null, [], errors.ToArray()), null);
@@ -186,21 +138,21 @@ public sealed class MigrationService(
     /// a mistake worth reporting rather than quietly ignoring - it usually means the caller is
     /// working from a stale view of the plan.
     /// </summary>
-    private static (MigrationPlanCollection[] Selected, string[] Unknown) SelectCollections(
-        MigrationPlanSnapshot snapshot,
+    private static (PlanEntry[] Selected, string[] Unknown) SelectCollections(
+        IReadOnlyCollection<PlanEntry> entries,
         string[]? requested)
     {
         if (requested is not { Length: > 0 })
-            return (snapshot.Collections, []);
+            return (entries.ToArray(), []);
 
         var wanted = requested.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var unknown = wanted
-            .Where(name => snapshot.Collections.Any(c => string.Equals(c.Collection, name, StringComparison.OrdinalIgnoreCase)) == false)
+            .Where(name => entries.Any(e => string.Equals(e.Collection, name, StringComparison.OrdinalIgnoreCase)) == false)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        return (snapshot.Collections.Where(c => wanted.Contains(c.Collection)).ToArray(), unknown);
+        return (entries.Where(e => wanted.Contains(e.Collection)).ToArray(), unknown);
     }
 
     private async Task<(CdcSinkSourceSchema? Schema, Refusal? Refusal)> ResolveSchemaAsync(
