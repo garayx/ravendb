@@ -1,6 +1,7 @@
 using Raven.Client.Documents.Operations.CdcSink;
 using Raven.Client.Documents.Operations.CdcSink.Schema;
 using Raven.Quill.Contracts;
+using Raven.Quill.Endpoints;
 
 namespace Raven.Quill.AiHelper.Migration;
 
@@ -10,6 +11,18 @@ namespace Raven.Quill.AiHelper.Migration;
 /// </summary>
 public static class PlanToCdcConfiguration
 {
+    /// <summary>
+    /// Keeps the task and connection string names of the mapping the app already has. A new app has
+    /// none yet, so it gets the same defaults the map endpoint gives a mapping saved without them.
+    /// </summary>
+    public static CdcSinkConfiguration Build(MigrationPlanSnapshot snapshot, CdcSinkConfiguration? previousMapping) =>
+        Build(
+            snapshot,
+            string.IsNullOrWhiteSpace(previousMapping?.Name) ? WizardEndpoints.DefaultCdcTaskName : previousMapping.Name,
+            string.IsNullOrWhiteSpace(previousMapping?.ConnectionStringName)
+                ? WizardEndpoints.SourceConnectionStringName
+                : previousMapping.ConnectionStringName);
+
     public static CdcSinkConfiguration Build(
         MigrationPlanSnapshot snapshot,
         string name,

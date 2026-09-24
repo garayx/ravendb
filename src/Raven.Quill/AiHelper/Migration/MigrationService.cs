@@ -163,10 +163,7 @@ public sealed class MigrationService(
         if (state?.LastDiscoveredSchema is null)
             return (null, new Refusal("no discovered schema found; call /api/setup/discover first"));
 
-        var configuration = PlanToCdcConfiguration.Build(
-            snapshot,
-            state.LastMapConfiguration?.Name ?? string.Empty,
-            state.LastMapConfiguration?.ConnectionStringName ?? string.Empty);
+        var configuration = PlanToCdcConfiguration.Build(snapshot, state.LastMapConfiguration);
 
         if (configuration.Validate(out var errors, validateName: false, validateConnection: false) == false)
             return (new MigrationApplyResponse(null, [], errors.ToArray()), null);

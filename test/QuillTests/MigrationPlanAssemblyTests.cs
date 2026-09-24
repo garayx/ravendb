@@ -40,6 +40,38 @@ public class MigrationPlanAssemblyTests(ITestOutputHelper output) : NoDisposalNe
     }
 
     [RavenFact(RavenTestCategory.Quill)]
+    public void A_new_app_without_a_mapping_gets_the_default_names_and_validates()
+    {
+        var config = PlanToCdcConfiguration.Build(Snapshot(MigrationSamples.ValidOrders()), previousMapping: null);
+
+        Assert.Equal("quill-cdc", config.Name);
+        Assert.Equal("quill-cdc-connection", config.ConnectionStringName);
+        Assert.True(config.Validate(out var errors, validateName: false, validateConnection: false), string.Join("; ", errors));
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void A_mapping_with_blank_names_falls_back_to_the_defaults()
+    {
+        var previous = new CdcSinkConfiguration { Name = " ", ConnectionStringName = "" };
+
+        var config = PlanToCdcConfiguration.Build(Snapshot(MigrationSamples.ValidOrders()), previous);
+
+        Assert.Equal("quill-cdc", config.Name);
+        Assert.Equal("quill-cdc-connection", config.ConnectionStringName);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void An_existing_mapping_keeps_its_names()
+    {
+        var previous = new CdcSinkConfiguration { Name = "shop-cdc", ConnectionStringName = "shop-source" };
+
+        var config = PlanToCdcConfiguration.Build(Snapshot(MigrationSamples.ValidOrders()), previous);
+
+        Assert.Equal("shop-cdc", config.Name);
+        Assert.Equal("shop-source", config.ConnectionStringName);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
     public void An_embedded_table_counts_as_covered_but_a_linked_one_does_not()
     {
         var orders = MigrationSamples.ValidOrders();

@@ -21,8 +21,8 @@ namespace Raven.Quill.Endpoints;
 public static class WizardEndpoints
 {
     // the source connection string's name on the app DB once provisioned (used when the map didn't set one)
-    private const string SourceConnectionStringName = "quill-cdc-connection";
-    private const string DefaultCdcTaskName = "quill-cdc";
+    internal const string SourceConnectionStringName = "quill-cdc-connection";
+    internal const string DefaultCdcTaskName = "quill-cdc";
     private const string CdcDryRunTaskName = "quill-cdc-dry-run";
 
     private const string DefaultIntentPrompt =
