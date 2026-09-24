@@ -4,7 +4,7 @@ import { Badge } from "@/components/shadcn/ui/badge";
 import { Button } from "@/components/shadcn/ui/button";
 import { Label } from "@/components/shadcn/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/shadcn/ui/radio-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/shadcn/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/shadcn/ui/tooltip";
 import { Heading, Text } from "@/components/typography";
 import {
     areAllQuestionsAnswered,
@@ -36,22 +36,24 @@ export function PlannerQuestions({
                         ? "The planner has a question"
                         : `The planner has ${questions.length} questions`}
                 </Heading>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label="Skip the questions and use the recommended answers"
-                            onClick={() =>
-                                onAnswer(composeAnswersPrompt(questions, recommendedAnswers(questions), true))
-                            }
-                        >
-                            <X aria-hidden />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Skip - use the recommended answers</TooltipContent>
-                </Tooltip>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                type="button"
+                                size="icon-sm"
+                                variant="ghost"
+                                aria-label="Skip the questions and use the recommended answers"
+                                onClick={() =>
+                                    onAnswer(composeAnswersPrompt(questions, recommendedAnswers(questions), true))
+                                }
+                            >
+                                <X aria-hidden />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Skip - use the recommended answers</TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             </div>
 
             <ol className="grid min-h-0 gap-4 overflow-y-auto p-3">
