@@ -66,7 +66,19 @@ public static class SchemaMigrationAgentDefinition
             {
                 Reply = "Explain the modelling decisions and their trade-offs. Do not repeat configuration JSON.",
                 Gaps = new[] { "something the user asked for that the source schema cannot express" },
-                OpenQuestions = new[] { "a decision you want confirmed before this is applied" }
+                OpenQuestions = new[]
+                {
+                    new MigrationOpenQuestion
+                    {
+                        Question = "a decision you want the user to make",
+                        Options = new[]
+                        {
+                            new MigrationAnswerOption { Answer = "the answer you would pick", IsRecommended = true },
+                            new MigrationAnswerOption { Answer = "a reasonable alternative", IsRecommended = false },
+                            new MigrationAnswerOption { Answer = "another reasonable alternative", IsRecommended = false }
+                        }
+                    }
+                }
             }),
 
             Actions = new List<AiAgentToolAction>
@@ -298,6 +310,12 @@ public static class SchemaMigrationAgentDefinition
         you would like a decision confirmed, that is not a reason to wait: register what the schema
         does support now, and raise the rest in Gaps and OpenQuestions alongside it. Asking a
         question and registering are not alternatives - do both in the same turn.
+
+        Open questions are answered by picking, not typing. Give every question exactly three
+        concrete, mutually exclusive answers, short enough to read at a glance, and mark exactly
+        one IsRecommended - the one you would choose if the user skipped the question, because
+        skipping applies it. Ask only what the schema cannot settle for you; a question with an
+        obvious answer is a decision you should have made yourself.
 
         Corrections: property naming and language are properties of the mappings you emit, not
         of the conversation. When the user changes them, call set_conventions once and then

@@ -5,6 +5,7 @@ import { Button } from "@/components/shadcn/ui/button";
 import { Textarea } from "@/components/shadcn/ui/textarea";
 import { Text } from "@/components/typography";
 import { useSetupWizardStore, type PlannerMessage } from "@/pages/setup/add-app-wizard/app-wizard-store";
+import { PlannerQuestions } from "@/pages/setup/add-app-wizard/steps/map/planner-questions";
 
 /** Matches the assistant panel: close enough to the bottom and the view keeps following the stream. */
 const STICK_TO_BOTTOM_THRESHOLD_PX = 48;
@@ -21,6 +22,7 @@ export function PlannerChat({
     onStop: () => void;
 }) {
     const messages = useSetupWizardStore((state) => state.plannerMessages);
+    const questions = useSetupWizardStore((state) => state.plannerQuestions);
     const [prompt, setPrompt] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
     const isFollowingStreamRef = useRef(true);
@@ -67,39 +69,43 @@ export function PlannerChat({
                 )}
             </div>
 
-            <div className="border-t p-3">
-                <div className="relative">
-                    <Textarea
-                        rows={3}
-                        value={prompt}
-                        onChange={(event) => setPrompt(event.target.value)}
-                        onKeyDown={(event) => {
-                            if (event.key === "Enter" && !event.shiftKey) {
-                                event.preventDefault();
-                                send();
+            {questions.length > 0 && !isStreaming ? (
+                <PlannerQuestions questions={questions} onAnswer={onAsk} />
+            ) : (
+                <div className="border-t p-3">
+                    <div className="relative">
+                        <Textarea
+                            rows={3}
+                            value={prompt}
+                            onChange={(event) => setPrompt(event.target.value)}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" && !event.shiftKey) {
+                                    event.preventDefault();
+                                    send();
+                                }
+                            }}
+                            disabled={!canAsk}
+                            placeholder={
+                                canAsk
+                                    ? "Tell the planner which collections to build, or ask for a change."
+                                    : "Start a session first."
                             }
-                        }}
-                        disabled={!canAsk}
-                        placeholder={
-                            canAsk
-                                ? "Tell the planner which collections to build, or ask for a change."
-                                : "Start a session first."
-                        }
-                        className="pr-12"
-                    />
-                    <Button
-                        type="button"
-                        size="icon"
-                        variant={isStreaming ? "secondary" : "default"}
-                        className="absolute right-2 bottom-2"
-                        onClick={isStreaming ? onStop : send}
-                        disabled={!canAsk || (!isStreaming && !prompt.trim())}
-                        aria-label={isStreaming ? "Stop" : "Send"}
-                    >
-                        {isStreaming ? <Square aria-hidden /> : <SendHorizontal aria-hidden />}
-                    </Button>
+                            className="pr-12"
+                        />
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant={isStreaming ? "secondary" : "default"}
+                            className="absolute right-2 bottom-2"
+                            onClick={isStreaming ? onStop : send}
+                            disabled={!canAsk || (!isStreaming && !prompt.trim())}
+                            aria-label={isStreaming ? "Stop" : "Send"}
+                        >
+                            {isStreaming ? <Square aria-hidden /> : <SendHorizontal aria-hidden />}
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

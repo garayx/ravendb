@@ -68,7 +68,41 @@ public sealed class ReplyFrame : MigrationFrame
 {
     public string? Reply { get; set; }
     public string[] Gaps { get; set; } = [];
-    public string[] OpenQuestions { get; set; } = [];
+    public OpenQuestion[] OpenQuestions { get; set; } = [];
+}
+
+/// <summary>
+/// A question as the browser renders it. <see cref="Recommended"/> indexes into
+/// <see cref="Options"/>, and is null only when the agent offered no answers at all.
+/// </summary>
+public sealed record OpenQuestion(string Question, string[] Options, int? Recommended)
+{
+    public const int MaxOptions = 3;
+
+    /// <summary>
+    /// The model is asked for three answers with exactly one recommended, and does not always
+    /// comply. Blank questions and answers are dropped, extra answers are cut, and when no kept
+    /// answer is flagged the first one stands in, so the browser can always resolve a skip.
+    /// </summary>
+    public static OpenQuestion[] From(MigrationOpenQuestion[]? questions) =>
+        (questions ?? [])
+            .Where(q => string.IsNullOrWhiteSpace(q.Question) == false)
+            .Select(q =>
+            {
+                var options = (q.Options ?? [])
+                    .Where(o => string.IsNullOrWhiteSpace(o.Answer) == false)
+                    .DistinctBy(o => o.Answer!.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .Take(MaxOptions)
+                    .ToArray();
+
+                var recommended = Array.FindIndex(options, o => o.IsRecommended);
+
+                return new OpenQuestion(
+                    q.Question!.Trim(),
+                    options.Select(o => o.Answer!.Trim()).ToArray(),
+                    options.Length == 0 ? null : Math.Max(recommended, 0));
+            })
+            .ToArray();
 }
 
 public sealed class DoneFrame : MigrationFrame

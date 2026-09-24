@@ -105,6 +105,54 @@ public class MigrationPlanAssemblyTests(ITestOutputHelper output) : NoDisposalNe
         Assert.Equal("inventory", Assert.Single(Assert.Single(config.Tables).EmbeddedTables).SourceTableSchema);
     }
 
+    private static MigrationOpenQuestion Question(string? text, params (string? Answer, bool IsRecommended)[] options) => new()
+    {
+        Question = text,
+        Options = options.Select(o => new MigrationAnswerOption { Answer = o.Answer, IsRecommended = o.IsRecommended }).ToArray()
+    };
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void An_open_question_carries_its_answers_and_the_recommended_index()
+    {
+        var question = Assert.Single(OpenQuestion.From([
+            Question(" Embed lines? ", ("Embed", false), ("Link", true), ("Separate", false))
+        ]));
+
+        Assert.Equal("Embed lines?", question.Question);
+        Assert.Equal(["Embed", "Link", "Separate"], question.Options);
+        Assert.Equal(1, question.Recommended);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void An_open_question_without_a_flagged_answer_recommends_the_first()
+    {
+        var question = Assert.Single(OpenQuestion.From([Question("q", ("a", false), ("b", false))]));
+
+        Assert.Equal(0, question.Recommended);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void An_open_question_keeps_three_distinct_non_blank_answers()
+    {
+        var question = Assert.Single(OpenQuestion.From([
+            Question("q", ("a", false), (" ", true), ("A", false), ("b", false), ("c", false), ("d", true))
+        ]));
+
+        Assert.Equal(["a", "b", "c"], question.Options);
+        // The only flagged answer was cut, so the first kept one stands in.
+        Assert.Equal(0, question.Recommended);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void Blank_questions_are_dropped_and_one_without_answers_has_no_recommendation()
+    {
+        var questions = OpenQuestion.From([Question("  "), Question(null), Question("free form?")]);
+
+        var question = Assert.Single(questions);
+        Assert.Empty(question.Options);
+        Assert.Null(question.Recommended);
+    }
+
     [RavenFact(RavenTestCategory.Quill)]
     public void An_embedded_table_counts_as_covered_but_a_linked_one_does_not()
     {

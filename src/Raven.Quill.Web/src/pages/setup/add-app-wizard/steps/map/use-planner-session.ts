@@ -4,6 +4,7 @@ import { api } from "@/api/api";
 import type { MigrationFrame } from "@/api/custom-services/migration-service";
 import { type AppFormData } from "@/pages/setup/add-app-wizard/app-wizard-validation";
 import { useSetupWizardStore, type PlannerMessage } from "@/pages/setup/add-app-wizard/app-wizard-store";
+import { splitOpenQuestions } from "@/pages/setup/add-app-wizard/steps/map/planner-questions-utils";
 
 let nextMessageId = 0;
 
@@ -36,9 +37,7 @@ export function usePlannerSession() {
                     dropped: frame.dropped,
                     enables: frame.enables,
                 });
-                store.appendPlannerMessage(
-                    message("tool", `Proposed ${frame.collections.length} collections.`),
-                );
+                store.appendPlannerMessage(message("tool", `Proposed ${frame.collections.length} collections.`));
                 break;
 
             case "collection":
@@ -87,9 +86,12 @@ export function usePlannerSession() {
                 store.appendPlannerMessage(message("tool", frame.text));
                 break;
 
-            case "reply":
-                store.appendPlannerMessage(message("agent", replyText(frame)));
+            case "reply": {
+                const { pickable, freeForm } = splitOpenQuestions(frame.openQuestions);
+                store.appendPlannerMessage(message("agent", replyText(frame, freeForm)));
+                store.setPlannerQuestions(pickable);
                 break;
+            }
 
             case "done":
                 store.setPlannerConversationId(frame.conversationId);
@@ -114,9 +116,7 @@ export function usePlannerSession() {
             if (!controller.signal.aborted) {
                 useSetupWizardStore
                     .getState()
-                    .appendPlannerMessage(
-                        message("error", error instanceof Error ? error.message : String(error)),
-                    );
+                    .appendPlannerMessage(message("error", error instanceof Error ? error.message : String(error)));
             }
         } finally {
             abortRef.current = null;
@@ -148,6 +148,7 @@ export function usePlannerSession() {
             }
 
             store.appendPlannerMessage(message("user", prompt));
+            store.setPlannerQuestions([]);
 
             return run((signal) =>
                 api.services.migration.ask(
@@ -165,16 +166,19 @@ export function usePlannerSession() {
     };
 }
 
-/** The reply carries gaps and open questions the transcript should show alongside the prose. */
-function replyText(frame: Extract<MigrationFrame, { type: "reply" }>): string {
+/**
+ * The reply carries gaps and open questions the transcript should show alongside the prose. Only
+ * the questions without answers to pick from are listed; the rest are asked in the picker.
+ */
+function replyText(frame: Extract<MigrationFrame, { type: "reply" }>, freeFormQuestions: string[]): string {
     const sections = [frame.reply?.trim() ?? ""];
 
     if (frame.gaps.length > 0) {
         sections.push(`**Gaps**\n\n${frame.gaps.map((gap) => `- ${gap}`).join("\n")}`);
     }
 
-    if (frame.openQuestions.length > 0) {
-        sections.push(`**Open questions**\n\n${frame.openQuestions.map((q) => `- ${q}`).join("\n")}`);
+    if (freeFormQuestions.length > 0) {
+        sections.push(`**Open questions**\n\n${freeFormQuestions.map((q) => `- ${q}`).join("\n")}`);
     }
 
     return sections.filter(Boolean).join("\n\n");

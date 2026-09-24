@@ -46,7 +46,15 @@ const migrationFrameSchema = z.discriminatedUnion("type", [
         type: z.literal("reply"),
         reply: z.string().nullish(),
         gaps: z.array(z.string()).default([]),
-        openQuestions: z.array(z.string()).default([]),
+        openQuestions: z
+            .array(
+                z.object({
+                    question: z.string(),
+                    options: z.array(z.string()).default([]),
+                    recommended: z.number().nullish(),
+                }),
+            )
+            .default([]),
     }),
     z.object({
         type: z.literal("done"),
@@ -82,8 +90,7 @@ export function createMigrationService(client: ApiClient) {
         ask: (request: MigrationAskRequest, signal?: AbortSignal) =>
             streamFrames(client, "/setup/migration/ask", request, signal),
 
-        apply: (request: MigrationApplyRequest) =>
-            client.post<MigrationApplyResult>("/setup/migration/apply", request),
+        apply: (request: MigrationApplyRequest) => client.post<MigrationApplyResult>("/setup/migration/apply", request),
     };
 }
 

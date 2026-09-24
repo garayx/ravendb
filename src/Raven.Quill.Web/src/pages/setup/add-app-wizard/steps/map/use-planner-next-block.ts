@@ -14,9 +14,17 @@ export function usePlannerNextBlock(): { isNextDisabled: boolean; nextDisabledRe
     const isStreaming = useSetupWizardStore((state) => state.isPlannerStreaming);
     const collections = useSetupWizardStore((state) => state.plannerCollections);
     const deselected = useSetupWizardStore((state) => state.plannerDeselected);
+    const hasQuestions = useSetupWizardStore((state) => state.plannerQuestions.length > 0);
 
     if (isStreaming) {
         return { isNextDisabled: true, nextDisabledReason: "The planner is still working." };
+    }
+
+    if (hasQuestions) {
+        return {
+            isNextDisabled: true,
+            nextDisabledReason: "Answer the planner's questions, or skip them to accept its recommendations.",
+        };
     }
 
     const registered = Object.values(collections).filter((collection) => collection.status !== "rejected");

@@ -105,7 +105,7 @@ public sealed class LocalMigrationClient(IDocumentStore store, MigrationPlanStor
                 {
                     Reply = reply.Reply,
                     Gaps = reply.Gaps,
-                    OpenQuestions = reply.OpenQuestions
+                    OpenQuestions = OpenQuestion.From(reply.OpenQuestions)
                 });
 
                 queue.Writer.TryWrite(new DoneFrame

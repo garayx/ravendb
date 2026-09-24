@@ -4,6 +4,7 @@ import {
     getAncestorTablePaths,
     type MapActiveTable,
 } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-types";
+import type { PlannerQuestion } from "@/pages/setup/add-app-wizard/steps/map/planner-questions-utils";
 
 /** Outcome of a connect attempt together with the connect key it ran with. */
 export type ConnectionAttempt = { key: string; error: Error | null };
@@ -80,6 +81,8 @@ export type SetupWizardState = {
     /** Names the operator kept. Absent from the map means kept - a new collection starts selected. */
     plannerDeselected: Record<string, boolean>;
     isPlannerStreaming: boolean;
+    /** Questions the operator has to answer, or skip, before the session can go on. */
+    plannerQuestions: PlannerQuestion[];
     appendPlannerMessage: (message: PlannerMessage) => void;
     setPlannerConversationId: (conversationId: string) => void;
     setPlannerProposal: (proposal: PlannerProposal) => void;
@@ -87,6 +90,7 @@ export type SetupWizardState = {
     removePlannerCollection: (collection: string) => void;
     togglePlannerCollection: (collection: string, isSelected: boolean) => void;
     setIsPlannerStreaming: (isStreaming: boolean) => void;
+    setPlannerQuestions: (questions: PlannerQuestion[]) => void;
     resetPlannerState: () => void;
 };
 
@@ -138,6 +142,7 @@ const initialState: Pick<
     | "plannerProposal"
     | "plannerDeselected"
     | "isPlannerStreaming"
+    | "plannerQuestions"
 > = {
     discoverResult: null,
     discoverSchemas: [],
@@ -160,6 +165,7 @@ const initialState: Pick<
     plannerProposal: null,
     plannerDeselected: {},
     isPlannerStreaming: false,
+    plannerQuestions: [],
 };
 
 export const useSetupWizardStore = create<SetupWizardState>((set) => ({
@@ -250,6 +256,8 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
 
     setIsPlannerStreaming: (isStreaming) => set({ isPlannerStreaming: isStreaming }),
 
+    setPlannerQuestions: (questions) => set({ plannerQuestions: questions }),
+
     resetPlannerState: () =>
         set({
             plannerMessages: [],
@@ -258,5 +266,6 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
             plannerProposal: null,
             plannerDeselected: {},
             isPlannerStreaming: false,
+            plannerQuestions: [],
         }),
 }));
