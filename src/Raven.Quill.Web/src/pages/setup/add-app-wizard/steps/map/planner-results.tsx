@@ -1,16 +1,24 @@
-import { ListTree } from "lucide-react";
-import { CodeBlock, TranscriptDisclosure } from "@/components/chat/transcript-disclosure";
+import { useState } from "react";
 import { Separator } from "@/components/shadcn/ui/separator";
-import { Heading, Text } from "@/components/typography";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shadcn/ui/tabs";
+import { Text } from "@/components/typography";
 import { useSetupWizardStore } from "@/pages/setup/add-app-wizard/app-wizard-store";
 import { PlannerCollectionCard } from "@/pages/setup/add-app-wizard/steps/map/planner-collection-card";
+import { PlannerProposalView } from "@/pages/setup/add-app-wizard/steps/map/planner-proposal";
 
-/** What the planner has actually registered, as opposed to what it said it would. */
+type ResultsTab = "proposal" | "collections";
+
+/**
+ * What the planner proposed and what it actually registered, side by side as tabs. The view
+ * follows the session - the proposal first, the collections once there are any - until the
+ * operator picks a tab themselves.
+ */
 export function PlannerResults() {
     const proposal = useSetupWizardStore((state) => state.plannerProposal);
     const collections = useSetupWizardStore((state) => state.plannerCollections);
     const deselected = useSetupWizardStore((state) => state.plannerDeselected);
     const toggle = useSetupWizardStore((state) => state.togglePlannerCollection);
+    const [chosenTab, setChosenTab] = useState<ResultsTab | null>(null);
 
     const registered = Object.values(collections);
 
@@ -22,33 +30,47 @@ export function PlannerResults() {
         );
     }
 
-    return (
-        <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3">
-            {proposal && (
-                <TranscriptDisclosure disclosureKey="planner-proposal" icon={ListTree} label="Proposed plan">
-                    <div className="px-3 pb-3">
-                        <CodeBlock value={JSON.stringify(proposal, null, 2)} className="max-h-96" />
-                    </div>
-                </TranscriptDisclosure>
-            )}
+    const tab = chosenTab ?? (registered.length > 0 ? "collections" : "proposal");
 
-            {registered.length > 0 && (
-                <div className="grid gap-3">
-                    <Heading as="h3" variant="subsection">
-                        Collections
-                    </Heading>
-                    {registered.map((collection, index) => (
-                        <div key={collection.collection} className="grid gap-3">
-                            {index > 0 && <Separator />}
-                            <PlannerCollectionCard
-                                collection={collection}
-                                isSelected={!deselected[collection.collection]}
-                                onSelectedChange={(isSelected) => toggle(collection.collection, isSelected)}
-                            />
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
+    return (
+        <Tabs
+            value={tab}
+            onValueChange={(next) => setChosenTab(next as ResultsTab)}
+            className="flex h-full min-h-0 flex-col gap-0"
+        >
+            <div className="border-b p-3">
+                <TabsList>
+                    <TabsTrigger value="proposal" disabled={!proposal}>
+                        Proposal
+                    </TabsTrigger>
+                    <TabsTrigger value="collections">Collections ({registered.length})</TabsTrigger>
+                </TabsList>
+            </div>
+
+            <TabsContent value="proposal" className="min-h-0 flex-1 overflow-y-auto p-3">
+                {proposal && <PlannerProposalView proposal={proposal} collections={collections} />}
+            </TabsContent>
+
+            <TabsContent value="collections" className="min-h-0 flex-1 overflow-y-auto p-3">
+                {registered.length === 0 ? (
+                    <Text variant="muted">
+                        Nothing registered yet. Tell the planner which proposed collections to build.
+                    </Text>
+                ) : (
+                    <div className="grid gap-3">
+                        {registered.map((collection, index) => (
+                            <div key={collection.collection} className="grid gap-3">
+                                {index > 0 && <Separator />}
+                                <PlannerCollectionCard
+                                    collection={collection}
+                                    isSelected={!deselected[collection.collection]}
+                                    onSelectedChange={(isSelected) => toggle(collection.collection, isSelected)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </TabsContent>
+        </Tabs>
     );
 }

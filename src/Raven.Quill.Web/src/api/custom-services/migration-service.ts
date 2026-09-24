@@ -10,9 +10,34 @@ import type { CdcSinkTableConfig } from "@/api/generated/server-api";
 const migrationFrameSchema = z.discriminatedUnion("type", [
     z.object({
         type: z.literal("proposal"),
-        areas: z.array(z.unknown()).default([]),
-        collections: z.array(z.unknown()).default([]),
-        dropped: z.array(z.unknown()).default([]),
+        areas: z
+            .array(
+                z.object({
+                    area: z.string().nullish(),
+                    collections: z.array(z.string()).default([]),
+                    why: z.string().nullish(),
+                }),
+            )
+            .default([]),
+        collections: z
+            .array(
+                z.object({
+                    collection: z.string().nullish(),
+                    rootTable: z.string().nullish(),
+                    absorbs: z
+                        .array(
+                            z.object({
+                                table: z.string().nullish(),
+                                how: z.string().nullish(),
+                                why: z.string().nullish(),
+                            }),
+                        )
+                        .default([]),
+                    why: z.string().nullish(),
+                }),
+            )
+            .default([]),
+        dropped: z.array(z.object({ table: z.string().nullish(), why: z.string().nullish() })).default([]),
         enables: z.array(z.string()).default([]),
     }),
     z.object({

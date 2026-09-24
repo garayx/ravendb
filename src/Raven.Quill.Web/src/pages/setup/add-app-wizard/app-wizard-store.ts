@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { MigrationFrame } from "@/api/custom-services/migration-service";
 import type { DiscoverResponse } from "@/api/generated/server-api";
 import {
     getAncestorTablePaths,
@@ -101,12 +102,7 @@ export type PlannerMessage = {
     text: string;
 };
 
-export type PlannerProposal = {
-    areas: unknown[];
-    collections: unknown[];
-    dropped: unknown[];
-    enables: string[];
-};
+export type PlannerProposal = Omit<Extract<MigrationFrame, { type: "proposal" }>, "type">;
 
 export type PlannerCollection = {
     collection: string;
