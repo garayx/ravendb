@@ -138,9 +138,28 @@ public sealed class MigrationSession
     // Action handlers
     // -----------------------------------------------------------------------
 
+    private void HandleTool<TArgs>(string actionName, Func<TArgs, Task<ActionAck>> handler) where TArgs : class
+    {
+        _chat.Handle<string, ActionAck>(actionName, async raw =>
+        {
+            if (ToolArguments.TryRead<TArgs>(raw, out var args, out var error))
+                return await handler(args);
+
+            _channel.Note($"{actionName} was called with arguments that could not be read: {error}");
+
+            return new ActionAck
+            {
+                Status = "rejected",
+                Errors = [error],
+                Registered = Plan.CollectionNames(),
+                Next = $"Nothing was done. Fix the arguments to match the {actionName} schema and call it again."
+            };
+        });
+    }
+
     private void RegisterHandlers()
     {
-        _chat.Handle(SchemaMigrationAgentDefinition.ProposePlan, async (ProposePlanArgs args) =>
+        HandleTool(SchemaMigrationAgentDefinition.ProposePlan, async (ProposePlanArgs args) =>
         {
             Plan.SetProposal(JsonSerializer.SerializeToElement(args, JsonHelper.Options));
             _channel.ProposalRegistered(args);
@@ -154,7 +173,7 @@ public sealed class MigrationSession
             };
         });
 
-        _chat.Handle(SchemaMigrationAgentDefinition.AddCollection, async (AddCollectionArgs args) =>
+        HandleTool(SchemaMigrationAgentDefinition.AddCollection, async (AddCollectionArgs args) =>
         {
             var collection = args.Collection ?? args.Config?.CollectionName;
 
@@ -190,7 +209,7 @@ public sealed class MigrationSession
             };
         });
 
-        _chat.Handle(SchemaMigrationAgentDefinition.RemoveCollection, async (RemoveCollectionArgs args) =>
+        HandleTool(SchemaMigrationAgentDefinition.RemoveCollection, async (RemoveCollectionArgs args) =>
         {
             var removed = Plan.Remove(args.Collection ?? string.Empty);
             if (removed)
@@ -207,7 +226,7 @@ public sealed class MigrationSession
             };
         });
 
-        _chat.Handle(SchemaMigrationAgentDefinition.SetConventions, async (SetConventionsArgs args) =>
+        HandleTool(SchemaMigrationAgentDefinition.SetConventions, async (SetConventionsArgs args) =>
         {
             if (PropertyCases.TryParse(args.PropertyCase, out var propertyCase) == false)
             {
