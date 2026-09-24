@@ -72,6 +72,40 @@ public class MigrationPlanAssemblyTests(ITestOutputHelper output) : NoDisposalNe
     }
 
     [RavenFact(RavenTestCategory.Quill)]
+    public void An_embedded_table_without_a_schema_takes_its_parents_at_every_depth()
+    {
+        var orders = MigrationSamples.ValidOrders();
+        orders.SourceTableSchema = "sales";
+        var lines = MigrationSamples.ValidLines();
+        lines.SourceTableSchema = null;
+        var notes = MigrationSamples.ValidLines();
+        notes.SourceTableName = "line_notes";
+        notes.SourceTableSchema = "";
+        lines.EmbeddedTables = [notes];
+        orders.EmbeddedTables = [lines];
+
+        var config = PlanToCdcConfiguration.Build(Snapshot(orders), previousMapping: null);
+
+        var embedded = Assert.Single(Assert.Single(config.Tables).EmbeddedTables);
+        Assert.Equal("sales", embedded.SourceTableSchema);
+        Assert.Equal("sales", Assert.Single(embedded.EmbeddedTables).SourceTableSchema);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
+    public void An_embedded_table_keeps_a_schema_it_names_itself()
+    {
+        var orders = MigrationSamples.ValidOrders();
+        orders.SourceTableSchema = "sales";
+        var lines = MigrationSamples.ValidLines();
+        lines.SourceTableSchema = "inventory";
+        orders.EmbeddedTables = [lines];
+
+        var config = PlanToCdcConfiguration.Build(Snapshot(orders), previousMapping: null);
+
+        Assert.Equal("inventory", Assert.Single(Assert.Single(config.Tables).EmbeddedTables).SourceTableSchema);
+    }
+
+    [RavenFact(RavenTestCategory.Quill)]
     public void An_embedded_table_counts_as_covered_but_a_linked_one_does_not()
     {
         var orders = MigrationSamples.ValidOrders();

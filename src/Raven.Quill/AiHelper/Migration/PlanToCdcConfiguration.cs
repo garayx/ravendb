@@ -34,9 +34,32 @@ public static class PlanToCdcConfiguration
             Tables = snapshot.Collections
                 .Select(c => c.Config)
                 .Where(c => c is not null)
-                .Select(c => c!)
+                .Select(c => WithInheritedSchemas(c!))
                 .ToList()
         };
+
+    /// <summary>
+    /// The planner leaves an embedded table's schema out when it matches the parent's, and the plan
+    /// validator reads it that way. The CDC runtime does not: a missing schema means the provider's
+    /// default there. Writing the parent's schema in keeps a root outside the default schema from
+    /// validating against one table and ingesting another.
+    /// </summary>
+    private static CdcSinkTableConfig WithInheritedSchemas(CdcSinkTableConfig table)
+    {
+        Inherit(table.EmbeddedTables, table.SourceTableSchema);
+        return table;
+
+        static void Inherit(List<CdcSinkEmbeddedTableConfig>? embedded, string? parentSchema)
+        {
+            foreach (var child in embedded ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(child.SourceTableSchema))
+                    child.SourceTableSchema = parentSchema;
+
+                Inherit(child.EmbeddedTables, child.SourceTableSchema);
+            }
+        }
+    }
 
     /// <summary>
     /// The tables the operator discovered that no mapping captures. Coverage counts roots and
