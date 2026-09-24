@@ -1,7 +1,7 @@
 import { useFormContext } from "react-hook-form";
 import { api } from "@/api/api";
 import { WizardStepError } from "@/components/form/wizard/wizard-step-error";
-import { useSetupWizardStore } from "@/pages/setup/add-app-wizard/app-wizard-store";
+import { useSetupWizardStore, type PlannerCollection } from "@/pages/setup/add-app-wizard/app-wizard-store";
 import { type AppFormData } from "@/pages/setup/add-app-wizard/app-wizard-validation";
 import { wrapDtoTablesToFormShape } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-dto";
 import { parsePlannerTables, useAdoptMapTables } from "@/pages/setup/add-app-wizard/steps/map/use-adopt-map-tables";
@@ -25,10 +25,17 @@ export function useApplyPlanner() {
             return;
         }
 
-        const selected = Object.values(store.plannerCollections)
+        const selectedCollections = Object.values(store.plannerCollections)
             .filter((collection) => collection.status !== "rejected")
-            .filter((collection) => !store.plannerDeselected[collection.collection])
-            .map((collection) => collection.collection);
+            .filter((collection) => !store.plannerDeselected[collection.collection]);
+        const selected = selectedCollections.map((collection) => collection.collection);
+
+        // Coming back to look at the plan and moving on again must not throw away what the
+        // operator has since edited in the editor, so an unchanged plan is not applied twice.
+        const appliedKey = computePlannerAppliedKey(conversationId, selectedCollections);
+        if (appliedKey === store.plannerAppliedKey) {
+            return;
+        }
 
         const result = await api.services.migration.apply({
             slug: getValues("externalConnection").slug,
@@ -37,10 +44,7 @@ export function useApplyPlanner() {
         });
 
         if (result.errors.length > 0) {
-            throw new WizardStepError(
-                "The registered mapping did not pass validation.",
-                result.errors.join("\n"),
-            );
+            throw new WizardStepError("The registered mapping did not pass validation.", result.errors.join("\n"));
         }
 
         if (!result.configuration) {
@@ -51,5 +55,16 @@ export function useApplyPlanner() {
         // derives the same list from the mapping it is about to render, and keeps deriving it as the
         // operator edits.
         adoptTables(parsePlannerTables(wrapDtoTablesToFormShape(result.configuration.tables ?? [])));
+        store.setPlannerAppliedKey(appliedKey);
     };
+}
+
+/** Identifies what an apply would hand over: the session, and each kept collection at its version. */
+export function computePlannerAppliedKey(conversationId: string, selected: PlannerCollection[]): string {
+    const collections = selected
+        .map((collection) => `${collection.collection}@${collection.version}`)
+        .sort()
+        .join(",");
+
+    return `${conversationId}|${collections}`;
 }

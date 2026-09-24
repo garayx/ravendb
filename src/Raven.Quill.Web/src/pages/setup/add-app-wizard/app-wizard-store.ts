@@ -84,6 +84,9 @@ export type SetupWizardState = {
     isPlannerStreaming: boolean;
     /** Questions the operator has to answer, or skip, before the session can go on. */
     plannerQuestions: PlannerQuestion[];
+    /** The plan and selection last handed to the editor, so going Back and Next again does not
+     * re-apply an unchanged plan over edits made in the editor since. */
+    plannerAppliedKey: string | null;
     appendPlannerMessage: (message: PlannerMessage) => void;
     setPlannerConversationId: (conversationId: string) => void;
     setPlannerProposal: (proposal: PlannerProposal) => void;
@@ -92,6 +95,7 @@ export type SetupWizardState = {
     togglePlannerCollection: (collection: string, isSelected: boolean) => void;
     setIsPlannerStreaming: (isStreaming: boolean) => void;
     setPlannerQuestions: (questions: PlannerQuestion[]) => void;
+    setPlannerAppliedKey: (key: string) => void;
     resetPlannerState: () => void;
 };
 
@@ -139,6 +143,7 @@ const initialState: Pick<
     | "plannerDeselected"
     | "isPlannerStreaming"
     | "plannerQuestions"
+    | "plannerAppliedKey"
 > = {
     discoverResult: null,
     discoverSchemas: [],
@@ -162,6 +167,7 @@ const initialState: Pick<
     plannerDeselected: {},
     isPlannerStreaming: false,
     plannerQuestions: [],
+    plannerAppliedKey: null,
 };
 
 export const useSetupWizardStore = create<SetupWizardState>((set) => ({
@@ -254,6 +260,8 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
 
     setPlannerQuestions: (questions) => set({ plannerQuestions: questions }),
 
+    setPlannerAppliedKey: (key) => set({ plannerAppliedKey: key }),
+
     resetPlannerState: () =>
         set({
             plannerMessages: [],
@@ -263,5 +271,6 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
             plannerDeselected: {},
             isPlannerStreaming: false,
             plannerQuestions: [],
+            plannerAppliedKey: null,
         }),
 }));
