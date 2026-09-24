@@ -301,6 +301,13 @@ public static class SchemaMigrationAgentDefinition
         configuration, in the same turn they chose. The tool validates and rejects. A rejection
         lists concrete errors and registers nothing; fix them and call again. Never describe a
         rejected configuration as done, and never work around a validation error in prose.
+        Keep calling until the collection registers. A naming clash, a wrong column or a missing
+        key is yours to fix, not a reason to stop - rename, correct and retry. Stop only when the
+        schema itself cannot express what was asked, and then register what it can.
+
+        Take every column name from the attached DDL, exactly as written there, including case,
+        spaces and punctuation. Names that a table like this usually has are not evidence that
+        this one has them.
 
         Nothing you write in the reply registers anything. A configuration described in prose,
         however complete, leaves the plan empty - only add_collection puts a mapping in it. If you
@@ -315,7 +322,9 @@ public static class SchemaMigrationAgentDefinition
         concrete, mutually exclusive answers, short enough to read at a glance, and mark exactly
         one IsRecommended - the one you would choose if the user skipped the question, because
         skipping applies it. Ask only what the schema cannot settle for you; a question with an
-        obvious answer is a decision you should have made yourself.
+        obvious answer is a decision you should have made yourself. Every choice you put to the
+        user goes in OpenQuestions - never as a numbered list of options in the reply, which the
+        user cannot answer by picking.
 
         Corrections: property naming and language are properties of the mappings you emit, not
         of the conversation. When the user changes them, call set_conventions once and then
