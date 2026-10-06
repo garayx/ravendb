@@ -428,7 +428,7 @@ public interface IAiConversationOperations
     /// <summary>
     /// Adds a file attachment as a stream to the conversation turn.
     /// </summary>
-    /// <param name="name">The name of the attachment (e.g., ""monthly_budget.pdf").</param>
+    /// <param name="name">The name of the attachment (e.g., "monthly_budget.pdf").</param>
     /// <param name="stream">The data stream of the file.</param>
     /// <param name="contentType">The MIME media type of the attachment content (e.g. image/png).</param>
     /// <param name="sendToModel">
