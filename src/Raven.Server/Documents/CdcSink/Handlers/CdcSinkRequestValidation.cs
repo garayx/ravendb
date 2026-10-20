@@ -28,27 +28,31 @@ internal static class CdcSinkRequestValidation
 
     internal static bool TryValidateIdentifier(string value, string fieldName, CdcSinkSourceSchema schemaResult, TestCdcSinkMappingResult testResult, bool allowEmpty = true)
     {
-        // Schema fields can legitimately be empty (default-schema fallback handles it). For
-        // table / PK / column identifiers, empty would flow into ORDER BY / WHERE generation
-        // as a SQL syntax error - callers in those positions pass allowEmpty: false.
-        if (string.IsNullOrEmpty(value))
-        {
-            if (allowEmpty)
-                return true;
-            var emptyError = $"'{fieldName}' must not be empty.";
-            if (schemaResult != null)
-                schemaResult.Errors.Add(emptyError);
-            if (testResult != null)
-                testResult.Errors.Add(emptyError);
-            return false;
-        }
-        if (IdentifierPattern.IsMatch(value))
+        if (TryValidateIdentifier(value, fieldName, allowEmpty, out var error))
             return true;
-        var error = $"'{fieldName}' value '{value}' contains invalid characters. Use letters, digits, and underscores only.";
         if (schemaResult != null)
             schemaResult.Errors.Add(error);
         if (testResult != null)
             testResult.Errors.Add(error);
+        return false;
+    }
+
+    internal static bool TryValidateIdentifier(string value, string fieldName, bool allowEmpty, out string error)
+    {
+        // Schema fields can legitimately be empty (default-schema fallback handles it). For
+        // table / PK / column identifiers, empty would flow into ORDER BY / WHERE generation
+        // as a SQL syntax error - callers in those positions pass allowEmpty: false.
+        error = null;
+        if (string.IsNullOrEmpty(value))
+        {
+            if (allowEmpty)
+                return true;
+            error = $"'{fieldName}' must not be empty.";
+            return false;
+        }
+        if (IdentifierPattern.IsMatch(value))
+            return true;
+        error = $"'{fieldName}' value '{value}' contains invalid characters. Use letters, digits, and underscores only.";
         return false;
     }
 

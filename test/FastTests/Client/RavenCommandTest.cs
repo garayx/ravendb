@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Raven.Client.Documents.Operations.ConnectionStrings;
@@ -82,7 +82,7 @@ namespace FastTests.Client
                 "ConfigureAttachmentsRemoteCommand", "GetRemoteAttachmentsConfigurationCommand", "DeleteAttachmentsCommand",
                 "ConfigureSchemaValidationCommand", "GetSchemaValidationCommand", "StartSchemaValidationCommand",
                 "AddCdcSinkCommand", "UpdateCdcSinkCommand",
-                "GetCdcSinkSchemaCommand", "TestCdcSinkMappingCommand",
+                "GetCdcSinkSchemaCommand", "GetCdcSinkDdlCommand", "TestCdcSinkMappingCommand",
                 "GetServerWideConnectionStringsCommand", "PutServerWideConnectionStringCommand", "RemoveServerWideConnectionStringCommand",
                 "VerifyCdcSinkCommand"
             }.OrderBy(t => t);
