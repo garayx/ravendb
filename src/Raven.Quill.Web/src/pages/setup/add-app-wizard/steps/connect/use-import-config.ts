@@ -19,7 +19,7 @@ import {
     MAX_SELECTED_TABLES,
     resolveDefaultSchema,
 } from "@/pages/setup/add-app-wizard/discover-utils";
-import { wrapDtoTablesToFormShape } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-dto";
+import { mapDtoTablesToForm } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-dto";
 import { findDiscoveredTable } from "@/pages/setup/add-app-wizard/steps/map-tables/map-tables-utils";
 import { createDraftSlug, toSlug } from "@/pages/setup/add-app-wizard/slugify";
 import { discoverTables } from "@/pages/setup/add-app-wizard/steps/verify/use-discover-tables";
@@ -131,7 +131,7 @@ export function useImportConfig() {
             }
 
             try {
-                const formTables = tablesSchema.parse(wrapDtoTablesToFormShape(config.tables));
+                const formTables = tablesSchema.parse(mapDtoTablesToForm(config.tables));
                 return { config, slug, isDraftSlug, formTables, discoverResult, schemas };
             } catch {
                 throw new Error(
