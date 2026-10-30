@@ -1,7 +1,8 @@
 import type { DiscoverForeignKeyResponse, DiscoverResponse, DiscoverTableResponse } from "@/api/generated/server-api";
+import { formatJavaScript } from "@/components/ace-editor/ace-editor-action-utils";
 import { toStringValueItems } from "@/lib/form-utils";
 import type { AppFormData } from "@/pages/setup/add-app-wizard/app-wizard-validation";
-import { isColumnSupported, isTableSupported } from "@/pages/setup/add-app-wizard/discover-utils";
+import { getTableKey, isColumnSupported, isTableSupported } from "@/pages/setup/add-app-wizard/discover-utils";
 import type {
     FormColumnMapping,
     FormEmbeddedTable,
@@ -36,10 +37,6 @@ export function propertyNameFromJoinColumn(column: string): string {
     return pascalCase(stripIdSuffix(column)) || pascalCase(column);
 }
 
-export function getSourceTableLabel(table: SourceTableRef) {
-    return table.sourceTableSchema ? `${table.sourceTableSchema}.${table.sourceTableName}` : table.sourceTableName;
-}
-
 /** Normalized identity of a source table, matching the case-insensitive comparison the
  * validation schema uses for duplicate root tables. Null when the table has no name yet. */
 export function getSourceTableKey(table: SourceTableRef): string | null {
@@ -50,6 +47,17 @@ export function getSourceTableKey(table: SourceTableRef): string | null {
     }
 
     return `${table.sourceTableSchema?.trim().toLowerCase() ?? ""}::${name}`;
+}
+
+export function haveSameTables(current: MappedSourceTable[], other: MappedSourceTable[]): boolean {
+    if (current.length !== other.length) {
+        return false;
+    }
+
+    // Where identifiers are case-sensitive, public."Orders" and public.orders are two tables.
+    const currentKeys = new Set(current.map(getTableKey));
+
+    return other.every((table) => currentKeys.has(getTableKey(table)));
 }
 
 /** A source table the mapping refers to, in the shape the verify-schema selection and the CDC
@@ -232,6 +240,21 @@ export function scaffoldTables(
     });
 }
 
+/**
+ * Scaffolds a root table for every selected table the mapping does not capture yet. Root tables outside
+ * the selection stay: the editor flags them, and dropping one is the operator's call.
+ */
+export function addUnmappedSelectedTables(
+    tables: FormRootTable[],
+    selectedTables: AppFormData["verifySchema"]["tables"],
+    discoverResult: DiscoverResponse | null,
+): FormRootTable[] {
+    const mappedKeys = collectMappedSourceTableKeys(tables);
+    const unmappedTables = selectedTables.filter((table) => !mappedKeys.has(getSourceTableKey(table) ?? ""));
+
+    return [...tables, ...scaffoldTables(unmappedTables, discoverResult)];
+}
+
 export function findDiscoveredTable(
     discoverResult: DiscoverResponse | null,
     sourceTableSchema: string | null | undefined,
@@ -273,6 +296,22 @@ export function getForeignKeysToTable(source: DiscoverTableResponse, target: Dis
             (foreignKey.referencedSchema ?? "") === (target.sourceTableSchema ?? "") &&
             foreignKey.referencedTable === target.sourceTableName,
     );
+}
+
+type TableWithScripts = Pick<FormRootTable, "patch" | "onDelete"> & { embeddedTables: FormEmbeddedTable[] };
+
+/** The AI writes its scripts compactly, often on one line; they open in the editor as its Format action leaves them. */
+export function formatTableScripts<TTable extends TableWithScripts>(table: TTable): TTable {
+    return {
+        ...table,
+        patch: formatScript(table.patch),
+        onDelete: table.onDelete && { ...table.onDelete, patch: formatScript(table.onDelete.patch) },
+        embeddedTables: table.embeddedTables.map(formatTableScripts),
+    };
+}
+
+function formatScript(script: string | null): string | null {
+    return script ? formatJavaScript(script) : script;
 }
 
 /** Walks the form errors object along a dotted field path, e.g. "mapTables.tables.0". */
