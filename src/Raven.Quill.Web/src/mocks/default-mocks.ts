@@ -84,6 +84,8 @@ export const defaultApiMocks = {
     setup: [
         setupMocks.connect(),
         setupMocks.discover(),
+        setupMocks.draftMissing(),
+        setupMocks.draftSave(),
         setupMocks.verifyCdc(),
         setupMocks.map(),
         setupMocks.testMapping(),
