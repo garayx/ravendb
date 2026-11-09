@@ -1876,6 +1876,7 @@ export interface components {
             type: "error";
             message: string;
             planId?: null | string;
+            code?: null | string;
         };
         MigrationFrameNoteFrame: {
             /** @enum {string} */
